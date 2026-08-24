@@ -290,11 +290,6 @@ scripts/verify-release --status
 The check fails if source files change while it runs. It records the source
 digest, test results, package contents, and artifact hashes.
 
-Operator-lift runs keep small release records instead of source material or
-model responses. Their hash chain proves continuity only when someone stores
-the root hash independently. See
-[the release-record documentation](docs/operator-lift-release.md).
-
 ## Proof status
 
 Cortheon does not yet have a valid universal-frontier result. Older runs are
@@ -304,3 +299,8 @@ A publishable result still needs preregistered hidden tasks, isolated runs of
 the same model, named reduced Cortheon conditions, external grading, and every
 failure counted. It also needs live replication across Pi, OpenCode, Codex,
 and generic MCP hosts, followed by an independent repeat outside this project.
+
+## Inspiration
+
+Cortheon was inspired in part by Hugging Face H4's post,
+[Scaling test-time compute](https://huggingface.co/spaces/HuggingFaceH4/blogpost-scaling-test-time-compute).
