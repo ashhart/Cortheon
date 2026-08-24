@@ -13,8 +13,8 @@ ROOT = Path(__file__).parents[1]
 # Uniform with tests/test_wheel_equivalence.py and
 # tests/test_opencode_architecture.py; that module carries the
 # measurement and the justification for both numbers.
-WHEEL_CAP = 241_000
-SDIST_CAP = 222_000
+WHEEL_CAP = 247_000
+SDIST_CAP = 227_000
 SHIPPED_PYTHON_MODULES = {
     "cortheon/__init__.py",
     "cortheon/cognitive_cli.py",

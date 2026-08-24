@@ -76,11 +76,13 @@ ROOT = Path(__file__).parents[1]
 # public facades avoid duplicated export inventories. Settled measurements:
 # wheel 239,739 bytes and sdist 219,775 bytes.
 # The tester release adds exact stale-runtime conformance, one content-free
-# results command, and its private-preview runbook. Measured artifacts are
-# wheel 240,195 bytes and sdist 220,897 bytes. The new caps leave less than
-# 1.2 KB of headroom and still reject another payload-sized addition.
-WHEEL_CAP = 241_000
-SDIST_CAP = 222_000
+# results command, and its private-preview runbook. The frontier-grounding
+# path then added environment inspection, scientific-source review, maintained
+# repository inspection, and current-source discovery. Measured artifacts are
+# wheel 246,562 bytes and sdist 226,594 bytes. The
+# caps retain less than 500 bytes of headroom and reject another payload.
+WHEEL_CAP = 247_000
+SDIST_CAP = 227_000
 
 PROBE = """
 import dataclasses, json, sys

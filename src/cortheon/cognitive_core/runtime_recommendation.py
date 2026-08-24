@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from cortheon.cognitive_core.adaptive_stopping import next_catalog_action
+from cortheon.cognitive_core.frontier_policy import needs_frontier_grounding
 from cortheon.cognitive_core.models import Investigation
 from cortheon.cognitive_core.runtime_state import RuntimeState
 from cortheon.cognitive_core.semantic_join import _semantic_join_analysis
@@ -60,6 +61,13 @@ class RecommendationMixin(RuntimeState):
                 guidance="Cortheon does not promote a budget-exhausted task to completion.",
             )
         retrieval_enabled = evaluation_operator(session.evaluation_profile, "retrieval")
+        frontier_grounding = (
+            self._frontier_grounding_response(session)
+            if retrieval_enabled and needs_frontier_grounding(session.goal, session.task_kind)
+            else None
+        )
+        if frontier_grounding is not None:
+            return frontier_grounding
         code_discovery = self._code_discovery_response(session) if retrieval_enabled else None
         if code_discovery is not None:
             return code_discovery

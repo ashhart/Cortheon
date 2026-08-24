@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from cortheon.cognitive_core.frontier_policy import needs_frontier_grounding
 from cortheon.cognitive_graph import content_id
 from cortheon.cognitive_protocol import evaluation_operator
 
@@ -15,6 +16,15 @@ _PURPOSES = {
         "obligation, so partial work cannot be reported as a whole answer."
     ),
     "inspect_surface": "Acquire the smallest live task surface from the host.",
+    "ground_environment": (
+        "Establish exact live runtime, dependency, manifest, and API constraints."
+    ),
+    "discover_frontier": (
+        "Acquire current primary knowledge and compatible reference implementations."
+    ),
+    "filter_compatibility": (
+        "Transfer only external methods that match the live versions, APIs, and constraints."
+    ),
     "frame_hypotheses": "Create distinct falsifiable explanations.",
     "discriminate": "Choose evidence that best separates the explanations.",
     "connect_sources": "Join separately supported propositions into a candidate inference.",
@@ -144,8 +154,20 @@ def compile_program(
         effort,
         split=False,
     )
+    if needs_frontier_grounding(goal, task_kind):
+        operators = list(sequence)
+        insertion = 1 if operators and operators[0] == "orient" else 0
+        operators[insertion:insertion] = [
+            "ground_environment",
+            "discover_frontier",
+            "filter_compatibility",
+        ]
+        sequence = tuple(operators)
     disabled_groups = {
         "retrieval": {
+            "ground_environment",
+            "discover_frontier",
+            "filter_compatibility",
             "inspect_surface",
             "establish_freshness",
             "corroborate",
@@ -234,9 +256,22 @@ def select_operator(
     parameters = parameters if isinstance(parameters, Mapping) else {}
     capability = str(request.get("capability") or "")
     purpose = str(parameters.get("purpose") or "")
+    operation = str(parameters.get("operation") or "")
     required = next_action.get("required_fields")
     required = set(required) if isinstance(required, (list, tuple)) else set()
-    if has_conflict:
+    if operation == "environment_grounding":
+        operator_id = "ground_environment"
+    elif operation in {
+        "frontier_discovery",
+        "primary_source_fetch",
+        "scholarly_source_review",
+        "repository_source_review",
+        "counterevidence_search",
+    }:
+        operator_id = "discover_frontier"
+    elif parameters.get("frontier_grounded") is True:
+        operator_id = "filter_compatibility"
+    elif has_conflict:
         operator_id = "resolve_contradiction"
     elif has_derivation:
         operator_id = "connect_sources"

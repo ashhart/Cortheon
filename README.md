@@ -120,6 +120,22 @@ model failures such as guessing instead of checking, settling on the first
 explanation, losing a requirement, or claiming success before tests pass. It
 does not change the model's weights or guarantee that its answer is correct.
 
+For work that depends on knowledge outside the repository, say so in the task:
+
+```text
+Implement this against the exact installed runtime and dependency versions.
+Use current official documentation, relevant primary research, and maintained
+reference repositories. Check compatibility and counterevidence before editing.
+```
+
+Cortheon first asks the host to establish the live runtime, dependency pins,
+manifests, lockfiles, and relevant API surface. It then directs the host's web
+tools toward current primary sources and maintained reference implementations.
+When relevant, it reads a paper's method and limitations and inspects a GitHub
+repository's releases, maintenance, license, tests, CI, and implementation files.
+It checks version fit and counterevidence before returning to the local code and
+tests. Repository stars are a discovery signal, not proof of quality.
+
 Check or stop it at any time:
 
 ```text

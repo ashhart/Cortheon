@@ -376,8 +376,11 @@ function permittedHostTool(tool, state) {
   if (capability === "search" && state.deliverable === "research_answer") {
     return ["websearch", "webfetch"].includes(tool)
   }
-  if (capability === "fetch" && state.deliverable === "research_answer") {
+  if (capability === "fetch") {
     return tool === "webfetch"
+  }
+  if (capability === "search_or_fetch") {
+    return ["websearch", "webfetch"].includes(tool)
   }
   if (capability === "search") {
     return ["grep", "glob", "read", "websearch", "webfetch"].includes(tool)
@@ -408,6 +411,9 @@ function safeHostArguments(tool, args) {
   }
   if (tool === "webfetch") {
     return { url: String(args?.url || "").slice(0, 1000) }
+  }
+  if (tool === "bash") {
+    return { command: String(args?.command || args?.cmd || "").slice(0, 1000) }
   }
   return {}
 }

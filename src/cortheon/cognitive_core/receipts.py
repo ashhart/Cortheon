@@ -148,7 +148,7 @@ def _validate_host_observation_batch(
         status = raw.get("status", "observed")
         if status == "failed":
             continue
-        if capability in {"search", "fetch"} and purpose is not None:
+        if capability in {"search", "fetch", "search_or_fetch"} and purpose is not None:
             if kind != "web" or raw.get("purpose") != purpose:
                 raise CognitiveRuntimeError(
                     "web evidence purpose does not match the pending request. "
@@ -371,6 +371,38 @@ _READ_ONLY_GIT_SUBCOMMANDS = frozenset(
 _MUTATING_READER_FLAGS = frozenset({"-delete", "-exec", "-execdir", "-ok", "-okdir"})
 
 
+_RUNTIME_VERSION_COMMAND = re.compile(
+    r"^(?:bun|cargo|deno|dotnet|go|java|node|npm|php|pnpm|python|python3|"
+    r"ruby|rustc|uv|yarn)$"
+)
+
+
+def _read_only_version_invocation(tokens: list[str]) -> bool:
+    """Allow only bounded runtime/package identity probes during grounding."""
+
+    if not tokens:
+        return False
+    command = tokens[0].rsplit("/", 1)[-1].casefold()
+    if _RUNTIME_VERSION_COMMAND.fullmatch(command) is None:
+        return False
+    arguments = tokens[1:]
+    if command == "go":
+        return arguments == ["version"]
+    if command == "java":
+        return arguments == ["-version"]
+    if command == "dotnet":
+        return arguments in (["--version"], ["--info"])
+    if (
+        command in {"python", "python3"}
+        and len(arguments) >= 3
+        and arguments[:3] == ["-m", "pip", "show"]
+    ):
+        return bool(arguments[3:]) and all(
+            re.fullmatch(r"[A-Za-z0-9_.-]+", item) for item in arguments[3:]
+        )
+    return arguments in (["--version"], ["-V"], ["-v"], ["version"])
+
+
 def _read_only_shell_receipt(arguments: dict[str, Any]) -> bool:
     """Accept a shell receipt for read-only requests only when its recorded
     command is verifiably a reader (ls/find/rg/cat...)."""
@@ -405,6 +437,8 @@ def _read_only_shell_receipt(arguments: dict[str, Any]) -> bool:
         if first == "git":
             if len(tokens) < 2 or tokens[1].casefold() not in _READ_ONLY_GIT_SUBCOMMANDS:
                 return False
+            continue
+        if _read_only_version_invocation(tokens):
             continue
         if first not in _READ_ONLY_SHELL_COMMANDS:
             return False

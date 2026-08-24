@@ -49,6 +49,8 @@ RESEARCH_PURPOSES = frozenset(
         "discovery",
         "corroboration",
         "primary_fetch",
+        "scholarly_validation",
+        "implementation_reference",
         "contradiction_check",
         "freshness_check",
         "passive",

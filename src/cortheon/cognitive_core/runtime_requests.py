@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from cortheon.cognitive_core.alignment import _FALSIFICATION_DESIGN_RE
+from cortheon.cognitive_core.frontier_policy import needs_frontier_grounding
 from cortheon.cognitive_core.models import (
     CognitiveRuntimeError,
     EvidenceRequest,
@@ -42,6 +43,8 @@ class RequestMixin(RuntimeState):
     def _initial_request(self, session: Investigation) -> EvidenceRequest:
         if not evaluation_operator(session.evaluation_profile, "retrieval"):
             raise CognitiveRuntimeError("retrieval is disabled by the evaluation profile")
+        if needs_frontier_grounding(session.goal, session.task_kind):
+            return self._environment_grounding_request(session)
         parameters: dict[str, Any] = {}
         if session.task_kind == "code":
             paths = _goal_code_paths(session.goal)

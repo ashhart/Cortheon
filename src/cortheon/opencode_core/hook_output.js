@@ -118,8 +118,11 @@ const createToolAfterHook = ({
     }
     if (
       state.automatic &&
-      state.deliverable === "research_answer" &&
-      ["websearch", "webfetch"].includes(tool)
+      ["websearch", "webfetch"].includes(tool) &&
+      (state.deliverable === "research_answer" ||
+        ["search", "fetch", "search_or_fetch"].includes(
+          state.request?.capability || "",
+        ))
     ) {
       const observations = webEvidenceBatch(tool, input.args, output.output, state)
       state.hostEvidence = undefined

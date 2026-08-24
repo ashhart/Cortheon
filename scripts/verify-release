@@ -18,8 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LINE_LIMIT = 500
-WHEEL_LIMIT = 241_000
-SDIST_LIMIT = 222_000
+WHEEL_LIMIT = 247_000
+SDIST_LIMIT = 227_000
 AUTHORED_SUFFIXES = {".js", ".py", ".ts"}
 AUTHORED_ROOTS = ("src", "tests", "build_support", "scripts")
 REQUIRED_GUARD_TESTS = (

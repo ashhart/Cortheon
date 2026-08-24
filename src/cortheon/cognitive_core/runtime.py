@@ -7,6 +7,7 @@ from cortheon.cognitive_core.runtime_completion import CompletionMixin
 from cortheon.cognitive_core.runtime_context import ContextMixin
 from cortheon.cognitive_core.runtime_discovery import DiscoveryMixin
 from cortheon.cognitive_core.runtime_failed_verification import FailedVerificationMixin
+from cortheon.cognitive_core.runtime_frontier import FrontierGroundingMixin
 from cortheon.cognitive_core.runtime_hypotheses import HypothesisMixin
 from cortheon.cognitive_core.runtime_lifecycle import LifecycleMixin
 from cortheon.cognitive_core.runtime_observations import ObservationMixin
@@ -20,6 +21,7 @@ class CognitiveRuntime(
     LifecycleMixin,
     ObservationMixin,
     HypothesisMixin,
+    FrontierGroundingMixin,
     RecommendationMixin,
     DiscoveryMixin,
     RequestMixin,

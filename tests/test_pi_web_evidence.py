@@ -113,6 +113,41 @@ def test_live_webfetch_preserves_host_text_and_structured_times(tmp_path: Path) 
     assert observation["content"].splitlines()[1] == host_text
 
 
+def test_code_frontier_request_uses_the_host_websearch_path(tmp_path: Path) -> None:
+    details = {
+        "results": [
+            {
+                "url": "https://docs.example.org/current-api",
+                "title": "Current API reference",
+                "snippet": "The supported runtime exposes the required API.",
+                "published_at": "2026-08-23",
+            }
+        ]
+    }
+    extension = write_web_extension(
+        tmp_path,
+        tool="websearch",
+        content="host search envelope",
+        details=details,
+    )
+    request = web_request("search_or_fetch")
+    request["parameters"] = {
+        "operation": "frontier_discovery",
+        "purpose": "discovery",
+    }
+    completed, _model, runtime = run_web_case(
+        tmp_path,
+        extension=extension,
+        request=request,
+        tool_call=("websearch", {"query": "current compatible API"}),
+    )
+    assert completed.returncode == 0, completed.stderr
+    observation = _observations(runtime)[0]
+    assert observation["url"] == "https://docs.example.org/current-api"
+    assert observation["purpose"] == "discovery"
+    assert _receipt(observation)["tool"] == "websearch"
+
+
 @pytest.mark.parametrize(
     ("details", "content", "reason"),
     [

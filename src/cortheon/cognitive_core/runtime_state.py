@@ -180,6 +180,12 @@ class RuntimeState:
     ) -> dict[str, Any]:
         raise NotImplementedError()
 
+    def _environment_grounding_request(self, session: Investigation) -> EvidenceRequest:
+        raise NotImplementedError()
+
+    def _frontier_grounding_response(self, session: Investigation) -> dict[str, Any] | None:
+        raise NotImplementedError()
+
     def _initial_request(self, session: Investigation) -> EvidenceRequest:
         raise NotImplementedError()
 

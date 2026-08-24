@@ -152,8 +152,10 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
             "name": "cortheon_start",
             "title": "Start Bounded Investigation",
             "description": (
-                "Start an ephemeral evidence-driven investigation. Cortheon returns the "
-                "next evidence request for the host to satisfy with its own tools."
+                "Start an ephemeral evidence-driven investigation. Cortheon can ground the "
+                "live environment, request current web knowledge and compatible references, "
+                "then returns each bounded evidence request for the host to satisfy with its "
+                "own tools."
             ),
             "inputSchema": {
                 "type": "object",
