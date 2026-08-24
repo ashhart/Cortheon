@@ -1,0 +1,58 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PYTHON=${PYTHON:-python3}
+
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "Cortheon needs Python 3.11 or newer." >&2
+    exit 1
+fi
+
+if ! "$PYTHON" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))'; then
+    echo "Cortheon needs Python 3.11 or newer." >&2
+    exit 1
+fi
+
+if command -v uv >/dev/null 2>&1; then
+    uv tool install --force "$ROOT"
+    BIN_DIR=$(uv tool dir --bin)
+else
+    DATA_HOME=${XDG_DATA_HOME:-"$HOME/.local/share"}
+    TOOL_HOME="$DATA_HOME/cortheon"
+    BIN_DIR=${CORTHEON_BIN_DIR:-"$HOME/.local/bin"}
+    "$PYTHON" -m venv "$TOOL_HOME"
+    "$TOOL_HOME/bin/python" -m pip install --disable-pip-version-check --upgrade "$ROOT"
+    mkdir -p "$BIN_DIR"
+    for NAME in cortheon cortheon-mcp; do
+        LINK="$BIN_DIR/$NAME"
+        TARGET="$TOOL_HOME/bin/$NAME"
+        if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
+            echo "Refusing to replace existing file: $LINK" >&2
+            exit 1
+        fi
+        if [ -L "$LINK" ] && [ "$(readlink "$LINK")" != "$TARGET" ]; then
+            echo "Refusing to replace existing link: $LINK" >&2
+            exit 1
+        fi
+        ln -sfn "$TARGET" "$LINK"
+    done
+fi
+
+CLI="$BIN_DIR/cortheon"
+MCP="$BIN_DIR/cortheon-mcp"
+if [ ! -x "$CLI" ] || [ ! -x "$MCP" ]; then
+    echo "Cortheon installation did not create its commands." >&2
+    exit 1
+fi
+
+echo "Cortheon installed on this machine."
+echo "CLI: $CLI"
+echo "MCP: $MCP"
+echo ""
+PATH="$BIN_DIR:$PATH" "$CLI" configure --host generic
+
+if ! command -v cortheon >/dev/null 2>&1; then
+    echo ""
+    echo "Use $CLI if cortheon is not yet on your PATH."
+fi

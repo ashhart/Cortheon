@@ -325,7 +325,10 @@ def install_codex(
 
 
 def generic_mcp_config() -> InstallResult:
-    command = shutil.which("cortheon-mcp") or "cortheon-mcp"
+    installed = Path(sys.executable).with_name("cortheon-mcp")
+    command = shutil.which("cortheon-mcp") or (
+        str(installed.resolve()) if installed.is_file() else "cortheon-mcp"
+    )
     return InstallResult(
         host="generic",
         status="configuration",

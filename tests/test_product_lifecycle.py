@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ import pytest
 from cortheon import __version__
 from cortheon.cognitive_cli import build_parser, doctor, host_conformance, main, runtime_results
 from cortheon.cognitive_http import _SOURCE_FINGERPRINT
+from cortheon.cognitive_install import generic_mcp_config
 from cortheon.cognitive_protocol import CORTHEON_PROTOCOL_VERSION
 
 
@@ -104,6 +106,23 @@ def test_generic_configuration_has_a_dedicated_read_only_cli(
     assert result["details"]["writes_files"] is False
     with pytest.raises(SystemExit):
         build_parser().parse_args(["install", "--host", "generic"])
+
+
+def test_generic_configuration_uses_the_installed_mcp_command(
+    tmp_path: Path,
+) -> None:
+    executable = tmp_path / "bin" / "python"
+    executable.parent.mkdir()
+    executable.touch()
+    mcp = executable.with_name("cortheon-mcp")
+    mcp.touch()
+
+    with (
+        patch("shutil.which", return_value=None),
+        patch.object(sys, "executable", str(executable)),
+    ):
+        command = generic_mcp_config().details["mcpServers"]["cortheon"]["command"]
+    assert command == str(mcp.resolve())
 
 
 def test_results_report_content_free_runtime_outcomes() -> None:

@@ -18,26 +18,30 @@ runtime stops responding, the host continues and marks the result uncertified.
 
 ## Install in three steps
 
-You need Python 3.11 or newer, Git, and one supported host. Cortheon does not
-use Docker or a second model.
+You need Python 3.11 or newer and Git. Cortheon installs once on your machine
+as a local MCP. It does not use Docker or a second model.
 
 ### 1. Clone and install
 
 ```bash
 git clone https://github.com/ashhart/Cortheon.git
 cd Cortheon
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install .
-cortheon --version
+./install
 ```
 
-Keep the virtual environment active while running Cortheon commands. In a new
-terminal, return to the repository and run `source .venv/bin/activate`.
+The installer prints the exact paths to `cortheon` and `cortheon-mcp`, followed
+by the standard MCP configuration. Cortheon stays installed after you close
+the terminal. There is nothing to activate.
 
 ### 2. Connect your host
 
-Pick the host you use.
+Pick the host you use. To connect both Pi and OpenCode, run:
+
+```bash
+cortheon install --host pi --host opencode
+```
+
+Or connect one host at a time.
 
 For Pi:
 
@@ -78,8 +82,9 @@ cortheon configure --host generic
 ```
 
 Copy the printed JSON into the host's MCP configuration and restart the host.
-Generic MCP mode is cooperative. Pi and OpenCode can enforce the reasoning and
-completion checks more reliably.
+The configuration calls the machine-installed `cortheon-mcp` command directly.
+Generic MCP mode is cooperative. Pi and OpenCode use small host adapters so
+they can also check tool evidence and task completion.
 
 ### 3. Run a task and check it
 
