@@ -1,4 +1,4 @@
-import { protocol } from "./state.js"
+import { modelContext, protocol } from "./state.js"
 import { isAmbiguityGoal, isCausalSynthesisGoal, deriveKeyedCollisionInference } from "./joins.js"
 import { numericJoin } from "./plans.js"
 import { prependSystemGuidance } from "./state.js"
@@ -50,10 +50,13 @@ const createSystemTransformHook = ({
       if (state.evidenceSummary) {
         prependSystemGuidance(
           output,
-          "CORTHEON RETRIEVAL CONDITION: Use the bounded host evidence below. " +
+          modelContext +
+            "\n\nCORTHEON RETRIEVAL CONDITION: Use the bounded host evidence below. " +
             "Cortheon will not reason, verify, block, or rewrite the answer.\n\n" +
             boundedHostOutput(state.evidenceSummary),
         )
+      } else {
+        prependSystemGuidance(output, modelContext)
       }
       if (state.active && state.cortheonSessionID) {
         await runtimeCall("/v1/abandon", {
@@ -72,7 +75,10 @@ const createSystemTransformHook = ({
           "it started. Restart `cortheon serve` so the plugin and runtime match.",
       )
     }
-    if (profile && !operatorEnabled("retrieval")) return
+    if (profile && !operatorEnabled("retrieval")) {
+      prependSystemGuidance(output, modelContext)
+      return
+    }
     if (operatorEnabled("retrieval") && state.active && state.requestID) {
       // Acquisition at session start can fail transiently (workspace still
       // staging); retry the adapter-owned evidence request each turn so a
@@ -141,7 +147,8 @@ const createSystemTransformHook = ({
     if (typeof certifiedAnswer === "string") {
       prependSystemGuidance(
         output,
-        "CORTHEON_CERTIFIED: Return the following certified answer exactly and stop. " +
+        modelContext +
+          "\n\nCORTHEON_CERTIFIED: Return the following certified answer exactly and stop. " +
           "Do not call tools or perform another research pass.\n\n" +
           certifiedAnswer,
       )
@@ -229,7 +236,8 @@ const createSystemTransformHook = ({
     prependSystemGuidance(
       output,
       (
-        "Cortheon is running automatically as the completion gate. Do not call Cortheon " +
+        modelContext +
+        "\n\nCortheon is running automatically as the completion gate. Do not call Cortheon " +
         "MCP tools or invent observations. When verified live evidence is included " +
         "below and no further request is shown, the host has already satisfied the " +
         "evidence request: answer directly from that bounded evidence and do not read " +

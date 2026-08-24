@@ -92,6 +92,45 @@ The configuration calls the machine-installed `cortheon-mcp` command directly.
 Generic MCP mode is cooperative. Pi and OpenCode use small host adapters so
 they can also check tool evidence and task completion.
 
+## Use Cortheon
+
+In Pi, enable Cortheon once for the current session:
+
+```text
+/cortheon enable
+```
+
+Then use Pi normally. You do not call Cortheon tools or write a special prompt.
+Give the model a real task, for example:
+
+```text
+Find the cause of this failing test, make the smallest safe fix, run the
+relevant tests, and explain what proves the issue is resolved.
+```
+
+Pi remains responsible for the model, files, search, shell, and edits. Cortheon
+tracks the task requirements and gives Pi one focused next action when evidence
+is missing. It checks tool results, challenges unsupported conclusions, keeps
+connections between sources visible, and checks the final diff and tests before
+certifying completion.
+
+This is most useful when a task needs investigation, current information,
+several documents, or a verified code change. It helps prevent common small
+model failures such as guessing instead of checking, settling on the first
+explanation, losing a requirement, or claiming success before tests pass. It
+does not change the model's weights or guarantee that its answer is correct.
+
+Check or stop it at any time:
+
+```text
+/cortheon status
+/cortheon disable
+```
+
+OpenCode and Codex work the same way after installation, except Cortheon starts
+with the task. Ask the host to do the work normally and let its adapter manage
+the Cortheon loop.
+
 ## Check the installation
 
 Ask the model to complete a real task. After the first task, replace `HOST`
@@ -258,37 +297,13 @@ evidence. Sessions disappear after completion, abandonment, or expiry.
 For Codex, nested web work reaches hooks as one outer execution receipt.
 Cortheon does not use that evidence for published benchmark claims.
 
-## Package limits
-
-Release tests enforce these limits:
-
-| Property | Limit |
-|---|---:|
-| Third-party runtime dependencies | 0 |
-| Wheel size | 241,000 bytes |
-| Source distribution size | 222,000 bytes |
-| Installed console commands | 2 |
-| Runtime project database | None |
-
-The wheel contains the runtime and host adapters. It excludes benchmark and
-experimental modules.
-
-## Development and release
+## Development
 
 ```bash
 python3 -m pip install -e '.[test]'
 PYTHONPATH=src pytest -q
 ruff check src tests setup.py
 ```
-
-Run the source-bound release check with:
-
-```bash
-scripts/verify-release --status
-```
-
-The check fails if source files change while it runs. It records the source
-digest, test results, package contents, and artifact hashes.
 
 ## Proof status
 

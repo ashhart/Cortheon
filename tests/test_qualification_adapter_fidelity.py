@@ -131,7 +131,8 @@ def test_pi_verification_only_preserves_prompt_and_does_not_bind_tools(tmp_path)
         strip_types=True,
         cwd=_stage_pi(tmp_path),
     )
-    assert result["prompt"] == "base"
+    assert result["prompt"].startswith("base\n\n[CORTHEON_MODEL_CONTEXT_V1]")
+    assert "CORTHEON_ACTIVE" not in result["prompt"]
     assert result["decision"] is None
     assert result["input"] == {"path": "other.py"}
 
@@ -188,10 +189,10 @@ def test_opencode_verification_only_never_runs_repairs_tests_or_research() -> No
       console.log(JSON.stringify({calls, prompt: prompt.system}));
     """
     result = _node(script, _profile("verification_only"))
-    assert result == {
-        "calls": {"repair": 0, "test": 0, "research": 0, "prompt": 0},
-        "prompt": ["base"],
-    }
+    assert result["calls"] == {"repair": 0, "test": 0, "research": 0, "prompt": 0}
+    assert result["prompt"][0].startswith("[CORTHEON_MODEL_CONTEXT_V1]")
+    assert result["prompt"][0].endswith("\n\nbase")
+    assert "Cortheon is running automatically" not in result["prompt"][0]
 
 
 def test_opencode_stopping_ablation_does_not_block_redundant_read() -> None:

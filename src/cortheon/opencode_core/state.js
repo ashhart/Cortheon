@@ -117,7 +117,16 @@ const semanticStopwords = new Set([
   "would",
 ])
 
-const protocol = `
+const modelContext = `
+[CORTHEON_MODEL_CONTEXT_V1]
+Cortheon is a lightweight reasoning runtime that gives this local model capabilities
+beyond its weights. Use host tools to fetch current evidence, test explanations,
+connect facts across sources, and verify work. The host runs tools; the model answers.
+Follow Cortheon's current instruction, never invent evidence, and stop when released.
+`.trim()
+
+const protocol = `${modelContext}
+
 Cortheon is the completion gate for this task.
 1. Call cortheon_start once. Normally omit task_kind so Cortheon infers it.
 2. Obey next_action. For a harness_tool action, ACTUALLY call the host read,
@@ -251,6 +260,7 @@ export {
   leaseSeconds,
   heartbeatIntervalMs,
   semanticStopwords,
+  modelContext,
   protocol,
   boundedHostOutput,
   focusedSessionDiff,

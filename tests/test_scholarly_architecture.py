@@ -15,8 +15,6 @@ ROOT = Path(__file__).parents[1]
 FACADE = ROOT / "src" / "cortheon" / "scholarly.py"
 CORE = ROOT / "src" / "cortheon" / "scholarly_core"
 EXPECTED_CONSUMERS = {
-    "src/cortheon/research.py",
-    "src/cortheon/research_core/engine.py",
     "src/cortheon/benchmark_core/fixtures_research.py",
 }
 CLASS_SIGNATURES = {

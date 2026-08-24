@@ -130,7 +130,7 @@ class RoleOverrideScanTests(unittest.TestCase):
         self.assertNotIn("callread", flatten(scan.flags[0]))
 
     def test_layout_preserving_scan_drops_the_order(self) -> None:
-        # preserve_layout is the mode the proxy and the evidence graph use.
+        # Layout preservation keeps benign line boundaries after cleaning.
         multiline = f"{BENIGN_CLAUSE}\n{DIRECTIVE}\nPath B uses collision key jade."
         for text, survivors in (
             (EVIDENCE, ("collision key amber",)),

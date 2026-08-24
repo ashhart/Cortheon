@@ -158,7 +158,13 @@ def policy_refusal_script(state: dict[str, Any]):
         if path == "/v1/start":
             return _start_payload("pol-1", REQ0)
         if path == "/v1/observe":
-            return (422, {"error": "cognitive policy refusal"})
+            return (
+                422,
+                {
+                    "error": "cognitive policy refusal",
+                    "error_type": "CognitivePolicyRefusal",
+                },
+            )
         if path == "/v1/complete":
             return (
                 200,

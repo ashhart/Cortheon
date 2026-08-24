@@ -1,9 +1,4 @@
-# What a source archive is allowed to contain. setup.py holds the shipping
-# allowlist and filters the file list this template produces, so a name here
-# that the allowlist drops would silently never ship. The two exclusions below
-# are the whole difference between the two, and
-# tests/test_lightweight_distribution.py fails if this file and a finished
-# archive stop describing the same set.
+# Source-archive allowlist. setup.py enforces the final contents.
 
 include LICENSE
 include MANIFEST.in

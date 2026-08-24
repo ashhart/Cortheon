@@ -13,11 +13,10 @@ const runtimeTimeoutInput = process.env.CORTHEON_RUNTIME_TIMEOUT_MS;
 const runtimeCommand = process.env.CORTHEON_RUNTIME_COMMAND || "cortheon";
 const pluginDebug = process.env.CORTHEON_PLUGIN_DEBUG === "1";
 
-/** An explicit live-runtime cognitive-policy refusal (HTTP 422 from
- * /v1/complete and peers): a typed marker on the error object, never
- * string-matched. Callers must fail closed on it, while transport/protocol/
- * unavailability errors (reset, timeout, invalid JSON, 5xx, auth) fail
- * open. */
+/** An explicit live-runtime cognitive-policy refusal: a typed marker on the
+ * error object, never inferred from HTTP status or message text. Callers must
+ * fail closed on it, while validation, correction, transport, protocol, and
+ * unavailability errors fail open. */
 export interface RuntimePolicyRefusal extends Error {
 	readonly policyRefusal: true;
 	readonly status: number;
@@ -185,7 +184,11 @@ export async function runtimeCall(
 				typeof error === "string"
 					? error
 					: `Cortheon rejected the request (HTTP ${response.status})`;
-			if (response.status === 422) {
+			const errorType = (payload as Record<string, unknown>).error_type;
+			if (
+				response.status === 422 &&
+				errorType === "CognitivePolicyRefusal"
+			) {
 				throw runtimePolicyRefusal(message, response.status);
 			}
 			throw new Error(message);

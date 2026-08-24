@@ -1,13 +1,13 @@
-"""Transport semantics on the completion path: policy fails closed,
-transport fails open.
+"""Completion transport semantics: explicit policy fails closed; all other
+runtime failures fail open.
 
-A valid HTTP 422 cognitive-policy response from /v1/complete is an explicit
-live runtime refusal: exactly one WITHHELD result, one abandon, no raw
-draft. Connection reset, invalid JSON, timeout, and 5xx are transport
-failures: the ephemeral session is abandoned and the original host-model
-answer stands verbatim with no sticky disposition that later rewrites it.
-The same distinction holds on the causal path, where wholly unavailable
-deliberation also fails open as substrate unavailability.
+Only HTTP 422 with ``error_type=CognitivePolicyRefusal`` is an explicit live
+runtime refusal: exactly one WITHHELD result, one abandon, no raw draft.
+Validation/correction errors, connection reset, invalid JSON, timeout, and
+5xx are non-policy failures: the ephemeral session is abandoned and the
+original host-model answer stands verbatim with no sticky disposition that
+later rewrites it. The same distinction holds on the causal path, where
+wholly unavailable deliberation also fails open as substrate unavailability.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pi_causal_helpers import (
     causal_runtime_script,
     causal_workspace,
 )
-from pi_doom_loop_helpers import workspace
+from pi_doom_loop_helpers import TOOL_TURN, workspace
 from pi_recovery_helpers import (
     Servers,
     assistant_answers,
@@ -40,7 +40,13 @@ from pi_terminal_helpers import (
     terminal_status_messages,
 )
 
-POLICY_422 = (422, {"error": "cognitive policy refusal"})
+POLICY_422 = (
+    422,
+    {
+        "error": "cognitive policy refusal",
+        "error_type": "CognitivePolicyRefusal",
+    },
+)
 CAPTURE_ENV = {"CORTHEON_BENCHMARK_CAPTURE_CANDIDATE": "1"}
 STAGE_ENTRY_TYPE = "cortheon-benchmark-causal-stage-v1"
 CANDIDATE_ENTRY_TYPE = "cortheon-benchmark-candidate-v1"
@@ -134,6 +140,103 @@ def _run(
             extra_env=extra_env,
         )
     return completed, model_state, runtime_state
+
+
+def _run_read_only_runtime_correction(tmp_path: Path, error_type: str | None):
+    """Replay a benign inspection whose finalization needs runtime correction."""
+
+    prompt = "Inspect the local fact file and report what it contains. Do not modify files."
+    answer = "The inspected file contains three labelled keys."
+    model_state: dict[str, Any] = {
+        "requests": [],
+        "turns": [TOOL_TURN, {"text": answer}],
+    }
+
+    def script(path: str, _body: dict[str, Any]) -> Any:
+        if path == "/v1/start":
+            return (
+                200,
+                {
+                    "session_id": "inspect-1",
+                    "status": "observing",
+                    "session": {"deliverable": "code_understanding"},
+                    "next_action": {
+                        "type": "harness_tool",
+                        "request": {
+                            "request_id": "req-0",
+                            "capability": "inspect",
+                            "query": "Inspect the local fact file.",
+                        },
+                    },
+                },
+            )
+        if path == "/v1/observe":
+            return (
+                200,
+                {
+                    "session_id": "inspect-1",
+                    "status": "observing",
+                    "accepted_evidence_ids": ["ev-1"],
+                    "next_action": {"type": "finish"},
+                },
+            )
+        if path == "/v1/complete":
+            error = {"error": "the investigation needs another bounded step"}
+            if error_type is not None:
+                error["error_type"] = error_type
+            return (
+                422,
+                error,
+            )
+        return 200, {"status": "ok"}
+
+    runtime_state: dict[str, Any] = {"records": [], "script": script}
+    with Servers(model_state, runtime_state) as servers:
+        completed = run_pi(
+            EXTENSION,
+            prompt,
+            model_port=servers.model.server_port,
+            runtime_port=servers.runtime.server_port,
+            workspace=workspace(tmp_path),
+            tmp_path=tmp_path,
+            timeout=60,
+        )
+    return completed, answer, runtime_state
+
+
+@pytest.mark.parametrize("error_type", [None, "ValueError", "CognitiveRuntimeError"])
+def test_read_only_runtime_correction_does_not_masquerade_as_policy_refusal(
+    tmp_path: Path, error_type: str | None
+) -> None:
+    """A correctable inspection error must not erase a benign host answer."""
+    if not require_pi():
+        pytest.skip("Pi is not installed")
+    completed, answer, runtime_state = _run_read_only_runtime_correction(tmp_path, error_type)
+    assert completed.returncode == 0, completed.stderr
+    answers = assistant_answers(completed)
+    assert answers and answers[-1] == answer, answers
+    assert not any(text.startswith(WITHHELD_MARKER) for text in answers), answers
+    assert terminal_status_messages(completed) == []
+    paths = [path for path, _body in runtime_state["records"]]
+    assert paths.count("/v1/complete") == 1, paths
+    assert paths.count("/v1/abandon") == 1, paths
+
+
+def test_enabled_pi_injects_stable_model_context_before_task_state(tmp_path: Path) -> None:
+    """The model learns what Cortheon does before it sees changing task state."""
+    if not require_pi():
+        pytest.skip("Pi is not installed")
+    completed, model_state, _runtime_state = _run(
+        tmp_path / "run",
+        (500, {"error": "runtime unavailable"}),
+    )
+    assert completed.returncode == 0, completed.stderr
+    request = json.dumps(model_state["requests"][0].get("messages", []))
+    marker = "[CORTHEON_MODEL_CONTEXT_V1]"
+    assert marker in request, request
+    assert "beyond its weights" in request, request
+    assert "model answers" in request, request
+    assert request.index(marker) < request.index("CORTHEON_ACTIVE"), request
 
 
 def test_policy_422_fails_closed_with_one_withhold_and_abandon(

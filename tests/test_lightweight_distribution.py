@@ -145,26 +145,20 @@ def test_wheel_contains_only_the_deployable_runtime(tmp_path: Path) -> None:
         member.endswith(
             (
                 "/benchmark.py",
-                "/research.py",
-                "/proxy.py",
                 "/parity.py",
                 "/cognitive_benchmark.py",
             )
         )
         for member in shipped_python
     )
-    assert "cortheon/proxy.py" not in members
     assert "cortheon/benchmark.py" not in members
-    assert "cortheon/research.py" not in members
     assert not any("/benchmark_core/" in member for member in members)
-    assert not any("/agent_core/" in member for member in members)
     # The round-8 parity benchmark split stays repository-only with its facade.
     assert not any("/parity_benchmark_core/" in member for member in members)
     # As does the release-contract split that replaced the parity.py god file.
     assert not any("/parity_gates/" in member for member in members)
     # And the pack-issuer split; it holds evaluator secret handling.
     assert not any("/parity_pack_core/" in member for member in members)
-    assert not any("/proxy_core/" in member for member in members)
 
     entry_points = next(name for name in members if name.endswith("entry_points.txt"))
     with zipfile.ZipFile(wheel) as archive:
@@ -269,15 +263,11 @@ def test_source_archive_uses_the_same_runtime_allowlist(tmp_path: Path) -> None:
         # and repository-only modules the allowlist drops.
         listed = read("src/cortheon.egg-info/SOURCES.txt").split()
     assert set(listed) == {member.name.split("/", 1)[1] for member in entries if member.isfile()}
-    assert not any(member.endswith("/cortheon/proxy.py") for member in members)
     assert not any(member.endswith("/cortheon/benchmark.py") for member in members)
-    assert not any(member.endswith("/cortheon/research.py") for member in members)
     assert not any("/benchmark_core/" in member for member in members)
-    assert not any("/agent_core/" in member for member in members)
     assert not any("/parity_benchmark_core/" in member for member in members)
     assert not any("/parity_gates/" in member for member in members)
     assert not any("/parity_pack_core/" in member for member in members)
-    assert not any("/proxy_core/" in member for member in members)
     assert not any("/tests/" in member for member in members)
     sdist_js = {
         member[len("cortheon-0.1.0/src/") :]

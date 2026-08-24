@@ -52,7 +52,13 @@ def _policy_422_script():
                 },
             )
         if path == "/v1/complete":
-            return (422, {"error": "cognitive policy refusal"})
+            return (
+                422,
+                {
+                    "error": "cognitive policy refusal",
+                    "error_type": "CognitivePolicyRefusal",
+                },
+            )
         return 200, {"status": "ok"}
 
     return script

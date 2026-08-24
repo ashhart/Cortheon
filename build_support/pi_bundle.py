@@ -39,13 +39,13 @@ PI_SOURCE_SHA256: dict[str, str] = {
     "events": "8c2ea7257c96a39275fa9e0a9ab482740299af5510853121a79eb86c85c0d1db",
     "host_evidence": "1e33beb163f351b6067e0fa8a5c7fd99062eb17d841e5089c8953beb092cc899",
     "merge": "46f7a5a8a27080f61c888f761c8ff58f003db40d667ba9442d70bf168aa24d21",
-    "protocol": "fb77b9969a2c3dff49f122e3e64f249ab06de9239a72564922370ecee2157c99",
+    "protocol": "918276eac8fb12e6c981cb25e13299bed09310520f1c311cdcf1f46106060305",
     "causal_complete": "e60e0e397289953cc66ffc5e93eea298364efe1a11dc85c8032af2916155caa9",
     "candidate_capture": "385195e9f743ac4b2c3da855e2cb7c506603245f13901079fed306d697be1a39",
     "repair": "f3336ea65ec622293afaaa62ec903ba246ae6d2dd71f14d33bc9456e26e300f0",
-    "runtime": "632cfbbfa85f1a63a708a28141423af5fd3e22e4aa4851da389ceec8586fa542",
+    "runtime": "82e3ea95888e99b0249eec86cd26b0c623ab7551e3ffe63cb65b6349ce898718",
     "satisfy": "8f264d5a627c89c9c51ca0cbcfb402fe78894b60d81a407809641e04e6a73fd4",
-    "session_events": "04b6437c432eb3baedf7a35d3262286d7675e622b381e3d70690bf1213697812",
+    "session_events": "f7e147e2f1255892f63d578c78f887dfa4b72b98cdd6c12d5c5c5b4f6a78ac23",
     "state": "38c779efa10037df11cf97d3d5576f344457499d96356254c6e7d0e6e39e7d8b",
     "task_analysis": "ca7ab38d80d5a8d7a554445d7a74096249ad08fe19b7e9e1b34ff17c2b00d39c",
     "observe_claim": "1924150be30ca2d67c374cfaf19485bd20eea6b49a84e52c25aefd89d983d581",
@@ -55,7 +55,7 @@ PI_SOURCE_SHA256: dict[str, str] = {
     "terminal": "7705a5b745c701dcf4a6b9003c68466006b8ba70da6fe219fd51f180195fc1df",
     "causal_answer": "3cc6ba2a7b8f4479ee194dedf7d9df18c33b6e4d73cdda14c8b6c04b77ee34bc",
 }
-PI_COMPACTED_CLOSURE_SHA256 = "ddf73d85c340b499e08d6daafc87bb9f3bd18f1936308e8f98e956e3bb506252"
+PI_COMPACTED_CLOSURE_SHA256 = "b528fb49e5d406d2e75bae614283e4f18ea6c399c57fb9bdc49533f4bdfd7f18"
 
 # Exact external specifiers this adapter may import from, as
 # spec -> (value symbols, type symbols, default binding or None).

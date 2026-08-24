@@ -4,6 +4,7 @@ import {
 	CONTINUATION_PREFIX,
 	LEASE_SECONDS,
 	MAX_AUTOMATIC_CONTINUATIONS,
+	modelContext,
 	protocol,
 } from "./protocol.ts";
 import { mergePayload } from "./merge.ts";
@@ -208,7 +209,7 @@ function sendScheduledContinuation(pi: ExtensionAPI, text: string): void {
 		const active = getActive();
 		const profile = evaluationProfile();
 		if (profile && !operatorEnabled("retrieval")) {
-			return { systemPrompt: event.systemPrompt };
+			return { systemPrompt: `${event.systemPrompt}\n\n${modelContext}` };
 		}
 		if (profile?.config.cleanup_before_answer) {
 			const evidenceSummary = active?.evidenceSummary;
@@ -217,7 +218,9 @@ function sendScheduledContinuation(pi: ExtensionAPI, text: string): void {
 				? `\n\nCORTHEON RETRIEVAL CONDITION: Use this bounded host evidence. ` +
 					`Cortheon will not reason, verify, block, or rewrite the answer.\n${evidenceSummary}`
 				: "";
-			return { systemPrompt: `${event.systemPrompt}${evidence}` };
+			return {
+				systemPrompt: `${event.systemPrompt}\n\n${modelContext}${evidence}`,
+			};
 		}
 		const causalSynthesis = Boolean(
 			active &&

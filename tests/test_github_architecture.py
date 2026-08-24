@@ -15,8 +15,6 @@ import pytest
 import cortheon.artifacts as artifacts
 import cortheon.connectors.github as github
 import cortheon.engine as engine
-import cortheon.research as research
-import cortheon.research_core.engine as research_engine
 
 ROOT = Path(__file__).resolve().parents[1]
 FACADE = ROOT / "src" / "cortheon" / "connectors" / "github.py"
@@ -194,8 +192,6 @@ def test_only_facade_imports_github_core_from_repository_source() -> None:
 def test_direct_consumers_receive_identical_objects() -> None:
     assert artifacts.parse_owner_repo is github.parse_owner_repo
     assert engine.GitHubConnector is github.GitHubConnector
-    assert research.GitHubRepositorySearch is github.GitHubRepositorySearch
-    assert research_engine.GitHubRepositorySearch is github.GitHubRepositorySearch
 
 
 class _SearchClient:

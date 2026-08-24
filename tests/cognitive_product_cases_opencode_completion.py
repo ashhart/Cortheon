@@ -322,6 +322,12 @@ await hooks["experimental.chat.system.transform"](
   system,
 )
 const systemPrompt = system.system.join("\n")
+if (!systemPrompt.includes("[CORTHEON_MODEL_CONTEXT_V1]")) {
+  throw new Error(`model context was not injected: ${systemPrompt}`)
+}
+if (!systemPrompt.includes("beyond its weights")) {
+  throw new Error(`model capability context was not injected: ${systemPrompt}`)
+}
 if (!systemPrompt.includes("Cortheon adaptive cognition: stage=connect")) {
   throw new Error(`adaptive cognition was not injected: ${systemPrompt}`)
 }

@@ -28,7 +28,13 @@ from pi_recovery_helpers import Servers, require_pi, run_pi
 from pi_terminal_constants import AMBIGUITY_ANSWER, AMBIGUITY_PROMPT, EXTENSION
 
 TMP = Path("/tmp/cortheon-acceptance")
-POLICY_422 = (422, {"error": "cognitive policy refusal"})
+POLICY_422 = (
+    422,
+    {
+        "error": "cognitive policy refusal",
+        "error_type": "CognitivePolicyRefusal",
+    },
+)
 CAPTURE = {"CORTHEON_BENCHMARK_CAPTURE_CANDIDATE": "1"}
 
 

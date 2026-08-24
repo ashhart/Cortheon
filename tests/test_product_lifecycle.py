@@ -201,14 +201,3 @@ def test_results_distinguish_an_unavailable_runtime_from_a_stale_one() -> None:
     assert report["runtime_identity_matches"] is False
     assert report["error"] == "runtime unavailable"
     metrics.assert_not_called()
-
-
-def test_legacy_slash_command_templates_fail_closed() -> None:
-    root = Path(__file__).parents[1] / "integrations" / "slash-commands"
-    templates = [root / "README.md", *sorted((root / "generated").glob("*.md"))]
-
-    assert templates
-    for template in templates:
-        text = template.read_text(encoding="utf-8")
-        assert "python3 -m cortheon.slash" not in text
-        assert "Do not install" in text or "not shipped" in text

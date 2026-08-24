@@ -139,8 +139,6 @@ def compile_program(
     evaluation_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     requirement_list = [(str(requirement_id), str(proof)) for requirement_id, proof in requirements]
-    # Decomposition is implemented in cortheon.decomposition but not yet shipped:
-    # the 150 KB runtime budget has no room for it. See tests/test_decomposition.py.
     sequence = _apply_effort(
         _SEQUENCES.get(deliverable, _SEQUENCES["answer"]),
         effort,

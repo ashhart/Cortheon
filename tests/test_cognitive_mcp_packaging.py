@@ -23,8 +23,6 @@ REPOSITORY_ONLY = (
     "cortheon/cognitive_benchmark.py",
     "cortheon/benchmark.py",
     "cortheon/parity.py",
-    "cortheon/proxy.py",
-    "cortheon/research.py",
 )
 
 

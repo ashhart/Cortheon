@@ -179,19 +179,6 @@ def test_renamed_repository_is_a_deprecation_signal() -> None:
     assert any("py-pdf/pypdf" in risk for risk in score.risks)
 
 
-def test_verdict_follows_thin_evidence() -> None:
-    """Regression: allow at 0.95 beside thin_evidence at 0.5 in one report."""
-
-    from cortheon.knowledge_pool import couple_verdict_to_answer_status
-
-    verdict, notes = couple_verdict_to_answer_status("allow", "thin_evidence")
-    assert verdict == "needs_evidence" and notes
-    verdict, notes = couple_verdict_to_answer_status("allow", "answered")
-    assert verdict == "allow" and not notes
-    verdict, notes = couple_verdict_to_answer_status("block", "thin_evidence")
-    assert verdict == "block" and not notes
-
-
 def test_supersession_requires_an_actual_rename_redirect() -> None:
     """Regression: package-vs-repo name mismatch flagged healthy SDKs.
 

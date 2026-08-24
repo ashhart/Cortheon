@@ -17,7 +17,6 @@ FACADE = ROOT / "src" / "cortheon" / "code_check.py"
 CORE = ROOT / "src" / "cortheon" / "code_check_core"
 EXPECTED_CONSUMERS = {
     "src/cortheon/engine.py",
-    "src/cortheon/prompt_evidence.py",
 }
 CORE_OWNERS = {
     "checking.py": {"check_api_usage", "check_keywords"},

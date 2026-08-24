@@ -238,6 +238,8 @@ def test_cache_copied_wheel_hook_runs_without_the_cortheon_package(
     assert submitted.stderr == stopped.stderr == ""
     context = json.loads(submitted.stdout)["hookSpecificOutput"]
     assert context["hookEventName"] == "UserPromptSubmit"
+    assert "[CORTHEON_MODEL_CONTEXT_V1]" in context["additionalContext"]
+    assert "beyond its weights" in context["additionalContext"]
     assert "CORTHEON IS ACTIVE." in context["additionalContext"]
     assert json.loads(stopped.stdout) == {
         "decision": "block",

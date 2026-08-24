@@ -17,13 +17,9 @@ ROOT = Path(__file__).parents[1]
 FACADE = ROOT / "src" / "cortheon" / "engine.py"
 CORE = ROOT / "src" / "cortheon" / "engine_core"
 EXPECTED_CONSUMERS = {
-    "src/cortheon/auto_evidence.py",
-    "src/cortheon/freshness_daemon.py",
-    "src/cortheon/knowledge_pool.py",
     "src/cortheon/option_ranker.py",
     "src/cortheon/parity_benchmark_core/casepack.py",
     "src/cortheon/parity_benchmark_core/cli.py",
-    "src/cortheon/slash.py",
 }
 CORE_OWNERS = {
     "packages.py": {"inspect_package", "compare", "recommend"},
