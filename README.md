@@ -16,6 +16,90 @@ runtime stops responding, the host continues and marks the result uncertified.
 > Cortheon is alpha software. The project has not proved universal frontier
 > parity.
 
+## Install in three steps
+
+You need Python 3.11 or newer, Git, and one supported host. Cortheon does not
+use Docker or a second model.
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/ashhart/Cortheon.git
+cd Cortheon
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+cortheon --version
+```
+
+Keep the virtual environment active while running Cortheon commands. In a new
+terminal, return to the repository and run `source .venv/bin/activate`.
+
+### 2. Connect your host
+
+Pick the host you use.
+
+For Pi:
+
+```bash
+cortheon install --host pi
+cortheon doctor --host pi
+```
+
+Restart Pi, then run these commands inside Pi:
+
+```text
+/cortheon enable
+/cortheon status
+```
+
+For OpenCode:
+
+```bash
+cortheon install --host opencode
+cortheon doctor --host opencode
+```
+
+Restart OpenCode. Cortheon starts when the next task begins.
+
+For Codex:
+
+```bash
+cortheon install --host codex
+cortheon doctor --host codex
+```
+
+Start a new Codex task. Cortheon starts with the task.
+
+For another MCP host:
+
+```bash
+cortheon configure --host generic
+```
+
+Copy the printed JSON into the host's MCP configuration and restart the host.
+Generic MCP mode is cooperative. Pi and OpenCode can enforce the reasoning and
+completion checks more reliably.
+
+### 3. Run a task and check it
+
+Ask the model to complete a real task. After the first task, replace `HOST`
+with `pi`, `opencode`, or `codex` and run:
+
+```bash
+cortheon doctor --host HOST --require-runtime
+cortheon conformance --host HOST
+cortheon results
+```
+
+For generic MCP, run `cortheon conformance --host generic` instead. The
+`results` command reports content-free counters for the current runtime. It
+never includes prompts, answers, file contents, or URLs.
+
+Remove an integration with `cortheon uninstall --host HOST`. Pi and OpenCode
+also support `--scope project` if you want Cortheon enabled for one repository
+only.
+
 ## The goal
 
 Cortheon aims to make a small model perform like a frontier system by improving
@@ -64,85 +148,7 @@ does not isolate lift from discriminating evidence because that operator's
 removed arm also scored 3/3. Every development gate remains false. See the
 [retained reports and chain roots](benchmarks/frozen/operator_lift_qwen35_4b_20260824/SUMMARY.md).
 
-## Tester quick start
-
-Cortheon requires Python 3.11 or newer. It is not on a package registry yet.
-The Python package includes the Pi, OpenCode, and Codex adapters plus the
-generic `cortheon-mcp` command. It does not use Docker or a second model.
-
-Install the private preview from the repository URL you received:
-
-```bash
-git clone REPOSITORY_URL cortheon
-cd cortheon
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install .
-cortheon --version
-```
-
-Keep this virtual environment activated when you run the setup and diagnostic
-commands below.
-
-### Pi
-
-```bash
-cortheon install --host pi
-cortheon doctor --host pi
-```
-
-Restart Pi. In each Pi session where you want Cortheon, run:
-
-```text
-/cortheon enable
-/cortheon status
-```
-
-`/cortheon disable` gives you a baseline run with the same Pi installation.
-After the first assisted task, verify the live connection in a terminal:
-
-```bash
-cortheon doctor --host pi --require-runtime
-cortheon conformance --host pi
-```
-
-### OpenCode
-
-Run a baseline task before installation, then install the adapter:
-
-```bash
-cortheon install --host opencode
-cortheon doctor --host opencode
-```
-
-Restart OpenCode. Cortheon starts automatically when the next task begins.
-After that task, run `cortheon conformance --host opencode` in a terminal.
-
-### Codex
-
-```bash
-cortheon install --host codex
-cortheon doctor --host codex
-```
-
-Start a new Codex task. Cortheon starts automatically. After the first task,
-run `cortheon conformance --host codex` in a terminal.
-
-### Other MCP hosts
-
-```bash
-cortheon configure --host generic
-```
-
-Copy the printed JSON into the host's MCP configuration, restart the host, then
-run `cortheon conformance --host generic`. Generic MCP mode is cooperative. It
-cannot intercept every host tool or the final answer, so Pi or OpenCode gives a
-stronger first test.
-
-Add `--scope project` to Pi or OpenCode install, doctor, and uninstall commands
-for a project-only setup.
-
-### Run a fair before-and-after test
+## Run a fair before-and-after test
 
 Use the same host, local model, quantization, settings, repository state, and
 prompt in two fresh sessions. Run the baseline first. For Pi, leave Cortheon
@@ -187,10 +193,9 @@ an older Cortheon process still owns port 8743. Close the hosts using Cortheon,
 stop that old `cortheon serve` process, and restart the selected host. The
 commands fail instead of accepting metrics or conformance from the wrong build.
 
-Remove an integration with `cortheon uninstall --host HOST`. Generic MCP has no
-Cortheon-owned host file, so remove that entry yourself. Pi and OpenCode keep
-one `.cortheon.bak` before the first configuration change and reject malformed
-or symlinked configuration files.
+Generic MCP has no Cortheon-owned host file, so remove that configuration entry
+yourself. Pi and OpenCode keep one `.cortheon.bak` before the first
+configuration change and reject malformed or symlinked configuration files.
 
 ## Generic MCP reference
 
