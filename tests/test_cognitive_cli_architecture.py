@@ -29,6 +29,7 @@ OWNERS = {
     "main": "dispatch.py",
     "mcp": "operations.py",
     "runtime_health": "diagnostics.py",
+    "runtime_results": "diagnostics.py",
     "serve": "operations.py",
     "uninstall": "operations.py",
 }
@@ -43,6 +44,9 @@ PUBLIC_SIGNATURES = {
         "scope: 'str' = 'user', project_dir: 'str | None' = None) -> 'dict[str, Any]'"
     ),
     "_runtime_health": "(url: 'str', *, token: 'str') -> 'dict[str, Any]'",
+    "runtime_results": (
+        "(runtime_url: 'str' = 'http://127.0.0.1:8743', *, token: 'str' = '') -> 'dict[str, Any]'"
+    ),
     "host_conformance": (
         "(runtime_url: 'str' = 'http://127.0.0.1:8743', *, token: 'str' = '', "
         "hosts: 'list[str] | tuple[str, ...]' = (), timeout_seconds: 'float' = 15.0) "
@@ -58,6 +62,7 @@ COMMANDS = (
     "mcp",
     "doctor",
     "conformance",
+    "results",
     "install",
     "uninstall",
     "configure",

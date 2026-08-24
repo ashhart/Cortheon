@@ -73,6 +73,16 @@ def _runtime_health(url: str, *, token: str) -> dict[str, Any]:
     return diagnostics.runtime_health(url, token=token)
 
 
+def runtime_results(
+    runtime_url: str = DEFAULT_RUNTIME_URL,
+    *,
+    token: str = "",
+) -> dict[str, Any]:
+    from cortheon.cognitive_cli_core import diagnostics
+
+    return diagnostics.runtime_results(runtime_url, token=token)
+
+
 def host_conformance(
     runtime_url: str = DEFAULT_RUNTIME_URL,
     *,

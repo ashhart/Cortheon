@@ -5,7 +5,9 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+from cortheon import __version__
 from cortheon.cognitive_cli import doctor, host_conformance
+from cortheon.cognitive_http import _SOURCE_FINGERPRINT
 from cortheon.cognitive_protocol import CORTHEON_PROTOCOL_VERSION
 from cortheon.cognitive_runtime import CognitiveRuntime
 
@@ -46,7 +48,14 @@ def test_host_conformance_executes_one_probe_per_host():
     with (
         patch(
             "cortheon.cognitive_cli._runtime_health",
-            return_value={"ok": True, "storage": "memory_only"},
+            return_value={
+                "ok": True,
+                "service": "cortheon-cognitive",
+                "version": __version__,
+                "protocol_version": CORTHEON_PROTOCOL_VERSION,
+                "source_fingerprint": _SOURCE_FINGERPRINT,
+                "storage": "memory_only",
+            },
         ),
         patch(
             "cortheon.cognitive_install.host_installation_status",

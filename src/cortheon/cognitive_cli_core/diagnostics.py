@@ -13,6 +13,22 @@ from typing import Any
 from cortheon import cognitive_cli as surface
 
 
+def runtime_identity(runtime: dict[str, Any]) -> tuple[dict[str, str], bool]:
+    from cortheon.cognitive_http import _SOURCE_FINGERPRINT
+
+    expected = {
+        "service": "cortheon-cognitive",
+        "version": surface.__version__,
+        "protocol_version": surface.protocol_capabilities()["protocol_version"],
+        "source_fingerprint": _SOURCE_FINGERPRINT,
+        "storage": "memory_only",
+    }
+    return expected, bool(
+        runtime.get("ok") is True
+        and all(runtime.get(key) == value for key, value in expected.items())
+    )
+
+
 def doctor(
     runtime_url: str,
     *,
@@ -22,7 +38,6 @@ def doctor(
     scope: str,
     project_dir: str | None,
 ) -> dict[str, Any]:
-    from cortheon.cognitive_http import _SOURCE_FINGERPRINT
     from cortheon.cognitive_install import host_installation_status
 
     checks: list[dict[str, Any]] = []
@@ -66,17 +81,8 @@ def doctor(
         )
 
     runtime = surface._runtime_health(runtime_url, token=token)
-    expected_runtime = {
-        "service": "cortheon-cognitive",
-        "version": surface.__version__,
-        "protocol_version": surface.protocol_capabilities()["protocol_version"],
-        "source_fingerprint": _SOURCE_FINGERPRINT,
-        "storage": "memory_only",
-    }
+    expected_runtime, identity_matches = runtime_identity(runtime)
     reachable = runtime.get("ok") is True
-    identity_matches = bool(
-        reachable and all(runtime.get(key) == value for key, value in expected_runtime.items())
-    )
     record(
         "runtime",
         identity_matches,
@@ -99,8 +105,16 @@ def doctor(
 
 
 def runtime_health(url: str, *, token: str) -> dict[str, Any]:
+    return _runtime_get(url, "/healthz", token=token)
+
+
+def runtime_metrics(url: str, *, token: str) -> dict[str, Any]:
+    return _runtime_get(url, "/metrics", token=token)
+
+
+def _runtime_get(url: str, path: str, *, token: str) -> dict[str, Any]:
     request = urllib.request.Request(
-        url.rstrip("/") + "/healthz",
+        url.rstrip("/") + path,
         headers={
             "Accept": "application/json",
             **({"Authorization": f"Bearer {token}"} if token else {}),
@@ -112,5 +126,29 @@ def runtime_health(url: str, *, token: str) -> dict[str, Any]:
     except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
         return {"ok": False, "error": str(exc)}
     if not isinstance(payload, dict):
-        return {"ok": False, "error": "health response was not an object"}
+        return {"ok": False, "error": "runtime response was not an object"}
     return payload
+
+
+def runtime_results(url: str, *, token: str) -> dict[str, Any]:
+    health = surface._runtime_health(url, token=token)
+    expected, identity_matches = runtime_identity(health)
+    if not identity_matches:
+        return {
+            "ok": False,
+            "runtime_identity_matches": False,
+            "error": (
+                "runtime identity mismatch" if health.get("ok") is True else "runtime unavailable"
+            ),
+            "runtime": health,
+            "expected_runtime_identity": expected,
+        }
+    metrics = runtime_metrics(url, token=token)
+    if metrics.get("ok") is not True:
+        return {"ok": False, "runtime_identity_matches": True, "error": metrics.get("error")}
+    return {
+        **metrics,
+        "runtime_identity_matches": True,
+        "scope": "since_runtime_start",
+        "runtime_identity": expected,
+    }

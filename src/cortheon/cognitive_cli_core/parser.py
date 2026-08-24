@@ -79,6 +79,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     conformance.add_argument("--timeout-seconds", type=float, default=15.0)
 
+    results = commands.add_parser("results", help="Show content-free runtime outcomes.")
+    results.add_argument("--url", default=surface.DEFAULT_RUNTIME_URL)
+    results.add_argument("--token", default="")
+
     install = commands.add_parser("install", help="Install host integrations.")
     install.add_argument(
         "--host",

@@ -39,36 +39,50 @@ repeated-request loops.
 | Model | Host | Without Cortheon | With Cortheon | Result |
 | --- | --- | --- | --- | --- |
 | Qwen3.5 0.8B, 8-bit | OpenCode / oMLX | Not retained | Smoke run | Lifecycle only; ungraded |
-| Qwen3.5 4B MLX, 8-bit | Generic MCP / oMLX | Yes | Yes | Five public development contrasts |
-| Qwen3.5 9B MLX, 8-bit | Generic MCP / oMLX | Yes | Yes | Paired diagnostic; invalid for claims |
+| Qwen3.5 4B MLX, 8-bit | Generic MCP / oMLX | Yes | Yes | Retained public pilot, 24 August 2026 |
+| Qwen3.5 9B MLX, 8-bit | Generic MCP / oMLX | Yes | Yes | Old diagnostic; invalid for claims |
 
-The 4B development pilots used one public case cluster per operator and three
-repetitions per arm:
+The fresh 4B run used one public case per operator and three repetitions per
+arm:
 
 | Operator | Full Cortheon | Operator removed | Equal-budget placebo |
 | --- | ---: | ---: | ---: |
-| Hypothesis framing | 3/3 | 1/3 | 0/3 |
+| Hypothesis framing | 3/3 | 2/3 | 0/3 |
 | Discriminating evidence | 3/3 | 3/3 | 0/3 |
 | Cross-source derivation | 3/3 | 0/3 | 0/3 |
 | Adaptive stopping | 3/3 | 0/3 | 0/3 |
-| Contradiction revision | 3/3 | 1/3 | 0/3 |
+| Contradiction revision | 3/3 | 0/3 | 0/3 |
 
-All 45 cells were identity-bound and safe. These are public development cases,
-not hidden independent evidence. They show substrate amplification on these
-cases; they do not prove general lift or frontier parity.
+Full Cortheon was correct in 15 of 15 cells. The operator-removed arms were
+correct in 5 of 15, and the placebo was correct in 0 of 15. All 45 cells were
+identity-bound, transcript-valid, and safe, with no timeout. Five
+operator-removed cells were withheld. The configured budgets matched, but the
+realized compute did not.
 
-## Install
+These are public development cases, not hidden independent evidence. The run
+does not isolate lift from discriminating evidence because that operator's
+removed arm also scored 3/3. Every development gate remains false. See the
+[retained reports and chain roots](benchmarks/frozen/operator_lift_qwen35_4b_20260824/SUMMARY.md).
 
-Cortheon requires Python 3.11 or newer. Install it from a repository checkout:
+## Tester quick start
+
+Cortheon requires Python 3.11 or newer. It is not on a package registry yet.
+The Python package includes the Pi, OpenCode, and Codex adapters plus the
+generic `cortheon-mcp` command. It does not use Docker or a second model.
+
+Install the private preview from the repository URL you received:
 
 ```bash
-python3 -m pip install .
+git clone REPOSITORY_URL cortheon
+cd cortheon
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install .
 cortheon --version
 ```
 
-Cortheon is not yet available from a package registry.
-
-## Connect a host
+Keep this virtual environment activated when you run the setup and diagnostic
+commands below.
 
 ### Pi
 
@@ -77,24 +91,32 @@ cortheon install --host pi
 cortheon doctor --host pi
 ```
 
-Restart Pi, then enable Cortheon for the session:
+Restart Pi. In each Pi session where you want Cortheon, run:
 
 ```text
 /cortheon enable
 /cortheon status
 ```
 
-Use `/cortheon disable` to turn it off.
+`/cortheon disable` gives you a baseline run with the same Pi installation.
+After the first assisted task, verify the live connection in a terminal:
+
+```bash
+cortheon doctor --host pi --require-runtime
+cortheon conformance --host pi
+```
 
 ### OpenCode
+
+Run a baseline task before installation, then install the adapter:
 
 ```bash
 cortheon install --host opencode
 cortheon doctor --host opencode
 ```
 
-Restart OpenCode. Its adapter starts with the host and has no per-session
-command.
+Restart OpenCode. Cortheon starts automatically when the next task begins.
+After that task, run `cortheon conformance --host opencode` in a terminal.
 
 ### Codex
 
@@ -103,40 +125,74 @@ cortheon install --host codex
 cortheon doctor --host codex
 ```
 
-Start a new Codex chat. The installer binds the plugin to Cortheon's Python
-environment and checks the protocol version and source fingerprint.
+Start a new Codex task. Cortheon starts automatically. After the first task,
+run `cortheon conformance --host codex` in a terminal.
 
-### Generic MCP
+### Other MCP hosts
 
 ```bash
 cortheon configure --host generic
-cortheon conformance --host generic
 ```
 
-`configure` prints an MCP entry but does not edit the host configuration. This
-mode is cooperative because a generic MCP server cannot intercept every host
-tool or the final answer.
+Copy the printed JSON into the host's MCP configuration, restart the host, then
+run `cortheon conformance --host generic`. Generic MCP mode is cooperative. It
+cannot intercept every host tool or the final answer, so Pi or OpenCode gives a
+stronger first test.
 
 Add `--scope project` to Pi or OpenCode install, doctor, and uninstall commands
-for a project-only integration.
+for a project-only setup.
 
-## Diagnose and manage Cortheon
+### Run a fair before-and-after test
 
-Run `cortheon doctor --host HOST` to inspect an adapter and runtime identity.
-Run `cortheon conformance --host HOST` for the protocol smoke test. Replace
-`HOST` with `pi`, `opencode`, `codex`, or `generic`.
+Use the same host, local model, quantization, settings, repository state, and
+prompt in two fresh sessions. Run the baseline first. For Pi, leave Cortheon
+disabled. For OpenCode or Codex, run the baseline before installing Cortheon.
+Then enable or install Cortheon and repeat the prompt without changing it.
 
-Native adapters start the memory-only runtime when needed. `doctor` therefore
-accepts a missing runtime unless you add `--require-runtime`. When one is
-running, it checks the service name, protocol, package version, and source
-fingerprint.
+Pick work where extra reasoning can change the outcome. Good tests include a
+bug spread across several files, a question that needs current primary sources,
+or a conclusion that must combine two documents. Record correctness, completed
+tests, working citations, elapsed time, tool calls, and any repeated request.
+
+After the assisted run, inspect Cortheon's content-free counters:
+
+```bash
+cortheon results
+```
+
+The counters cover the current runtime process. For several tasks, capture the
+output before and after each task. `sessions_completed` and
+`hook_turns_certified` show successful gates. `completion_withheld`,
+`hook_uncertified_releases`, and `controller_zero_gain_stops` expose failures
+and bounded stops. Cortheon never puts prompts, answers, file contents, or URLs
+in this report.
+
+Share this short report with the test group. Redact project names and secrets:
+
+```text
+Host and version:
+Model ID and quantization:
+Hardware:
+Exact task type:
+Baseline result:
+Cortheon result:
+Tests or citations checked:
+Elapsed time and tool calls:
+Repeated requests or stalls:
+Cortheon results output:
+```
+
+If `doctor`, `conformance`, or `results` reports a runtime identity mismatch,
+an older Cortheon process still owns port 8743. Close the hosts using Cortheon,
+stop that old `cortheon serve` process, and restart the selected host. The
+commands fail instead of accepting metrics or conformance from the wrong build.
 
 Remove an integration with `cortheon uninstall --host HOST`. Generic MCP has no
 Cortheon-owned host file, so remove that entry yourself. Pi and OpenCode keep
 one `.cortheon.bak` before the first configuration change and reject malformed
 or symlinked configuration files.
 
-## Generic MCP
+## Generic MCP reference
 
 Run the MCP server with `cortheon-mcp` or `cortheon mcp`. The default exposes
 session lifecycle tools with fixed limits. Add `--advanced` for debugging.
@@ -185,8 +241,8 @@ Release tests enforce these limits:
 | Property | Limit |
 |---|---:|
 | Third-party runtime dependencies | 0 |
-| Wheel size | 240,000 bytes |
-| Source distribution size | 220,000 bytes |
+| Wheel size | 241,000 bytes |
+| Source distribution size | 222,000 bytes |
 | Installed console commands | 2 |
 | Runtime project database | None |
 

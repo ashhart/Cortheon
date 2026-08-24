@@ -32,6 +32,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(surface.json.dumps(payload, indent=2, sort_keys=True))
             return 0 if payload["ok"] else 1
+        if args.command == "results":
+            payload = surface.runtime_results(args.url, token=args.token)
+            print(surface.json.dumps(payload, indent=2, sort_keys=True))
+            return 0 if payload["ok"] else 1
         if args.command == "install":
             results = surface._install(args)
             print(

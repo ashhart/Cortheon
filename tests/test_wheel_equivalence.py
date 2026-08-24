@@ -75,8 +75,12 @@ ROOT = Path(__file__).parents[1]
 # code, SPDX metadata avoids embedding a second license body, and concise
 # public facades avoid duplicated export inventories. Settled measurements:
 # wheel 239,739 bytes and sdist 219,775 bytes.
-WHEEL_CAP = 240_000
-SDIST_CAP = 220_000
+# The tester release adds exact stale-runtime conformance, one content-free
+# results command, and its private-preview runbook. Measured artifacts are
+# wheel 240,195 bytes and sdist 220,897 bytes. The new caps leave less than
+# 1.2 KB of headroom and still reject another payload-sized addition.
+WHEEL_CAP = 241_000
+SDIST_CAP = 222_000
 
 PROBE = """
 import dataclasses, json, sys

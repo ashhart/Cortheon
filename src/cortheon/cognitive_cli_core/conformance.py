@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from cortheon import cognitive_cli as surface
+from cortheon.cognitive_cli_core.diagnostics import runtime_identity
 
 
 def host_conformance(
@@ -178,6 +179,7 @@ def host_conformance(
         if runtime_required
         else {"ok": True, "required": False, "reason": "stdio MCP owns its runtime process"}
     )
+    _, identity_matches = runtime_identity(runtime) if runtime_required else (None, True)
     invariant_contract = {
         "storage": capabilities["storage"],
         "owns_project_tools": capabilities["owns_project_tools"],
@@ -199,9 +201,10 @@ def host_conformance(
         )
     return {
         "schema_version": 1,
-        "ok": runtime.get("ok") is True and all(item["ok"] for item in results.values()),
+        "ok": identity_matches and all(item["ok"] for item in results.values()),
         "runtime": runtime,
         "runtime_required": runtime_required,
+        "runtime_identity_matches": identity_matches,
         "selected_hosts": selected,
         "hosts": results,
         "cross_host_contract_consistent": all(
