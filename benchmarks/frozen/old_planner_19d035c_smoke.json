@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "kind": "cortheon_frozen_old_planner_smoke",
+  "content_free": true,
+  "commit": "19d035c4e8c6df52be861636029e18a9a1d2d777",
+  "git_tree_sha1": "ee8a2cbc19806123ca39686c61428a0fd76f8d02",
+  "archive_sha256": "a37de1098022b3d438e9e96d10e747db76a88e902087783f1896d88e5cc407bd",
+  "wrapper_sha256": "be719165b81130c3afb04d189fd5107c1dde6e2d6062800840aaaca3365a81e0",
+  "implementation_sha256": "f48c1119f49ef14225e425223410494b0e8d794f0a27ef01ba5c1bdac64a9b15",
+  "sealed_task_sha256": "5b02433d60eb76ec165dcc279a98e0c6bbf5f5b91bd57dc562e58ba525b9d6fc",
+  "host": {
+    "id": "opencode",
+    "version": "1.18.18",
+    "executable_sha256": "4f5979c2dadb06fbff1335335afaaea274e58f92e79aa43cf2ed98618d555422"
+  },
+  "inference": {
+    "provider_id": "omlx",
+    "model_id": "mlx-community--Qwen3.5-0.8B-8bit",
+    "endpoint_sha256": "cc183c621aa4f25bcba0fbc4d9eab5f0583fd47a24f25ce9f572f9d519b580bd",
+    "identity_valid": true,
+    "measurements_valid": true
+  },
+  "policy": {
+    "max_steps": 4,
+    "max_tool_calls": 4,
+    "timeout_seconds": 90.0,
+    "context_tokens": 32768,
+    "output_tokens": 2048
+  },
+  "outcome": {
+    "terminal_status": "success",
+    "delivered": true,
+    "candidate_correct": null,
+    "observed_steps": 4,
+    "observed_tool_calls": 4
+  },
+  "runtime": {
+    "sessions_started": 1,
+    "observations_accepted": 1,
+    "sessions_completed": 0,
+    "sessions_evidence_closed": 0,
+    "sessions_abandoned": 1,
+    "completion_withheld": 0,
+    "evaluator_cleanup_sessions": 1,
+    "active_sessions_postflight": 0,
+    "artifact_unchanged": true
+  }
+}

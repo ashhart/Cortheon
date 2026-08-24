@@ -1,0 +1,100 @@
+import cognitive_product_cases_host_install as _host_install
+import cognitive_product_cases_installer_safety as _installer_safety
+import cognitive_product_cases_opencode_completion as _opencode_completion
+import cognitive_product_cases_opencode_documents as _opencode_documents
+import cognitive_product_cases_opencode_install as _opencode_install
+import cognitive_product_cases_opencode_release as _opencode_release
+import cognitive_product_cases_opencode_repair_execution as _opencode_repair_execution
+import cognitive_product_cases_opencode_repair_guards as _opencode_repair_guards
+import cognitive_product_cases_opencode_session as _opencode_session
+import cognitive_product_cases_pi_adapter as _pi_adapter
+import cognitive_product_cases_pi_install as _pi_install
+import cognitive_product_cases_runtime_operations as _runtime_operations
+
+test_opencode_install_is_atomic_preserving_and_idempotent = (
+    _opencode_install.test_opencode_install_is_atomic_preserving_and_idempotent
+)
+test_opencode_install_replaces_stale_cortheon_adapters_without_duplicates = (
+    _opencode_install.test_opencode_install_replaces_stale_cortheon_adapters_without_duplicates
+)
+test_opencode_adapter_singleflights_concurrent_session_start = (
+    _opencode_session.test_opencode_adapter_singleflights_concurrent_session_start
+)
+_opencode_adapter_corpus = _opencode_session._opencode_adapter_corpus
+test_opencode_adapter_prepends_system_guidance = (
+    _opencode_session.test_opencode_adapter_prepends_system_guidance
+)
+test_opencode_adapter_aborts_only_post_certification_compaction = (
+    _opencode_completion.test_opencode_adapter_aborts_only_post_certification_compaction
+)
+test_opencode_adapter_releases_runtime_derived_semantic_rule = (
+    _opencode_completion.test_opencode_adapter_releases_runtime_derived_semantic_rule
+)
+test_opencode_adapter_preserves_each_read_in_ambiguity_completion = (
+    _opencode_documents.test_opencode_adapter_preserves_each_read_in_ambiguity_completion
+)
+test_opencode_adapter_discovers_then_reads_unnamed_documents = (
+    _opencode_documents.test_opencode_adapter_discovers_then_reads_unnamed_documents
+)
+test_opencode_adapter_executes_only_a_host_verified_bounded_repair = (
+    _opencode_repair_execution.test_opencode_adapter_executes_only_a_host_verified_bounded_repair
+)
+test_opencode_bounded_repair_fails_closed_and_preserves_files = (
+    _opencode_repair_guards.test_opencode_bounded_repair_fails_closed_and_preserves_files
+)
+test_opencode_adapter_auto_fetches_and_certifies_current_release = (
+    _opencode_release.test_opencode_adapter_auto_fetches_and_certifies_current_release
+)
+test_installer_refuses_to_rewrite_malformed_host_config = (
+    _installer_safety.test_installer_refuses_to_rewrite_malformed_host_config
+)
+test_installer_refuses_symlinked_host_configuration = (
+    _installer_safety.test_installer_refuses_symlinked_host_configuration
+)
+test_pi_project_install_preserves_settings_and_enables_extension = (
+    _pi_install.test_pi_project_install_preserves_settings_and_enables_extension
+)
+test_pi_install_replaces_legacy_adapter_without_loading_both = (
+    _pi_install.test_pi_install_replaces_legacy_adapter_without_loading_both
+)
+_pi_module_graph_source = _pi_adapter._pi_module_graph_source
+test_pi_adapter_exposes_an_explicit_session_gate = (
+    _pi_adapter.test_pi_adapter_exposes_an_explicit_session_gate
+)
+test_bundled_skill_distinguishes_pi_native_mode_from_mcp_mode = (
+    _pi_adapter.test_bundled_skill_distinguishes_pi_native_mode_from_mcp_mode
+)
+test_installed_pi_can_load_cortheon_control_command = (
+    _pi_adapter.test_installed_pi_can_load_cortheon_control_command
+)
+test_pi_headless_mode_requires_explicit_environment_opt_in = (
+    _pi_adapter.test_pi_headless_mode_requires_explicit_environment_opt_in
+)
+test_pi_native_adapter_eliminates_small_model_protocol_bookkeeping = (
+    _pi_adapter.test_pi_native_adapter_eliminates_small_model_protocol_bookkeeping
+)
+for _host_test in (
+    "test_codex_install_materializes_valid_marketplace_without_cli_mutation",
+    "test_project_scope_preflight_prevents_partial_all_host_install",
+    "test_preflight_rejects_later_malformed_config_before_any_host_changes",
+    "test_generic_mcp_configuration_is_truthful_about_assurance",
+    "test_host_installation_status_reports_configuration_without_contents",
+    "test_uninstall_removes_only_cortheon_adapter_references",
+    "test_generic_install_is_rejected_before_any_host_change",
+    "test_codex_uninstall_removes_only_verified_owned_marketplace",
+    "test_codex_uninstall_refuses_an_unverified_directory",
+    "test_uninstall_preflights_codex_ownership_before_adapter_changes",
+    "test_codex_status_comes_from_plugin_list_not_copied_source",
+    "test_codex_status_rejects_a_stale_cached_plugin_version",
+):
+    globals()[_host_test] = getattr(_host_install, _host_test)
+del _host_test
+test_runtime_metrics_are_content_free_and_versioned = (
+    _runtime_operations.test_runtime_metrics_are_content_free_and_versioned
+)
+test_host_conformance_executes_one_probe_per_host = (
+    _runtime_operations.test_host_conformance_executes_one_probe_per_host
+)
+test_doctor_runtime_is_optional_unless_required = (
+    _runtime_operations.test_doctor_runtime_is_optional_unless_required
+)

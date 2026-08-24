@@ -1,0 +1,22 @@
+{
+  "name": "cortheon",
+  "version": "0.1.0+codex.20260729195637",
+  "description": "Ephemeral reasoning and verification for Codex.",
+  "author": {
+    "name": "Cortheon"
+  },
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Cortheon",
+    "shortDescription": "Reason with live, host-verified evidence.",
+    "longDescription": "Ephemeral reasoning and verification over live host evidence.",
+    "developerName": "Cortheon",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Reasoning"
+    ],
+    "defaultPrompt": "Use Cortheon to investigate and solve this task."
+  },
+  "mcpServers": "./.mcp.json"
+}

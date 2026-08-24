@@ -1,0 +1,45 @@
+# Active runtime state dirs.
+.cortheon/
+.cortheon-test/
+
+# Ignore state left by pre-Cortheon development builds.
+.learn-layer/
+.learn-layer-test/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.DS_Store
+
+# Local agent and editor state, not part of the project.
+.claude/
+.zcode/
+.codex-*.txt
+.codex-run-*.zsh
+.probe_*.py
+.tsconfig.*.json
+
+# Local JavaScript tooling used to parse the host adapters.
+/node_modules
+/package.json
+/package-lock.json
+
+# Local benchmark pilots and smoke runs, not release evidence.
+/benchmarks/frozen/*_pilot.json
+/benchmarks/frozen/*_pilot/
+/benchmarks/frozen/*_pilot_attempt*/
+/benchmarks/frozen/*_smoke/
+/benchmarks/frozen/stage9_generic_*.json
+
+# Internal planning, reviews, and historical development notes.
+/PLAN.md
+/TODO.md
+/CORTHEON.md
+/docs/WORLD_CLASS.md
+/docs/stage-8-hostile-review.md
+/benchmarks/RESULTS.md

@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+"""Run Cortheon's local release gate and emit a source-bound status record."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import zipfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+LINE_LIMIT = 500
+WHEEL_LIMIT = 240_000
+SDIST_LIMIT = 220_000
+AUTHORED_SUFFIXES = {".js", ".py", ".ts"}
+AUTHORED_ROOTS = ("src", "tests", "build_support", "scripts")
+REQUIRED_GUARD_TESTS = (
+    "tests/test_lightweight_distribution.py",
+    "tests/test_wheel_equivalence.py",
+    "tests/test_pi_canonical_source.py",
+    "tests/test_opencode_architecture.py",
+    "tests/test_cognitive_core_architecture.py",
+    "tests/test_cognitive_mcp_architecture.py",
+)
+FORBIDDEN_SOURCE_PATTERNS = {
+    "macOS user path": re.compile(b"/" + rb"Users/[A-Za-z0-9._-]+"),
+    "private key": re.compile(b"BEGIN " + rb"(?:RSA |OPENSSH |EC )?PRIVATE KEY"),
+}
+
+
+class GateFailure(RuntimeError):
+    pass
+
+
+def _run(
+    label: str,
+    command: list[str],
+    *,
+    environment: dict[str, str] | None = None,
+) -> dict[str, object]:
+    started = __import__("time").monotonic()
+    completed = subprocess.run(command, cwd=ROOT, check=False, env=environment)
+    elapsed = round(__import__("time").monotonic() - started, 3)
+    if completed.returncode:
+        raise GateFailure(f"{label} failed with exit code {completed.returncode}")
+    return {"name": label, "seconds": elapsed, "command": command}
+
+
+def _tool(name: str) -> str:
+    path = shutil.which(name)
+    if path is None:
+        raise GateFailure(f"required executable is unavailable: {name}")
+    return path
+
+
+def _authored_files() -> list[Path]:
+    files: list[Path] = []
+    for root_name in AUTHORED_ROOTS:
+        root = ROOT / root_name
+        if not root.exists():
+            continue
+        files.extend(
+            path
+            for path in root.rglob("*")
+            if path.is_file()
+            and (path.suffix in AUTHORED_SUFFIXES or path == ROOT / "scripts/verify-release")
+            and "__pycache__" not in path.parts
+        )
+    return sorted(set(files))
+
+
+def _line_inventory() -> dict[str, object]:
+    counts = {
+        path.relative_to(ROOT).as_posix(): len(path.read_bytes().splitlines())
+        for path in _authored_files()
+    }
+    oversized = {path: lines for path, lines in counts.items() if lines > LINE_LIMIT}
+    if oversized:
+        raise GateFailure(f"project-authored files exceed {LINE_LIMIT} lines: {oversized}")
+    return {
+        "files": len(counts),
+        "maximum_lines": max(counts.values(), default=0),
+        "maximum_file": max(counts, key=lambda path: counts[path]) if counts else None,
+    }
+
+
+def _privacy_inventory() -> dict[str, object]:
+    findings: dict[str, list[str]] = {}
+    for path in _authored_files():
+        content = path.read_bytes()
+        matched = [
+            name for name, pattern in FORBIDDEN_SOURCE_PATTERNS.items() if pattern.search(content)
+        ]
+        if matched:
+            findings[path.relative_to(ROOT).as_posix()] = matched
+    if findings:
+        raise GateFailure(f"personal or secret material is present in authored files: {findings}")
+    return {"files_scanned": len(_authored_files()), "findings": 0}
+
+
+def _git_paths(*arguments: str) -> list[str]:
+    completed = subprocess.run(
+        [_tool("git"), *arguments, "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    return [os.fsdecode(value) for value in completed.stdout.split(b"\0") if value]
+
+
+def _source_digest() -> tuple[str, int]:
+    paths = sorted(set(_git_paths("ls-files", "-co", "--exclude-standard")))
+    digest = hashlib.sha256()
+    included = 0
+    for relative in paths:
+        path = ROOT / relative
+        if not path.is_file():
+            continue
+        encoded = relative.encode()
+        content = path.read_bytes()
+        mode = path.stat().st_mode & 0o777
+        digest.update(len(encoded).to_bytes(4, "big"))
+        digest.update(encoded)
+        digest.update(mode.to_bytes(2, "big"))
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+        included += 1
+    return digest.hexdigest(), included
+
+
+def _reject_untracked_benchmark_material() -> None:
+    untracked = _git_paths("ls-files", "--others", "--exclude-standard")
+    forbidden = [
+        path for path in untracked if Path(path).parts[:1] in {("benchmarks",), ("evals",)}
+    ]
+    if forbidden:
+        raise GateFailure(f"untracked benchmark material is present: {sorted(forbidden)}")
+
+
+def _syntax_checks() -> list[dict[str, object]]:
+    node = _tool("node")
+    checks: list[dict[str, object]] = []
+    type_script_parser = (
+        "const fs=require('node:fs');"
+        "const {stripTypeScriptTypes}=require('node:module');"
+        "const vm=require('node:vm');"
+        "const source=fs.readFileSync(process.argv[1],'utf8');"
+        "new vm.SourceTextModule(stripTypeScriptTypes(source,{mode:'strip'}));"
+    )
+    for path in sorted((ROOT / "src" / "cortheon").rglob("*")):
+        if path.suffix == ".ts":
+            checks.append(
+                _run(
+                    f"syntax:{path.relative_to(ROOT).as_posix()}",
+                    [
+                        node,
+                        "--no-warnings",
+                        "--experimental-vm-modules",
+                        "-e",
+                        type_script_parser,
+                        str(path),
+                    ],
+                )
+            )
+        elif path.suffix == ".js":
+            checks.append(
+                _run(
+                    f"syntax:{path.relative_to(ROOT).as_posix()}",
+                    [node, "--check", str(path)],
+                )
+            )
+    return checks
+
+
+def _artifact_record(path: Path, limit: int) -> dict[str, object]:
+    size = path.stat().st_size
+    if size > limit:
+        raise GateFailure(f"{path.name} is {size} bytes; limit is {limit}")
+    return {
+        "file": path.name,
+        "bytes": size,
+        "limit": limit,
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
+def _wheel_inventory(path: Path) -> dict[str, object]:
+    with zipfile.ZipFile(path) as archive:
+        members = sorted(info.filename for info in archive.infolist() if not info.is_dir())
+        metadata_names = [name for name in members if name.endswith(".dist-info/METADATA")]
+        if len(metadata_names) != 1:
+            raise GateFailure("wheel must contain exactly one METADATA member")
+        metadata = archive.read(metadata_names[0]).decode("utf-8")
+    dependencies = sorted(
+        line.removeprefix("Requires-Dist: ")
+        for line in metadata.splitlines()
+        if line.startswith("Requires-Dist: ")
+    )
+    runtime_dependencies = [value for value in dependencies if "extra ==" not in value]
+    if runtime_dependencies:
+        raise GateFailure(f"wheel has runtime dependencies: {runtime_dependencies}")
+    return {
+        "members": len(members),
+        "members_sha256": hashlib.sha256("\n".join(members).encode()).hexdigest(),
+        "declared_dependencies": dependencies,
+    }
+
+
+def _sdist_valid(path: Path) -> None:
+    with tarfile.open(path, "r:gz") as archive:
+        if not any(
+            member.isfile() and member.name.endswith("/pyproject.toml") for member in archive
+        ):
+            raise GateFailure("sdist does not contain pyproject.toml")
+
+
+def _build_artifacts() -> tuple[list[dict[str, object]], dict[str, object]]:
+    with tempfile.TemporaryDirectory(prefix="cortheon-verify-") as temporary:
+        output = Path(temporary)
+        check = _run(
+            "build",
+            [sys.executable, "-m", "build", "--sdist", "--wheel", "--outdir", str(output)],
+        )
+        wheels = list(output.glob("*.whl"))
+        sdists = list(output.glob("*.tar.gz"))
+        if len(wheels) != 1 or len(sdists) != 1:
+            raise GateFailure("build did not produce exactly one wheel and one sdist")
+        wheel, sdist = wheels[0], sdists[0]
+        records = [
+            _artifact_record(wheel, WHEEL_LIMIT),
+            _artifact_record(sdist, SDIST_LIMIT),
+        ]
+        _sdist_valid(sdist)
+        return records, {"command": check, "wheel": _wheel_inventory(wheel)}
+
+
+def _required_guards_exist() -> None:
+    missing = [path for path in REQUIRED_GUARD_TESTS if not (ROOT / path).is_file()]
+    if missing:
+        raise GateFailure(f"required release guard tests are missing: {missing}")
+
+
+def _threat_model_record() -> dict[str, object]:
+    source_root = str(ROOT / "src")
+    sys.path.insert(0, source_root)
+    try:
+        from cortheon.threat_model import (
+            THREAT_MANIFEST,
+            build_report_bytes,
+            report_sha256,
+            validate_threat_model,
+        )
+
+        validation = validate_threat_model(
+            ROOT,
+            THREAT_MANIFEST,
+            execute_hostile_tests=True,
+        )
+        report = build_report_bytes(THREAT_MANIFEST, validation)
+    finally:
+        if sys.path[:1] == [source_root]:
+            sys.path.pop(0)
+    if not validation.valid or not validation.hostile_tests_passed:
+        raise GateFailure(f"threat-model validation failed: {validation.errors}")
+    return {
+        "manifest_sha256": validation.manifest_sha256,
+        "report_sha256": report_sha256(report),
+        "critical_high_risks": len(THREAT_MANIFEST.risks),
+        "hostile_test_nodes": len(validation.collected_node_ids),
+        "promotion_approved": False,
+        "external_reviewer_signoffs_required": 2,
+    }
+
+
+def _version(command: list[str]) -> str:
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode:
+        raise GateFailure(f"version probe failed: {command}")
+    return (completed.stdout or completed.stderr).strip().splitlines()[0]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--status", action="store_true", help="emit the final JSON status record")
+    arguments = parser.parse_args()
+    if not arguments.status:
+        parser.error("--status is required")
+    _required_guards_exist()
+    _reject_untracked_benchmark_material()
+    source_sha256, source_files = _source_digest()
+    checks: list[dict[str, object]] = []
+    checks.append(
+        _run(
+            "ruff",
+            [
+                _tool("ruff"),
+                "check",
+                "src",
+                "tests",
+                "setup.py",
+                "build_backend.py",
+                "build_support",
+                "scripts",
+            ],
+        )
+    )
+    checks.append(
+        _run(
+            "ruff-format",
+            [
+                _tool("ruff"),
+                "format",
+                "--check",
+                "src",
+                "tests",
+                "setup.py",
+                "build_backend.py",
+                "build_support",
+                "scripts",
+            ],
+        )
+    )
+    checks.append(_run("diff-check", [_tool("git"), "diff", "--check"]))
+    static_environment = os.environ.copy()
+    static_environment.pop("PYTHONHOME", None)
+    static_environment.pop("PYTHONPATH", None)
+    checks.append(_run("pyright", [_tool("pyright")], environment=static_environment))
+    checks.extend(_syntax_checks())
+    checks.append(_run("pytest", [sys.executable, "-m", "pytest", "-q"]))
+    threat_model = _threat_model_record()
+    artifacts, build = _build_artifacts()
+    checks.append(
+        _run(
+            "artifact-tests",
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "tests/test_lightweight_distribution.py",
+                "tests/test_wheel_equivalence.py",
+            ],
+        )
+    )
+    final_source_sha256, final_source_files = _source_digest()
+    if (final_source_sha256, final_source_files) != (source_sha256, source_files):
+        raise GateFailure("repository bytes changed while the release gate was running")
+    status = {
+        "schema_version": 1,
+        "kind": "cortheon_release_verification",
+        "source_sha256": source_sha256,
+        "source_files": source_files,
+        "line_inventory": _line_inventory(),
+        "privacy_inventory": _privacy_inventory(),
+        "environment": {
+            "python": sys.version.split()[0],
+            "node": _version([_tool("node"), "--version"]),
+            "ruff": _version([_tool("ruff"), "--version"]),
+            "pyright": _version([_tool("pyright"), "--version"]),
+            "git": _version([_tool("git"), "--version"]),
+        },
+        "artifacts": artifacts,
+        "wheel_inventory": build["wheel"],
+        "threat_model": threat_model,
+        "checks": [*checks, build["command"]],
+        "passed": True,
+    }
+    print(json.dumps(status, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (GateFailure, subprocess.CalledProcessError) as exc:
+        print(json.dumps({"schema_version": 1, "passed": False, "error": str(exc)}))
+        raise SystemExit(1) from exc

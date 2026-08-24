@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "cortheon": {
+      "command": "./scripts/cortheon-mcp",
+      "args": [],
+      "cwd": "."
+    }
+  }
+}

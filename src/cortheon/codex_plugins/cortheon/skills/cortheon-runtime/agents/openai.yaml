@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cortheon Runtime"
+  short_description: "Reason and verify with live host evidence"
+  default_prompt: "Use $cortheon-runtime to investigate, verify, and complete this task."

@@ -1,0 +1,45 @@
+# What a source archive is allowed to contain. setup.py holds the shipping
+# allowlist and filters the file list this template produces, so a name here
+# that the allowlist drops would silently never ship. The two exclusions below
+# are the whole difference between the two, and
+# tests/test_lightweight_distribution.py fails if this file and a finished
+# archive stop describing the same set.
+
+include LICENSE
+include MANIFEST.in
+include README.md
+include pyproject.toml
+include setup.py
+include build_backend.py
+recursive-include build_support *.py
+
+include src/cortheon/__init__.py
+include src/cortheon/cognitive_cli.py
+include src/cortheon/cognitive_graph.py
+include src/cortheon/cognitive_hooks.py
+include src/cortheon/cognitive_http.py
+include src/cortheon/cognitive_install.py
+include src/cortheon/cognitive_mcp.py
+include src/cortheon/cognitive_program.py
+include src/cortheon/cognitive_protocol.py
+include src/cortheon/cognitive_repair.py
+include src/cortheon/cognitive_runtime.py
+include src/cortheon/sanitize.py
+
+recursive-include src/cortheon/cognitive_core *.py
+recursive-include src/cortheon/cognitive_cli_core *.py
+recursive-include src/cortheon/cognitive_install_core *.py
+recursive-include src/cortheon/cognitive_hooks_core *.py
+recursive-include src/cortheon/cognitive_mcp_core *.py
+include src/cortheon/opencode_plugin.js
+recursive-include src/cortheon/opencode_core *.js
+include src/cortheon/pi_extension.ts
+recursive-include src/cortheon/pi_core *.ts
+
+# The Codex plugin ships whole, minus the console-script shim the wheel's own
+# entry point replaces and the agent profile that is not Codex's.
+recursive-include src/cortheon/codex_plugins/cortheon *
+exclude src/cortheon/codex_plugins/cortheon/scripts/cortheon-mcp
+exclude src/cortheon/codex_plugins/cortheon/skills/cortheon-runtime/agents/openai.yaml
+
+global-exclude __pycache__ *.py[cod]

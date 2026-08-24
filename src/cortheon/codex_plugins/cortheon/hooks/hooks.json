@@ -1,0 +1,70 @@
+{
+  "description": "Require Cortheon evidence gating for substantive Codex tasks.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/cortheon_hook.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\cortheon_hook.py\"",
+            "timeout": 3,
+            "statusMessage": "Activating Cortheon verification"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/cortheon_hook.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\cortheon_hook.py\"",
+            "timeout": 3,
+            "statusMessage": "Checking Cortheon lifecycle"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/cortheon_hook.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\cortheon_hook.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/cortheon_hook.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\cortheon_hook.py\"",
+            "timeout": 125,
+            "statusMessage": "Certifying Cortheon completion"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/cortheon_hook.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\cortheon_hook.py\"",
+            "timeout": 1
+          }
+        ]
+      }
+    ]
+  }
+}
