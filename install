@@ -4,6 +4,19 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PYTHON=${PYTHON:-python3}
 
+case ${1-} in
+    "") ;;
+    -h|--help)
+        echo "Usage: ./install"
+        echo "Install Cortheon and its MCP server on this machine."
+        exit 0
+        ;;
+    *)
+        echo "Usage: ./install" >&2
+        exit 2
+        ;;
+esac
+
 if ! command -v "$PYTHON" >/dev/null 2>&1; then
     echo "Cortheon needs Python 3.11 or newer." >&2
     exit 1

@@ -21,19 +21,25 @@ runtime stops responding, the host continues and marks the result uncertified.
 You need Python 3.11 or newer and Git. Cortheon installs once on your machine
 as a local MCP. It does not use Docker or a second model.
 
-### 1. Clone and install
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/ashhart/Cortheon.git
 cd Cortheon
+```
+
+### 2. Install the MCP
+
+```bash
 ./install
 ```
 
 The installer prints the exact paths to `cortheon` and `cortheon-mcp`, followed
 by the standard MCP configuration. Cortheon stays installed after you close
-the terminal. There is nothing to activate.
+the terminal. There is nothing to activate. If your shell cannot find
+`cortheon`, use the exact CLI path printed by the installer.
 
-### 2. Connect your host
+### 3. Connect your host
 
 Pick the host you use. To connect both Pi and OpenCode, run:
 
@@ -86,7 +92,7 @@ The configuration calls the machine-installed `cortheon-mcp` command directly.
 Generic MCP mode is cooperative. Pi and OpenCode use small host adapters so
 they can also check tool evidence and task completion.
 
-### 3. Run a task and check it
+## Check the installation
 
 Ask the model to complete a real task. After the first task, replace `HOST`
 with `pi`, `opencode`, or `codex` and run:
@@ -104,6 +110,13 @@ never includes prompts, answers, file contents, or URLs.
 Remove an integration with `cortheon uninstall --host HOST`. Pi and OpenCode
 also support `--scope project` if you want Cortheon enabled for one repository
 only.
+
+Update an existing installation from the cloned repository:
+
+```bash
+git pull
+./install
+```
 
 ## The goal
 
@@ -204,14 +217,15 @@ configuration change and reject malformed or symlinked configuration files.
 
 ## Generic MCP reference
 
-Run the MCP server with `cortheon-mcp` or `cortheon mcp`. The default exposes
+Run `cortheon configure --host generic` and copy its output into the host. It
+uses the absolute path to the installed MCP command. The default server exposes
 session lifecycle tools with fixed limits. Add `--advanced` for debugging.
 
 ```json
 {
   "mcpServers": {
     "cortheon": {
-      "command": "cortheon-mcp"
+      "command": "/absolute/path/printed/by/the/installer/cortheon-mcp"
     }
   }
 }

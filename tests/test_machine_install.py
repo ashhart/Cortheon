@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -26,3 +27,20 @@ def test_machine_installer_has_no_fixed_user_path() -> None:
     assert "$HOME/.local/share" in source
     assert "uv tool install --force" in source
     assert os.access(INSTALLER, os.X_OK)
+
+
+def test_machine_installer_help_does_not_install() -> None:
+    completed = subprocess.run(
+        [str(INSTALLER), "--help"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stdout == (
+        "Usage: ./install\nInstall Cortheon and its MCP server on this machine.\n"
+    )
+    assert completed.stderr == ""
