@@ -287,14 +287,19 @@ def _version_key(value: str) -> tuple[int, ...]:
         return ()
 
 
+_LATEST_RELEASE_HINTS = frozenset({"latest", "newest", "current"})
+_RELEASE_VERSION_HINTS = frozenset({"release", "released", "version"})
+
+
+def _latest_release_goal(goal: str) -> bool:
+    return _has_hint(goal, _LATEST_RELEASE_HINTS) and _has_hint(goal, _RELEASE_VERSION_HINTS)
+
+
 def _research_release_analysis(
     goal: str,
     observations: Iterable[Observation],
 ) -> dict[str, Any] | None:
-    if not (
-        _has_hint(goal, frozenset({"latest", "newest", "current"}))
-        and _has_hint(goal, frozenset({"release", "released", "version"}))
-    ):
+    if not _latest_release_goal(goal):
         return None
     by_origin: dict[str, set[str]] = {}
     sources: dict[str, list[str]] = {}

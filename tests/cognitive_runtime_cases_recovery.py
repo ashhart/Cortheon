@@ -97,6 +97,104 @@ class WaiverAndRetractionTests(unittest.TestCase):
         self.assertTrue(any("single URL origin" in item for item in completed["caveats"]))
         self.assertIn("corroboration", completed["scorecard"]["waived_requirements"])
 
+    def test_scoped_null_corroboration_waives_without_another_round(self) -> None:
+        runtime = CognitiveRuntime(require_host_receipts=True)
+        started = runtime.start(
+            "Research current guidance on widget safety from published sources.",
+            task_kind="research",
+            effort="quick",
+            strictness="strict",
+        )
+        session_id = started["session"]["session_id"]
+        retrieved_at = datetime.now(UTC).isoformat()
+
+        first = runtime.observe(
+            session_id,
+            [
+                {
+                    "kind": "web",
+                    "content": ("The vendor guidance reports no known conflict for widget safety."),
+                    "url": "https://example.com/guidance",
+                    "retrieved_at": retrieved_at,
+                    "purpose": "contradiction_check",
+                }
+            ],
+            request_id=started["next_action"]["request"]["request_id"],
+        )
+        corroboration = first["next_action"]["request"]
+        self.assertEqual(corroboration["parameters"]["purpose"], "corroboration")
+
+        scoped = runtime.observe(
+            session_id,
+            [
+                {
+                    "kind": "web",
+                    "content": (
+                        '[CORTHEON_HOST_EVIDENCE] {"tool":"websearch","outcome":"no_match",'
+                        '"args":{"query":"independent widget safety corroboration"}}\n'
+                        "No independent corroboration was found in the scoped search."
+                    ),
+                    "source": "opencode:websearch:unattributed",
+                    "retrieved_at": retrieved_at,
+                    "purpose": "corroboration",
+                }
+            ],
+            request_id=corroboration["request_id"],
+        )
+        self.assertIn("single URL origin", " ".join(scoped.get("caveats", [])))
+        after = scoped["next_action"]["request"]
+        self.assertEqual(after["parameters"]["purpose"], "primary_fetch")
+        self.assertEqual(runtime.metrics["requests_waived"], 1)
+
+    def test_latest_release_goal_keeps_corroboration_after_scoped_null(self) -> None:
+        runtime = CognitiveRuntime(require_host_receipts=True)
+        started = runtime.start(
+            "Research the latest release version of example_lib from current published sources.",
+            task_kind="research",
+            effort="quick",
+            strictness="strict",
+        )
+        session_id = started["session"]["session_id"]
+        retrieved_at = datetime.now(UTC).isoformat()
+
+        first = runtime.observe(
+            session_id,
+            [
+                {
+                    "kind": "web",
+                    "content": "The release notes report the current example_lib guidance.",
+                    "url": "https://example.com/release",
+                    "retrieved_at": retrieved_at,
+                    "purpose": "contradiction_check",
+                }
+            ],
+            request_id=started["next_action"]["request"]["request_id"],
+        )
+        corroboration = first["next_action"]["request"]
+        self.assertEqual(corroboration["parameters"]["purpose"], "corroboration")
+
+        scoped = runtime.observe(
+            session_id,
+            [
+                {
+                    "kind": "web",
+                    "content": (
+                        '[CORTHEON_HOST_EVIDENCE] {"tool":"websearch","outcome":"no_match",'
+                        '"args":{"query":"independent example_lib release corroboration"}}\n'
+                        "No independent corroboration was found in the scoped search."
+                    ),
+                    "source": "opencode:websearch:unattributed",
+                    "retrieved_at": retrieved_at,
+                    "purpose": "corroboration",
+                }
+            ],
+            request_id=corroboration["request_id"],
+        )
+        self.assertNotIn("single URL origin", " ".join(scoped.get("caveats", [])))
+        after = scoped["next_action"]["request"]
+        self.assertEqual(after["parameters"]["purpose"], "corroboration")
+        self.assertEqual(runtime.metrics["requests_waived"], 0)
+
     def test_failed_receipt_attempts_waive_the_request(self) -> None:
         runtime = CognitiveRuntime(require_host_receipts=True)
         started = runtime.start("Explain why the rollout stalled this afternoon.")

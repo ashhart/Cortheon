@@ -18,6 +18,7 @@ from cortheon.cognitive_core.research_gaps import (
     _LOCAL_PROJECT_DOMAIN_RE,
     _effective_web_lineages,
     _is_local_project_evidence,
+    _latest_release_goal,
 )
 from cortheon.cognitive_core.runtime_state import RuntimeState
 from cortheon.cognitive_core.text import _text
@@ -74,7 +75,13 @@ class RequestFlowMixin(RuntimeState):
                     parameters={"purpose": "contradiction_check"},
                 )
         if effective_lineages < 2 and "corroboration" not in waived:
-            if (
+            null_attested = any(
+                item.kind == "web"
+                and item.purpose == "corroboration"
+                and (item.host_receipt or {}).get("outcome") == "no_match"
+                for item in session.observations.values()
+            )
+            if (null_attested and not _latest_release_goal(session.goal)) or (
                 self._purpose_rounds(session, "corroboration")
                 >= session.strictness.corroboration_rounds
             ):

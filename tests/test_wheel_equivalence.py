@@ -78,11 +78,13 @@ ROOT = Path(__file__).parents[1]
 # The tester release adds exact stale-runtime conformance, one content-free
 # results command, and its private-preview runbook. The frontier-grounding
 # path then added environment inspection, scientific-source review, maintained
-# repository inspection, and current-source discovery. Measured artifacts are
-# wheel 246,562 bytes and sdist 226,594 bytes. The
-# caps retain less than 500 bytes of headroom and reject another payload.
-WHEEL_CAP = 247_000
-SDIST_CAP = 227_000
+# repository inspection, and current-source discovery. The scoped-null
+# calibration added host-attested absence handling and shared release-goal
+# checks. Measured artifacts are wheel 247,059 bytes and sdist 227,071
+# bytes. The caps retain less than 500 bytes of headroom and reject another
+# payload.
+WHEEL_CAP = 247_200
+SDIST_CAP = 227_150
 
 PROBE = """
 import dataclasses, json, sys
