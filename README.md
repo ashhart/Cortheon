@@ -81,6 +81,18 @@ cortheon doctor --host codex
 
 Start a new Codex task. Cortheon starts with the task.
 
+For OMP (Oh My Pi):
+
+```bash
+cortheon install --host omp
+cortheon doctor --host omp
+```
+
+Restart OMP. The next session exposes the Cortheon MCP tools and the
+`cortheon-runtime` skill. OMP has no native Cortheon adapter, so it runs in
+cooperative MCP mode: the model gathers evidence with OMP's own tools and
+reports what it ran through `cortheon_observe`.
+
 For another MCP host:
 
 ```bash
@@ -149,7 +161,7 @@ the Cortheon loop.
 
 ## Check the installation
 
-Ask the model to complete a real task. After the first task, replace `HOST`
+with `pi`, `opencode`, `codex`, or `omp` and run:
 with `pi`, `opencode`, or `codex` and run:
 
 ```bash
@@ -270,7 +282,9 @@ Generic MCP has no Cortheon-owned host file, so remove that configuration entry
 yourself. Pi and OpenCode keep one `.cortheon.bak` before the first
 configuration change and reject malformed or symlinked configuration files.
 
-## Generic MCP reference
+OMP and Pi cover the common local hosts; `cortheon install --host omp` writes
+the OMP-native `mcp.json` entry plus the `cortheon-runtime` skill. For any
+other host, run `cortheon configure --host generic` and copy its output into
 
 Run `cortheon configure --host generic` and copy its output into the host. It
 uses the absolute path to the installed MCP command. The default server exposes

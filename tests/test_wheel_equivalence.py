@@ -81,8 +81,13 @@ ROOT = Path(__file__).parents[1]
 # repository inspection, and current-source discovery. Measured artifacts are
 # wheel 246,562 bytes and sdist 226,594 bytes. The
 # caps retain less than 500 bytes of headroom and reject another payload.
-WHEEL_CAP = 247_000
-SDIST_CAP = 227_000
+# The OMP host then added its installer, conformance probe, and bundled
+# runtime skill. Re-measured after the frontier-grounding baseline, builds
+# are byte-identical at wheel 248,864 bytes and sdist 228,723 bytes; the
+# caps move to 250,000 and 230,000, holding about 1.1-1.3 KB of headroom
+# and still rejecting another payload-sized change.
+WHEEL_CAP = 250_000
+SDIST_CAP = 230_000
 
 PROBE = """
 import dataclasses, json, sys
