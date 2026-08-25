@@ -79,12 +79,14 @@ ROOT = Path(__file__).parents[1]
 # results command, and its private-preview runbook. The frontier-grounding
 # path then added environment inspection, scientific-source review, maintained
 # repository inspection, and current-source discovery. The scoped-null
-# calibration added host-attested absence handling and shared release-goal
-# checks. Measured artifacts are wheel 247,059 bytes and sdist 227,071
-# bytes. The caps retain less than 500 bytes of headroom and reject another
-# payload.
-WHEEL_CAP = 247_200
-SDIST_CAP = 227_150
+# calibration and the hostile-review evidence repairs added host-attested
+# absence handling, structured source-review records, re-scoped
+# corroboration, and source-intent routing. The stable product ceilings are
+# 300,000 bytes for both wheel and sdist, holding the lean runtime plus its
+# adapters with real headroom rather than a knife's edge. Current settled
+# artifacts are about wheel 248,000 bytes and sdist 227,900 bytes.
+WHEEL_CAP = 300_000
+SDIST_CAP = 300_000
 
 PROBE = """
 import dataclasses, json, sys

@@ -78,11 +78,22 @@ def test_quick_frontier_code_task_reserves_patch_and_test_evidence() -> None:
         },
         {
             "kind": "web",
-            "content": "A maintained compatible repository includes tests and a license.",
+            "content": (
+                '[CORTHEON_HOST_EVIDENCE] {"tool":"webfetch","outcome":"result",'
+                '"args":{"url":"https://github.com/example/payment-client"}}\n'
+                "A maintained compatible repository includes tests and a license."
+            ),
             "source": "https://github.com/example/payment-client",
             "url": "https://github.com/example/payment-client",
             "retrieved_at": retrieved_at,
             "purpose": "implementation_reference",
+            "source_record": {
+                "repository_url": "https://github.com/example/payment-client",
+                "maintenance": "commits within the last month",
+                "license": "MIT",
+                "tests": "CI test suite passes on the current release",
+                "compatibility": "matches the pinned runtime",
+            },
         },
         {
             "kind": "web",
@@ -230,3 +241,35 @@ console.log(JSON.stringify({first, receipt}));
     assert result["receipt"]["outcome"] == "no_match"
     assert result["first"]["purpose"] == "scholarly_validation"
     assert "url" not in result["first"]
+
+
+def test_opencode_websearch_empty_output_is_an_error_not_a_scoped_null() -> None:
+    root = Path(__file__).parents[1]
+    script = r"""
+import {webEvidenceBatch} from './src/cortheon/opencode_core/evidence.js';
+const observations = webEvidenceBatch(
+  'websearch',
+  {query: 'directly relevant primary paper'},
+  '',
+  {request: {parameters: {purpose: 'scholarly_validation'}}},
+);
+const first = observations[0];
+const receipt = JSON.parse(
+  first.content.split('\n')[0].slice('[CORTHEON_HOST_EVIDENCE] '.length),
+);
+console.log(JSON.stringify({outcome: receipt.outcome}));
+"""
+    completed = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    # Empty websearch output can mean tool failure or malformed response; it
+    # must never certify an absence the host did not observe.
+    assert result["outcome"] == "error"
+    assert result["outcome"] != "no_match"

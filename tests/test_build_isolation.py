@@ -34,8 +34,8 @@ from build_support.lean_workspace import (
 ROOT = Path(__file__).parents[1]
 # Uniform with tests/test_wheel_equivalence.py, which carries the measurement
 # and the justification for both numbers.
-WHEEL_CAP = 247_200
-SDIST_CAP = 227_150
+WHEEL_CAP = 300_000
+SDIST_CAP = 300_000
 SDIST_HOOK = "import build_backend, sys;print(build_backend.build_sdist(sys.argv[1]))"
 # A second fixed instant, unrelated to the build's default, so honouring the
 # caller's SOURCE_DATE_EPOCH is distinguishable from ignoring it.

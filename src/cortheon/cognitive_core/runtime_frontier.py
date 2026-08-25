@@ -23,20 +23,19 @@ class FrontierGroundingMixin(RuntimeState):
             session,
             capability="inspect",
             query=(
-                "Establish the exact live execution environment before choosing an external "
-                "approach. Inspect project manifests, lockfiles, toolchain declarations, "
-                "installed runtime versions, pinned dependency versions, enabled features, "
-                "and the available API/import surface relevant to this task. Use only "
-                f"read-only host tools. Task: {session.goal}"
+                "Establish the exact live environment before choosing an external approach: "
+                "project manifests, lockfiles, toolchain declarations, installed runtime and "
+                "pinned dependency versions, enabled features, and the relevant API surface. "
+                f"Use only read-only host tools. Task: {session.goal}"
             ),
             reason=(
                 "Current external guidance is useful only after its runtime and API "
                 "assumptions can be matched to the live project."
             ),
             success_condition=(
-                "Return focused host-receipted facts for the runtime, dependency pins, "
-                "manifests or lockfiles, and relevant available APIs. Explicitly mark any "
-                "version that could not be established."
+                "Return host-receipted facts for the runtime, dependency pins, manifests or "
+                "lockfiles, and the relevant API surface. Mark any version that could not "
+                "be established."
             ),
             parameters={
                 "operation": "environment_grounding",
@@ -63,11 +62,9 @@ class FrontierGroundingMixin(RuntimeState):
                 session,
                 capability="search_or_fetch",
                 query=(
-                    "Find and read the strongest directly relevant primary paper or rigorous "
-                    "review. Deduplicate by DOI, arXiv ID, or title. Extract its method, "
-                    "benchmark or population, result, limitations, date, identifier, and "
-                    "transfer conditions. "
-                    f"Task: {session.goal}"
+                    "Find and read the strongest relevant primary paper or rigorous review. "
+                    "Deduplicate by DOI, arXiv ID, or title; extract its method, benchmark, "
+                    f"result, limitations, date, identifier, and transfer conditions. Task: {session.goal}"
                 ),
                 reason="The task needs method-level scientific evidence.",
                 success_condition=(
@@ -89,16 +86,15 @@ class FrontierGroundingMixin(RuntimeState):
             session,
             capability="search_or_fetch",
             query=(
-                "Find and inspect a directly relevant maintained repository. Check release or "
-                "tag, maintenance, archived status, license, language and dependency fit, "
-                "tests and CI, docs, and exact implementation and test files. Treat stars only "
-                "as a discovery hint. "
-                f"Task: {session.goal}"
+                "Find and inspect a relevant maintained repository: release or tag, "
+                "maintenance, archived status, license, language and dependency fit, tests "
+                "and CI, docs, and exact implementation and test files. Stars are only a "
+                f"discovery hint. Task: {session.goal}"
             ),
             reason="The task needs implementation-level repository evidence.",
             success_condition=(
-                "Return a repository URL with maintenance, release, license, tests, "
-                "compatibility, and implementation-file evidence; or one host-receipted "
+                "Return a repository URL with release, maintenance, license, tests, "
+                "compatibility, and implementation-file evidence, or one host-receipted "
                 "scoped null."
             ),
             parameters={
@@ -196,21 +192,20 @@ class FrontierGroundingMixin(RuntimeState):
                 capability="search_or_fetch",
                 query=(
                     "Search the current web for knowledge that materially improves this task. "
-                    "Use the grounded runtime and dependency facts to reject incompatible "
-                    "examples. Prefer official documentation and releases, directly relevant "
-                    "primary research when applicable, and maintained reference repositories. "
-                    "For repositories, inspect version or tag fit, recent maintenance, tests, "
-                    "license, and exact implementation relevance rather than stars alone. "
-                    f"Task: {session.goal}"
+                    "Use the grounded runtime facts to reject incompatible examples. Prefer "
+                    "official documentation and releases, relevant primary research, and "
+                    "maintained reference repositories. For repositories, check version or "
+                    "tag fit, recent maintenance, tests, license, and implementation "
+                    f"relevance, not stars. Task: {session.goal}"
                 ),
                 reason=(
                     "The model needs current techniques and reference implementations beyond "
                     "its weights, filtered against the live environment."
                 ),
                 success_condition=(
-                    "Return attributable current results covering the strongest compatible "
-                    "primary source and implementation reference, with URLs and dates when "
-                    "available. Include incompatibilities and limitations instead of hiding them."
+                    "Return attributable current results with URLs and dates covering the "
+                    "strongest compatible primary source and implementation reference; "
+                    "include incompatibilities and limitations."
                 ),
                 parameters={
                     "operation": "frontier_discovery",
@@ -239,14 +234,14 @@ class FrontierGroundingMixin(RuntimeState):
                 session,
                 capability="fetch",
                 query=(
-                    "Fetch the strongest primary source already found. Extract the exact "
-                    "version assumptions, API or method, implementation details, limitations, "
-                    f"and evidence that it applies to the live environment. Task: {session.goal}"
+                    "Fetch the strongest primary source already found. Extract its version "
+                    "assumptions, API or method, implementation details, limitations, and "
+                    f"evidence it applies to the live environment. Task: {session.goal}"
                 ),
                 reason="Search results are leads; the load-bearing source must be read directly.",
                 success_condition=(
-                    "Return one focused primary-source passage with URL, retrieval time, source "
-                    "date when available, compatibility details, and explicit limitations."
+                    "Return one focused primary-source passage with URL, retrieval time, "
+                    "source date when available, compatibility, and explicit limitations."
                 ),
                 parameters={
                     "operation": "primary_source_fetch",
@@ -309,7 +304,7 @@ class FrontierGroundingMixin(RuntimeState):
                 ),
                 success_condition=(
                     "Return the strongest attributable limitation or contradiction, or a scoped "
-                    "no-conflict result, with URL and current retrieval time."
+                    "no-conflict result, with URL and retrieval time."
                 ),
                 parameters={
                     "operation": "counterevidence_search",

@@ -16,6 +16,7 @@ from cortheon.cognitive_core.profiles import _EXPLICIT_FRESHNESS_HINTS, _has_hin
 from cortheon.cognitive_core.receipts import _observation_origin
 from cortheon.cognitive_core.research_gaps import (
     _LOCAL_PROJECT_DOMAIN_RE,
+    _corroboration_waive_permits,
     _effective_web_lineages,
     _is_local_project_evidence,
     _latest_release_goal,
@@ -81,12 +82,29 @@ class RequestFlowMixin(RuntimeState):
                 and (item.host_receipt or {}).get("outcome") == "no_match"
                 for item in session.observations.values()
             )
-            if (null_attested and not _latest_release_goal(session.goal)) or (
-                self._purpose_rounds(session, "corroboration")
-                >= session.strictness.corroboration_rounds
-            ):
-                self._waive(session, "corroboration")
-            else:
+            rounds = self._purpose_rounds(session, "corroboration")
+            if rounds < session.strictness.corroboration_rounds:
+                if null_attested:
+                    return self._create_request(
+                        session,
+                        capability="search",
+                        query=(
+                            "Re-scope the corroboration search: the prior scoped search "
+                            "returned no independent origin. Vary phrasing, publisher, and "
+                            "venue, and consider reviews and adjacent primary sources: "
+                            f"{session.goal}"
+                        ),
+                        reason=(
+                            "A scoped null attests absence only for that exact query, so "
+                            "corroboration is re-scoped once before any waiver is considered."
+                        ),
+                        success_condition=(
+                            "Return a directly relevant result from a new URL origin with "
+                            "retrieval and source-date metadata, or an explicit scoped null "
+                            "from the re-scoped search."
+                        ),
+                        parameters={"purpose": "corroboration"},
+                    )
                 return self._create_request(
                     session,
                     capability="search",
@@ -107,6 +125,14 @@ class RequestFlowMixin(RuntimeState):
                     ),
                     parameters={"purpose": "corroboration"},
                 )
+            if null_attested and not (
+                _corroboration_waive_permits(session.goal)
+                and not _latest_release_goal(session.goal)
+            ):
+                # Protected domains and latest-release goals never waive on a
+                # scoped null: the corroboration gap stays and completion withholds.
+                return None
+            self._waive(session, "corroboration")
         if usable and "primary_fetch" not in purposes and "primary_fetch" not in waived:
             if (
                 self._purpose_rounds(session, "primary_fetch")

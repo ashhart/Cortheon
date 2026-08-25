@@ -71,12 +71,12 @@ class BriefMixin(RuntimeState):
             "orient": [
                 "Frame the exact deliverable and the strongest way an answer could be wrong.",
                 "Acquire the requested live evidence before trusting model memory.",
-                "Keep at least one alternative explanation available for revision.",
+                "Keep at least one alternative explanation for revision.",
             ],
             "frame": [
-                "Generate genuinely different explanations, including a measurement or task-design artifact when plausible.",
+                "Generate genuinely different explanations, including a measurement or task-design artifact.",
                 "Give each explanation an observable falsification test.",
-                "Identify the cheapest evidence that would separate the leading alternatives.",
+                "Identify the cheapest evidence to separate the leading alternatives.",
             ],
             "discover": [
                 "Use the pending request to reduce the highest-value uncertainty.",
@@ -95,7 +95,7 @@ class BriefMixin(RuntimeState):
             ],
             "challenge": [
                 "Attack the strongest supported conclusion with the best live counterexample.",
-                "Remove, qualify, or re-investigate any claim that fails the attack.",
+                "Remove, qualify, or re-investigate any claim failing the attack.",
             ],
             "synthesize": [
                 "Choose the hypothesis best supported after attempted falsification.",

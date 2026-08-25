@@ -323,11 +323,20 @@ class ResearchMixin(RuntimeTestCase):
             [
                 {
                     "kind": "web",
-                    "content": "The paper reports its method, benchmark, result, and limitations.",
+                    "content": (
+                        '[CORTHEON_HOST_EVIDENCE] {"tool":"webfetch","outcome":"result",'
+                        '"args":{"url":"https://doi.org/10.0000/example"}}\n'
+                        "The paper reports its method, benchmark, result, and limitations."
+                    ),
                     "source": "https://doi.org/10.0000/example",
                     "url": "https://doi.org/10.0000/example",
                     "retrieved_at": datetime.now(UTC).isoformat(),
                     "purpose": "scholarly_validation",
+                    "source_record": {
+                        "identifier": "10.0000/example",
+                        "method": "controlled benchmark with held-out splits",
+                        "limitations": "single domain",
+                    },
                 }
             ],
             request_id=started["next_action"]["request"]["request_id"],

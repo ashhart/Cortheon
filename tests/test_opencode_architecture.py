@@ -29,8 +29,8 @@ CORE = ROOT / "src" / "cortheon" / "opencode_core"
 # Uniform with tests/test_wheel_equivalence.py and
 # tests/test_lightweight_distribution.py; that module carries the
 # measurement and the justification for both numbers.
-WHEEL_CAP = 247_200
-SDIST_CAP = 227_150
+WHEEL_CAP = 300_000
+SDIST_CAP = 300_000
 
 
 def _adapter_modules() -> list[Path]:

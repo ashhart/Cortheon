@@ -295,6 +295,19 @@ def _latest_release_goal(goal: str) -> bool:
     return _has_hint(goal, _LATEST_RELEASE_HINTS) and _has_hint(goal, _RELEASE_VERSION_HINTS)
 
 
+_PROTECTED_DOMAIN_RE = re.compile(
+    r"\b(?:clinical|medical|medicine|drug|patient|treat(?:ment)?|therapy|"
+    r"surgical|safety|toxic|health|legal|law(?:s)?|litigat\w+|court|"
+    r"regulat\w+|compliance|statut\w+|scientific|peer[- ]reviewed|"
+    r"diagnos(?:is|tic)|curative|pharmacol\w+|symptom)\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _corroboration_waive_permits(goal: str) -> bool:
+    return _PROTECTED_DOMAIN_RE.search(goal) is None
+
+
 def _research_release_analysis(
     goal: str,
     observations: Iterable[Observation],

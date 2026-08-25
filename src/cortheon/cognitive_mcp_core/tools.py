@@ -1,4 +1,4 @@
-"""The tool catalogue and JSON Schemas that tools/list publishes."""
+"""Tool catalogue and JSON Schemas tools/list publishes."""
 
 from __future__ import annotations
 
@@ -54,22 +54,21 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
     host_receipt = {
         "type": "object",
         "description": (
-            "Exact provenance for a host tool that was actually run. Deterministic "
+            "Exact provenance for a host tool that ran. Deterministic "
             "code, document, diff, command, and test checks require this receipt."
         ),
         "properties": {
             "tool": {
                 "type": "string",
                 "description": (
-                    "Logical evidence operation requested by Cortheon, for example "
+                    "Logical evidence operation requested by Cortheon, e.g. "
                     "grep, read, diff, or test."
                 ),
             },
             "executor": {
                 "type": "string",
                 "description": (
-                    "Optional actual harness tool that performed the operation, "
-                    "for example shell or bash."
+                    "Optional actual harness tool that ran the operation, e.g. shell or bash."
                 ),
             },
             "outcome": {
@@ -77,14 +76,14 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
                 "enum": sorted(HOST_RECEIPT_OUTCOMES),
                 "description": (
                     "Use match/no_match for grep, passed/failed for tests, changed "
-                    "for diffs, and result for other successful calls."
+                    "for diffs, and result otherwise."
                 ),
             },
             "args": {
                 "type": "object",
                 "description": (
                     "Exact bounded host-tool arguments. Use pattern and path for grep; "
-                    "use filePath for read."
+                    "filePath for read."
                 ),
                 "additionalProperties": True,
             },
@@ -152,7 +151,7 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
             "name": "cortheon_start",
             "title": "Start Bounded Investigation",
             "description": (
-                "Start an ephemeral evidence-driven investigation. Cortheon can ground the "
+                "Start an ephemeral evidence-driven investigation. Cortheon grounds the "
                 "live environment, request current web knowledge and compatible references, "
                 "then returns each bounded evidence request for the host to satisfy with its "
                 "own tools."
@@ -247,7 +246,7 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
             "name": "cortheon_resume",
             "title": "Resume After Context Loss",
             "description": (
-                "List the active investigations in this Cortheon process with their "
+                "List the active investigations in this process with their "
                 "goals, pending next actions, and the working evidence context for "
                 "the most recent one. Call this first when conversation context was "
                 "compacted or lost, instead of asking the user to restate the task. "

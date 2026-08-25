@@ -64,7 +64,7 @@ class DiscoveryMixin(RuntimeState):
                 ),
                 reason=(
                     "The live search exposed a bounded candidate set; focused reads "
-                    "are now more informative than another broad search."
+                    "are more informative than another broad search."
                 ),
                 success_condition=(
                     "Return focused host-read excerpts from each candidate. Unrelated "
@@ -197,7 +197,7 @@ class DiscoveryMixin(RuntimeState):
                 ),
                 reason=(
                     "The live search identified a focused implementation/test surface; "
-                    "reading it is now more informative than another repository search."
+                    "reading it is more informative than another repository search."
                 ),
                 success_condition=(
                     "Return focused host-read excerpts from each candidate, including "
@@ -236,7 +236,7 @@ class DiscoveryMixin(RuntimeState):
                 ),
                 reason=(
                     "A verified code change needs a live implementation and test or "
-                    "observable boundary; the first discovery result was insufficient."
+                    "observable boundary; the first result was insufficient."
                 ),
                 success_condition=(
                     "Return new project-relative code paths with focused matching lines, "

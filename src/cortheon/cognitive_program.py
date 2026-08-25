@@ -10,7 +10,7 @@ from cortheon.cognitive_graph import content_id
 from cortheon.cognitive_protocol import evaluation_operator
 
 _PURPOSES = {
-    "orient": "Fix the deliverable, constraints, and strongest failure mode.",
+    "orient": "Fix deliverable, constraints, and strongest failure mode.",
     "decompose": (
         "Split the goal into ordered sub-goals, each with its own completion "
         "obligation, so partial work cannot be reported as a whole answer."
@@ -112,8 +112,8 @@ def _apply_effort(sequence: tuple[str, ...], effort: str, *, split: bool) -> tup
     """Shape the operator sequence by effort tier.
 
     The tier is the host's prompt-derived signal for how much structure a
-    task warrants; without it a trivial lookup and a deep multi-source task
-    would compile to byte-identical programs.
+    task warrants; otherwise a trivial lookup and a deep multi-source task
+    compile to byte-identical programs.
     """
 
     tier = effort.strip().lower()

@@ -57,9 +57,34 @@ _SCHOLARLY_SOURCE_RE = re.compile(
 )
 
 
-_REPOSITORY_SOURCE_RE = re.compile(
-    r"\b(?:github|gitlab|source\s+code|repositories|repository|repos?|"
-    r"reference\s+implementations?)\b",
+_REPOSITORY_URL_RE = re.compile(
+    r"(?:github\.com|gitlab\.com|bitbucket\.org)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
+    flags=re.IGNORECASE,
+)
+
+
+_REPOSITORY_ACTION_RE = re.compile(
+    r"\b(?:inspect|read|review|examine|study|analyse?|check|verify|evaluate|"
+    r"reference|maintain(?:ed)?|use|adopt|integrate|migrate|clone|fork|patch|extend)\s+"
+    r"(?:(?:an?|the|its|their)\s+)?(?:open[- ]source\s+)?(?:code\s+)?"
+    r"(?:repositor\w+|codebase|source\s+code|implementation)\b",
+    flags=re.IGNORECASE,
+)
+
+
+_NAMED_REPOSITORY_RE = re.compile(
+    r"\bthe\s+[A-Za-z0-9_.-]+\s+(?:repositor\w+|codebase)\b",
+    flags=re.IGNORECASE,
+)
+
+_REPOSITORY_SITE_NOUN_RE = re.compile(
+    r"\b(?:github|gitlab|bitbucket|open[- ]source)\s+(?:code|repositor\w+|projects?)\b",
+    flags=re.IGNORECASE,
+)
+
+
+_REFERENCE_IMPLEMENTATION_RE = re.compile(
+    r"\b(?:reference|maintained)\s+(?:repositories|repos?|implementations?|code)\b",
     flags=re.IGNORECASE,
 )
 
@@ -97,7 +122,13 @@ def needs_scholarly_sources(goal: str) -> bool:
 
 
 def needs_repository_sources(goal: str) -> bool:
-    return bool(_REPOSITORY_SOURCE_RE.search(goal))
+    return bool(
+        _REPOSITORY_URL_RE.search(goal)
+        or _REPOSITORY_ACTION_RE.search(goal)
+        or _NAMED_REPOSITORY_RE.search(goal)
+        or _REPOSITORY_SITE_NOUN_RE.search(goal)
+        or _REFERENCE_IMPLEMENTATION_RE.search(goal)
+    )
 
 
 SOURCE_QUALITY_SIGNALS = [

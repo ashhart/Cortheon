@@ -73,6 +73,20 @@ def test_compatibility_sensitive_code_task_starts_with_environment_grounding() -
     assert {"ground_environment", "discover_frontier", "filter_compatibility"} <= operators
 
 
+def test_repository_routing_requires_source_intent_not_bare_mentions() -> None:
+    from cortheon.cognitive_core.frontier_policy import needs_repository_sources
+
+    # Bare mentions are not repository-inspection intent.
+    assert not needs_repository_sources("Write a report about GitHub's acquisition strategy.")
+    assert not needs_repository_sources("Write a survey of source-code privacy laws.")
+    assert not needs_repository_sources("Summarize what GitHub allows in a code of conduct.")
+    # Source intent triggers repository review.
+    assert needs_repository_sources("Review the maintenance and license of the fastapi repository.")
+    assert needs_repository_sources("Inspect the source code of the httpx client project.")
+    assert needs_repository_sources("Compare reference implementations of CRDT libraries.")
+    assert needs_repository_sources("Check the tests and CI of github.com/encode/httpx.")
+
+
 def test_grounding_progresses_to_current_frontier_sources_then_primary_fetch() -> None:
     runtime = CognitiveRuntime()
     started = runtime.start(GOAL, effort="deep")
@@ -172,11 +186,20 @@ def test_frontier_grounding_checks_counterevidence_before_returning_to_local_cod
         payload,
         {
             "kind": "web",
-            "content": "Primary paper method, result, transfer conditions, and limitations.",
+            "content": (
+                '[CORTHEON_HOST_EVIDENCE] {"tool":"webfetch","outcome":"result",'
+                '"args":{"url":"https://doi.org/10.0000/example"}}\n'
+                "Primary paper method, result, transfer conditions, and limitations."
+            ),
             "source": "https://doi.org/10.0000/example",
             "url": "https://doi.org/10.0000/example",
             "retrieved_at": retrieved_at,
             "purpose": "scholarly_validation",
+            "source_record": {
+                "identifier": "10.0000/example",
+                "method": "controlled benchmark with held-out splits",
+                "limitations": "single domain",
+            },
         },
     )
     assert _operation(payload) == "repository_source_review"
@@ -189,11 +212,22 @@ def test_frontier_grounding_checks_counterevidence_before_returning_to_local_cod
         payload,
         {
             "kind": "web",
-            "content": "Maintained compatible repository with release, license, tests, and code.",
+            "content": (
+                '[CORTHEON_HOST_EVIDENCE] {"tool":"webfetch","outcome":"result",'
+                '"args":{"url":"https://github.com/example/http-client"}}\n'
+                "Maintained compatible repository with release, license, tests, and code."
+            ),
             "source": "https://github.com/example/http-client",
             "url": "https://github.com/example/http-client",
             "retrieved_at": retrieved_at,
             "purpose": "implementation_reference",
+            "source_record": {
+                "repository_url": "https://github.com/example/http-client",
+                "maintenance": "commits within the last month",
+                "license": "MIT",
+                "tests": "CI test suite passes on the current release",
+                "compatibility": "matches the pinned httpx runtime",
+            },
         },
     )
     assert _operation(payload) == "counterevidence_search"

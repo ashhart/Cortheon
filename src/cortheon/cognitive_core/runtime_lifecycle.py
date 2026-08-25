@@ -120,7 +120,7 @@ class LifecycleMixin(RuntimeState):
             self._purge_expired()
             if len(self._sessions) >= self.max_sessions:
                 raise CognitiveRuntimeError(
-                    "the in-memory session limit is full; finish or abandon an investigation"
+                    "the in-memory session limit is full; finish or abandon it"
                 )
             now = self._clock()
             detected_kind = _infer_task_kind(normalized_goal)
@@ -449,7 +449,7 @@ class LifecycleMixin(RuntimeState):
         session = self._sessions.get(normalized)
         if session is None:
             raise InvestigationNotFound(
-                "investigation not found; it may have expired or already been discarded"
+                "investigation not found; it may have expired or been discarded"
             )
         now = self._clock()
         if now >= session.expires_at:
@@ -491,7 +491,7 @@ class LifecycleMixin(RuntimeState):
         if session.turns >= session.profile.max_turns:
             session.phase = "inconclusive"
             raise CognitiveRuntimeError(
-                "the reasoning-turn budget is exhausted; abandon the investigation "
+                "the reasoning-turn budget is exhausted; abandon it "
                 "or finish a previously verified answer"
             )
         session.turns += 1

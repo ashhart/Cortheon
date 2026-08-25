@@ -242,7 +242,7 @@ def _requirement_coverage(
             )
         elif kind_ids:
             status = "unresolved"
-            reason = "Evidence of the right type does not match this specific requirement."
+            reason = "Evidence of the right type does not match this requirement."
         else:
             status = "unresolved"
             reason = f"This requirement still needs {requirement.proof} evidence."
