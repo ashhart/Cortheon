@@ -44,6 +44,11 @@ class RequestMixin(RuntimeState):
         if not evaluation_operator(session.evaluation_profile, "retrieval"):
             raise CognitiveRuntimeError("retrieval is disabled by the evaluation profile")
         if needs_frontier_grounding(session.goal, session.task_kind):
+            if session.task_kind == "research":
+                request = self._next_research_source_request(session)
+                if request is None:
+                    raise CognitiveRuntimeError("the research source plan produced no request")
+                return request
             return self._environment_grounding_request(session)
         parameters: dict[str, Any] = {}
         if session.task_kind == "code":

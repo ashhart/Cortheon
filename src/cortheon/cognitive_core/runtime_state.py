@@ -189,6 +189,9 @@ class RuntimeState:
     def _initial_request(self, session: Investigation) -> EvidenceRequest:
         raise NotImplementedError()
 
+    def _next_research_source_request(self, session: Investigation) -> EvidenceRequest | None:
+        raise NotImplementedError()
+
     def _maybe_reframe_research(self, session: Investigation) -> None:
         raise NotImplementedError()
 

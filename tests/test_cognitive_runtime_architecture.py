@@ -41,8 +41,8 @@ STANDALONE_TESTS = (
     "test_move_and_copy_goals_request_change",
     "test_host_hook_diff_receipt_establishes_change_when_observed",
 )
-LEGACY_TEST_COUNT = 87
-LEGACY_NAME_DIGEST = "f4aee61a010a42ad706e80c01cf0d7c0b6c773250bd93b98b375459c9001ab7d"
+LEGACY_TEST_COUNT = 88
+LEGACY_NAME_DIGEST = "11344805b3aca18f14721a748b30f3ad7d7996ab9f4e6ae10f94e7aceec7c9be"
 HELPER_OWNERS = {
     "FakeClock": "cognitive_runtime_cases_common.py",
     "_complete": "cognitive_runtime_cases_change_budget.py",

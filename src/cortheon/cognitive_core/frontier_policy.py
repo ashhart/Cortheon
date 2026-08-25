@@ -50,9 +50,23 @@ _RESEARCH_SOURCE_RE = re.compile(
 )
 
 
-def needs_frontier_grounding(goal: str, task_kind: str) -> bool:
-    """Return whether a non-research task explicitly needs current external knowledge."""
+_SCHOLARLY_SOURCE_RE = re.compile(
+    r"\b(?:papers?|stud(?:y|ies)|scientific|clinical|academic|arxiv|doi|"
+    r"primary\s+research|recent\s+research|peer[- ]reviewed)\b",
+    flags=re.IGNORECASE,
+)
 
+
+_REPOSITORY_SOURCE_RE = re.compile(
+    r"\b(?:github|gitlab|source\s+code|repositories|repository|repos?|"
+    r"reference\s+implementations?)\b",
+    flags=re.IGNORECASE,
+)
+
+
+def needs_frontier_grounding(goal: str, task_kind: str) -> bool:
+    if task_kind == "research":
+        return needs_scholarly_sources(goal) or needs_repository_sources(goal)
     if task_kind != "code":
         return False
     if _EXPLICIT_FRONTIER_RE.search(goal):
@@ -67,8 +81,6 @@ def needs_frontier_grounding(goal: str, task_kind: str) -> bool:
 
 
 def source_classes(goal: str) -> list[str]:
-    """Return the smallest useful source portfolio for the requested task."""
-
     classes = [
         "official_documentation",
         "official_release_or_standard",
@@ -81,9 +93,11 @@ def source_classes(goal: str) -> list[str]:
 
 
 def needs_scholarly_sources(goal: str) -> bool:
-    """Return whether the task would benefit from primary research."""
+    return bool(_SCHOLARLY_SOURCE_RE.search(goal))
 
-    return bool(_RESEARCH_SOURCE_RE.search(goal))
+
+def needs_repository_sources(goal: str) -> bool:
+    return bool(_REPOSITORY_SOURCE_RE.search(goal))
 
 
 SOURCE_QUALITY_SIGNALS = [

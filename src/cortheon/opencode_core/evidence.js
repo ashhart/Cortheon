@@ -3,12 +3,16 @@ import { boundedHostOutput, maxEvidenceCharacters } from "./state.js"
 
 function evidenceReceipt(tool, args, output, metadata = {}) {
   let outcome = "result"
-  if (tool === "grep") {
+  if (tool === "grep" || tool === "websearch") {
     outcome =
       !output ||
-      /\b(?:no files found|no matches?(?: found)?|0 matches?)\b/i.test(output)
+      /\b(?:no (?:files|results?) found|no matches?(?: found)?|0 (?:matches?|results?))\b/i.test(
+        output,
+      )
         ? "no_match"
-        : "match"
+        : tool === "grep"
+          ? "match"
+          : "result"
   }
   return (
     "[CORTHEON_HOST_EVIDENCE] " +

@@ -153,6 +153,32 @@ export function failedWebObservation(
 	};
 }
 
+function scopedNullWebObservation(
+	request: EvidenceRequest,
+	retrievedAt: string,
+): Record<string, unknown> {
+	const requestPurpose = purpose(request)!;
+	const receipt = {
+		tool: "websearch",
+		outcome: "no_match",
+		args: {
+			query: String(request.query || "").slice(0, 500),
+			purpose: requestPurpose,
+		},
+		retrieved_at_source: "pi_tool_result",
+	};
+	return {
+		kind: "web",
+		content:
+			`[CORTHEON_HOST_EVIDENCE] ${JSON.stringify(receipt)}\n` +
+			"No attributable results were returned by the scoped web search.",
+		source: "pi:websearch:scoped-null",
+		status: "observed",
+		retrieved_at: retrievedAt,
+		purpose: requestPurpose,
+	};
+}
+
 function fetchObservations(
 	input: Record<string, unknown>,
 	details: Record<string, unknown>,
@@ -216,7 +242,7 @@ function searchObservations(
 	retrievedAt: string,
 ): Array<Record<string, unknown>> {
 	const raw = Array.isArray(details.results) ? details.results : undefined;
-	if (!raw || raw.length === 0 || raw.length > MAX_WEB_RESULTS) {
+	if (!raw || raw.length > MAX_WEB_RESULTS) {
 		return [
 			failedWebObservation(
 				"websearch",
@@ -225,6 +251,7 @@ function searchObservations(
 			),
 		];
 	}
+	if (raw.length === 0) return [scopedNullWebObservation(request, retrievedAt)];
 	const observations: Array<Record<string, unknown>> = [];
 	const seen = new Set<string>();
 	for (const candidate of raw) {

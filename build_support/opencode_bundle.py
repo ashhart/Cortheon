@@ -12,7 +12,7 @@ SOURCE_SHA256 = {
     "auto_evidence": "386c57c537e2b93628a5a748ff6792760953f12bf2bc52d2cc52c7f3f8baede7",
     "auto_research": "a1f162475caf89a58f352896235f3df33199bfa7aa3be6e623fe804caac649be",
     "completion": "570740b416d4f81095f50108f460d9fce4ac4a01b47d5bfff129e81b6ba9ba15",
-    "evidence": "37bfc79ac68b976940c28df4a425da00c1d137d9c84b9e1478114cc6cd70a262",
+    "evidence": "bc71c14218ab81afeb34ced5aaa47e17b7bdc27720c7e022e93be8f7b4ca938e",
     "evaluator_control": "a06cfdcb305b3d4bed10844ddc2e8889263c30e34ca3079ca57e43145e0939d5",
     "hook_conversation": "51435ed4a3cc2f03c42ae168d9c00548679de762044fc9adc803e0ec3074ea1d",
     "hook_output": "799ada5cf88fe3e846839ac853720b7cc2880e2c60d6616304982480d9a60e57",
@@ -27,7 +27,7 @@ SOURCE_SHA256 = {
     "state": "1a2036fa42f01de53ca088d41f175e6890d2c1638269940dcf0e7729eeb8b4c9",
     "state_merge": "676b8c591787796bb03d10c75464fb66dbeea32b98bb1d2558faef6b64c673d4",
 }
-COMPACTED_CLOSURE_SHA256 = "e8693b791b06c5dcf15f25581d2a48fc3a5ce4b60f37cd2440661415640af841"
+COMPACTED_CLOSURE_SHA256 = "a58be6fb1258da70ea86ddbc99eef12b4dc70357e411d600ebd87629d314b121"
 
 _IMPORT = re.compile(r'^import\s+.*?\s+from\s+"(?P<spec>[^"]+)"\s*\n', re.MULTILINE | re.DOTALL)
 _EXPORT_LIST = re.compile(r"^export\s*\{.*?\}\s*\n?", re.MULTILINE | re.DOTALL)

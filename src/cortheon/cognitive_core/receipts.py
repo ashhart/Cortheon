@@ -1,5 +1,3 @@
-"""Host evidence receipt parsing and read-only tool validation."""
-
 from __future__ import annotations
 
 import hashlib
@@ -94,7 +92,6 @@ def _receipt_error(
     request: EvidenceRequest | None,
 ) -> CognitiveRuntimeError:
     """Reject a receipt with a correct example attached.
-
     Small models imitate syntax better than they follow prose, so every
     rejection carries copyable JSON.
     """
@@ -109,7 +106,6 @@ def _validate_host_observation_batch(
     observations: list[dict[str, Any]],
 ) -> bool:
     """Validate structural host provenance and exact request binding.
-
     Prevents stale, mismatched, hidden, or failed receipts from satisfying
     an evidence request; native host adapters add the first-line receipt
     from their tool-result hooks.
@@ -146,6 +142,8 @@ def _validate_host_observation_batch(
     for raw, receipt in parsed:
         kind = raw.get("kind")
         status = raw.get("status", "observed")
+        tool = str(receipt["tool"]).casefold() if receipt is not None else ""
+        outcome = str(receipt["outcome"]).casefold() if receipt is not None else ""
         if status == "failed":
             continue
         if capability in {"search", "fetch", "search_or_fetch"} and purpose is not None:
@@ -165,6 +163,14 @@ def _validate_host_observation_batch(
                         sort_keys=True,
                     )
                 )
+            if (
+                capability in {"search", "search_or_fetch"}
+                and tool in {"search", "websearch"}
+                and outcome == "no_match"
+                and raw.get("retrieved_at")
+            ):
+                successful = True
+                continue
             if not raw.get("url") or not raw.get("retrieved_at"):
                 continue
             successful = True
@@ -175,8 +181,6 @@ def _validate_host_observation_batch(
                 capability,
                 request,
             )
-        tool = str(receipt["tool"]).casefold()
-        outcome = str(receipt["outcome"]).casefold()
         arguments = receipt["args"]
         if outcome in {"error", "failed"}:
             continue

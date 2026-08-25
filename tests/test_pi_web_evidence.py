@@ -148,6 +148,28 @@ def test_code_frontier_request_uses_the_host_websearch_path(tmp_path: Path) -> N
     assert _receipt(observation)["tool"] == "websearch"
 
 
+def test_empty_structured_search_is_an_attributable_scoped_null(tmp_path: Path) -> None:
+    extension = write_web_extension(
+        tmp_path,
+        tool="websearch",
+        content="host search envelope",
+        details={"results": []},
+    )
+    completed, _model, runtime = run_web_case(
+        tmp_path,
+        extension=extension,
+        request=web_request("search_or_fetch"),
+        tool_call=("websearch", {"query": "directly relevant primary paper"}),
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    observation = _observations(runtime)[0]
+    assert observation["status"] == "observed"
+    assert "url" not in observation
+    assert observation["retrieved_at"].endswith("Z")
+    assert _receipt(observation)["outcome"] == "no_match"
+
+
 @pytest.mark.parametrize(
     ("details", "content", "reason"),
     [
