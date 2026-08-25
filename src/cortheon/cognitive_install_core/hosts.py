@@ -17,6 +17,7 @@ from cortheon.cognitive_install_core.config import (
     _configured_codex_plugins,
     _is_packaged_adapter_reference,
     _load_json_config,
+    _omp_config_home,
     _pi_config_home,
     _xdg_config_home,
     _xdg_data_home,
@@ -67,6 +68,8 @@ def install_hosts(
             results.append(install_pi(scope=scope, project_dir=root, dry_run=dry_run))
         elif host == "codex":
             results.append(install_codex(dry_run=dry_run, run_cli=run_codex_cli))
+        elif host == "omp":
+            results.append(install_omp(scope=scope, project_dir=root, dry_run=dry_run))
     return results
 
 
@@ -94,6 +97,13 @@ def _preflight_hosts(
             else _pi_config_home() / "settings.json"
         )
         _preflight_json_string_list(path, "extensions")
+    if "omp" in hosts:
+        path = (
+            project_dir / ".omp" / "mcp.json"
+            if scope == "project"
+            else _omp_config_home() / "mcp.json"
+        )
+        _preflight_omp_config(path)
     if "codex" in hosts and run_codex_cli and not dry_run:
         codex = shutil.which("codex")
         if codex is None:
@@ -106,6 +116,16 @@ def _preflight_hosts(
                 f"{conflicting}, not {root}"
             )
 
+
+def _preflight_omp_config(path: Path) -> None:
+    """Reject an OMP mcp.json that a Cortheon entry cannot be merged into."""
+
+    if path.is_symlink():
+        raise InstallError(f"refusing to rewrite symlinked configuration: {path}")
+    payload = _load_json_config(path)
+    servers = payload.get("mcpServers", {})
+    if not isinstance(servers, dict):
+        raise InstallError(f"{path} field 'mcpServers' must be an object")
 
 def _preflight_json_string_list(path: Path, field: str) -> None:
     if path.is_symlink():
@@ -324,11 +344,15 @@ def install_codex(
     )
 
 
-def generic_mcp_config() -> InstallResult:
+def _installed_mcp_command() -> str:
     installed = Path(sys.executable).with_name("cortheon-mcp")
-    command = shutil.which("cortheon-mcp") or (
+    return shutil.which("cortheon-mcp") or (
         str(installed.resolve()) if installed.is_file() else "cortheon-mcp"
     )
+
+
+def generic_mcp_config() -> InstallResult:
+    command = _installed_mcp_command()
     return InstallResult(
         host="generic",
         status="configuration",
@@ -354,6 +378,58 @@ def _normalize_hosts(hosts: Iterable[str]) -> list[str]:
     if unknown:
         raise InstallError(f"unsupported host(s): {', '.join(unknown)}")
     return list(dict.fromkeys(values))
+
+def install_omp(*, scope: str, project_dir: Path, dry_run: bool) -> InstallResult:
+    """Register the installed MCP server and runtime skill in OMP's config."""
+
+    command = _installed_mcp_command()
+    config_path = (
+        project_dir / ".omp" / "mcp.json"
+        if scope == "project"
+        else _omp_config_home() / "mcp.json"
+    )
+    _preflight_omp_config(config_path)
+    payload = _load_json_config(config_path)
+    servers = dict(payload.get("mcpServers", {}))
+    entry = {"command": command, "args": []}
+    changed = servers.get("cortheon") != entry
+    if changed:
+        servers["cortheon"] = entry
+        payload["mcpServers"] = servers
+        if not dry_run:
+            _atomic_json(config_path, payload, backup_existing=True, sort_keys=False)
+    skill_root = config_path.parent / "skills"
+    skill_changed = _install_omp_skill(skill_root, dry_run=dry_run)
+    changed |= skill_changed
+    return InstallResult(
+        host="omp",
+        status="planned" if dry_run and changed else ("installed" if changed else "present"),
+        target=str(config_path),
+        details={
+            "mcp_server": entry,
+            "assurance": "cooperative",
+            "scope": scope,
+            "skills_root": str(skill_root / "cortheon-runtime"),
+            "changed": changed,
+            "skill_changed": skill_changed,
+        },
+    )
+
+
+def _install_omp_skill(skill_root: Path, *, dry_run: bool) -> bool:
+    """Install the bundled OMP runtime skill, returning whether it changed."""
+
+    source = package_asset("omp_skill/cortheon-runtime/SKILL.md")
+    target = skill_root / "cortheon-runtime" / "SKILL.md"
+    if target.is_symlink():
+        raise InstallError(f"refusing to replace symlinked OMP skill: {target}")
+    previous = target.read_text(encoding="utf-8") if target.is_file() else None
+    updated = source.read_text(encoding="utf-8")
+    changed = previous != updated
+    if changed and not dry_run:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(updated, encoding="utf-8")
+    return changed
 
 
 def _run(command: list[str]) -> dict[str, Any]:
@@ -403,6 +479,13 @@ for _definition in (
     _normalize_hosts,
     _run,
     _configured_codex_marketplaces,
+):
+    _definition.__module__ = "cortheon.cognitive_install"
+for _definition in (
+    _preflight_omp_config,
+    _installed_mcp_command,
+    install_omp,
+    _install_omp_skill,
 ):
     _definition.__module__ = "cortheon.cognitive_install"
 

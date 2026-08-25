@@ -148,6 +148,7 @@ RUNTIME_SOURCE_FILES = frozenset(
         *(f"src/cortheon/opencode_core/{path.name}" for path in _ADAPTER_CORE_SOURCES),
         "src/cortheon/pi_extension.ts",
         *(f"src/cortheon/pi_core/{path.name}" for path in _PI_CORE_SOURCES),
+        "src/cortheon/omp_skill/cortheon-runtime/SKILL.md",
         *(
             f"build_support/{path.name}"
             for path in sorted((PROJECT_ROOT / "build_support").glob("*.py"))

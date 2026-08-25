@@ -60,6 +60,7 @@ def asset_paths() -> dict[str, str]:
         "opencode_plugin": str(root.joinpath("opencode_plugin.js")),
         "pi_extension": str(root.joinpath("pi_extension.ts")),
         "codex_plugin": str(root.joinpath("codex_plugins/cortheon")),
+        "omp_skill": str(root.joinpath("omp_skill/cortheon-runtime/SKILL.md")),
     }
 
 

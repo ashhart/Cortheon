@@ -50,6 +50,7 @@ cortheon = [
   # Codex copies this complete hook package into its plugin cache.
   "codex_plugins/cortheon/hooks/*.py",
   "codex_plugins/cortheon/skills/cortheon-runtime/SKILL.md",
+  "omp_skill/cortheon-runtime/SKILL.md",
 ]
 
 [tool.pytest.ini_options]

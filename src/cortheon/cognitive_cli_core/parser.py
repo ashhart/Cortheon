@@ -87,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument(
         "--host",
         action="append",
-        choices=["opencode", "pi", "codex", "all"],
+        choices=["opencode", "pi", "codex", "omp", "all"],
         default=[],
         help="Host to install; repeatable.",
     )

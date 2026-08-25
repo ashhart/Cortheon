@@ -97,6 +97,21 @@ def _pi_config_home() -> Path:
     configured = os.environ.get("PI_CODING_AGENT_DIR")
     return Path(configured).expanduser() if configured else Path.home() / ".pi" / "agent"
 
+def _omp_config_home() -> Path:
+    """Resolve the active OMP profile's native agent directory."""
+
+    profile = os.environ.get("OMP_PROFILE")
+    if not profile:
+        profile = os.environ.get("PI_PROFILE")
+    if profile and profile.strip():
+        return Path.home() / ".omp" / "profiles" / profile.strip() / "agent"
+    configured = os.environ.get("PI_CODING_AGENT_DIR")
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".omp" / "agent"
+
+
+
 
 def _configured_codex_plugins(codex: str) -> dict[str, str]:
     completed = subprocess.run(
@@ -132,6 +147,7 @@ for _definition in (
     _xdg_config_home,
     _xdg_data_home,
     _pi_config_home,
+    _omp_config_home,
     _configured_codex_plugins,
 ):
     _definition.__module__ = "cortheon.cognitive_install"

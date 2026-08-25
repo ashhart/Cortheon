@@ -98,6 +98,7 @@ def test_host_installation_status_reports_configuration_without_contents():
                 "XDG_CONFIG_HOME": str(root / "config"),
                 "XDG_DATA_HOME": str(root / "data"),
                 "PI_CODING_AGENT_DIR": str(root / "pi"),
+                "HOME": str(root / "home"),
             },
         ):
             install_opencode(scope="user", project_dir=root, dry_run=False)
@@ -111,6 +112,7 @@ def test_host_installation_status_reports_configuration_without_contents():
         assert statuses["opencode"]["configured"] is True
         assert statuses["pi"]["configured"] is True
         assert "topsecret" not in json.dumps(statuses)
+
 
 
 def test_uninstall_removes_only_cortheon_adapter_references():
@@ -156,6 +158,104 @@ def test_generic_install_is_rejected_before_any_host_change():
         with pytest.raises(InstallError, match="configuration-only"):
             install_hosts(["opencode", "generic"], scope="project", project_dir=root)
         assert not (root / "opencode.json").exists()
+
+
+def test_omp_install_writes_user_mcp_and_skill():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        with patch.dict(os.environ, {"HOME": str(root)}):
+            first = install_hosts(["omp"], scope="user", dry_run=False)[0]
+            second = install_hosts(["omp"], scope="user", dry_run=False)[0]
+
+        mcp = root / ".omp" / "agent" / "mcp.json"
+        skill = root / ".omp" / "agent" / "skills" / "cortheon-runtime" / "SKILL.md"
+        assert first.status == "installed"
+        assert second.status == "present"
+        servers = json.loads(mcp.read_text())["mcpServers"]
+        assert servers["cortheon"] == {"command": "cortheon-mcp", "args": []}
+        assert skill.is_file()
+        assert "cooperative" in skill.read_text()
+
+
+def test_omp_install_project_scope_preserves_other_servers():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        mcp = root / ".omp" / "mcp.json"
+        mcp.parent.mkdir(parents=True)
+        mcp.write_text(
+            json.dumps({"mcpServers": {"Jira": {"type": "http", "url": "https://mcp.jira/"}}})
+        )
+
+        result = install_hosts(["omp"], scope="project", project_dir=root, dry_run=False)[0]
+
+        assert result.status == "installed"
+        payload = json.loads(mcp.read_text())
+        assert set(payload["mcpServers"]) == {"Jira", "cortheon"}
+        assert payload["mcpServers"]["Jira"]["url"] == "https://mcp.jira/"
+        assert (root / ".omp" / "skills" / "cortheon-runtime" / "SKILL.md").is_file()
+
+
+def test_omp_status_reports_server_and_skill():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        with patch.dict(os.environ, {"HOME": str(root)}):
+            install_hosts(["omp"], scope="user", dry_run=False)
+            status = host_installation_status()["omp"]
+
+        assert status["configured"] is True
+        assert status["valid"] is True
+        assert status["skill_present"] is True
+        assert status["scope"] == "user"
+        assert "topsecret" not in json.dumps(status)
+
+
+def test_omp_uninstall_removes_server_and_skill_but_preserves_others():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        mcp = root / ".omp" / "mcp.json"
+        mcp.parent.mkdir(parents=True)
+        mcp.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "Jira": {"type": "http", "url": "https://mcp.jira/"},
+                        "cortheon": {"command": "cortheon-mcp", "args": []},
+                    }
+                }
+            )
+        )
+
+        result = uninstall_hosts(["omp"], scope="project", project_dir=root, dry_run=False)[0]
+
+        assert result.status == "removed"
+        payload = json.loads(mcp.read_text())
+        assert payload["mcpServers"] == {"Jira": {"type": "http", "url": "https://mcp.jira/"}}
+        assert mcp.with_name("mcp.json.cortheon.bak").is_file()
+        assert not (root / ".omp" / "skills" / "cortheon-runtime").exists()
+
+
+def test_omp_install_preflight_rejects_malformed_config_before_other_host_changes():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        mcp = root / ".omp" / "mcp.json"
+        mcp.parent.mkdir(parents=True)
+        mcp.write_text('{"mcpServers": "not-an-object"}')
+
+        with pytest.raises(InstallError, match="mcpServers"):
+            install_hosts(["opencode", "omp"], scope="project", project_dir=root)
+
+        assert not (root / "opencode.json").exists()
+        assert json.loads(mcp.read_text()) == {"mcpServers": "not-an-object"}
+
+
+def test_omp_uninstall_reports_absent_without_a_config():
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+
+        result = uninstall_hosts(["omp"], scope="project", project_dir=root, dry_run=False)[0]
+
+        assert result.status == "absent"
+        assert result.details["removed_server"] is False
 
 
 def test_codex_uninstall_removes_only_verified_owned_marketplace():

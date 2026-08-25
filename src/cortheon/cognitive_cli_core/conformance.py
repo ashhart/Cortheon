@@ -173,7 +173,39 @@ def host_conformance(
             },
         }
 
-    runtime_required = any(host != "generic" for host in selected)
+    if "omp" in selected:
+        mcp = shutil.which("cortheon-mcp")
+        initialize = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": "2025-06-18"},
+            },
+            separators=(",", ":"),
+        )
+        probe = (
+            execute([mcp], input=initialize + "\n")
+            if mcp
+            else {"ok": False, "error": "cortheon-mcp is not installed", "_stdout": ""}
+        )
+        try:
+            response = json.loads(str(probe.pop("_stdout", "")).splitlines()[0])
+            initialized = response.get("result", {}).get("serverInfo", {}).get("name") == "cortheon"
+        except (IndexError, json.JSONDecodeError):
+            initialized = False
+        results["omp"] = {
+            "assurance": assurance["stdio_mcp"],
+            "configured": installation["omp"]["configured"],
+            "skill_present": installation["omp"]["skill_present"],
+            "adapter_load": {
+                **probe,
+                "mcp_initialized": initialized,
+                "ok": bool(probe.get("ok") and initialized),
+            },
+        }
+
+    runtime_required = any(host not in {"generic", "omp"} for host in selected)
     runtime = (
         surface._runtime_health(runtime_url, token=token)
         if runtime_required

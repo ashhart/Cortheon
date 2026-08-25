@@ -13,6 +13,7 @@ from cortheon.cognitive_install_core.config import (
     _configured_codex_plugins,
     _is_packaged_adapter_reference,
     _load_json_config,
+    _omp_config_home,
     _pi_config_home,
     _xdg_config_home,
     _xdg_data_home,
@@ -20,8 +21,10 @@ from cortheon.cognitive_install_core.config import (
 )
 from cortheon.cognitive_install_core.hosts import (
     _configured_codex_marketplaces,
+    _installed_mcp_command,
     _normalize_hosts,
     _preflight_json_string_list,
+    _preflight_omp_config,
     _run,
 )
 from cortheon.cognitive_install_core.model import (
@@ -114,6 +117,7 @@ def host_installation_status(
         "version_matches": version_matches,
         "scope": scope,
     }
+    omp_root = project_dir / ".omp" if scope == "project" else _omp_config_home()
     mcp = shutil.which("cortheon-mcp")
     statuses["generic"] = {
         "configured": mcp is not None,
@@ -122,6 +126,31 @@ def host_installation_status(
         "scope": "process",
         "configuration_only": True,
     }
+    omp_mcp = omp_root / "mcp.json"
+    omp_skill = omp_root / "skills" / "cortheon-runtime" / "SKILL.md"
+    try:
+        payload = _load_json_config(omp_mcp)
+        servers = payload.get("mcpServers", {})
+        server = servers.get("cortheon") if isinstance(servers, dict) else None
+        configured = isinstance(server, dict) and isinstance(server.get("command"), str)
+        command = server.get("command") if isinstance(server, dict) else None
+        statuses["omp"] = {
+            "configured": configured,
+            "valid": bool(configured and command == _installed_mcp_command()),
+            "target": str(omp_mcp),
+            "skill_present": omp_skill.is_file(),
+            "scope": scope,
+            "assurance": "cooperative",
+        }
+    except InstallError as exc:
+        statuses["omp"] = {
+            "configured": False,
+            "valid": False,
+            "target": str(omp_mcp),
+            "skill_present": omp_skill.is_file(),
+            "scope": scope,
+            "error": str(exc),
+        }
     return statuses
 
 
@@ -201,6 +230,51 @@ def _uninstall_codex(*, dry_run: bool, run_cli: bool) -> InstallResult:
     )
 
 
+def _uninstall_omp(*, scope: str, project_dir: Path, dry_run: bool) -> InstallResult:
+    omp_root = project_dir / ".omp" if scope == "project" else _omp_config_home()
+    config_path = omp_root / "mcp.json"
+    payload = _load_json_config(config_path)
+    servers = payload.get("mcpServers", {})
+    if not isinstance(servers, dict):
+        raise InstallError(f"{config_path} field 'mcpServers' must be an object")
+    removed_server = "cortheon" in servers
+    if removed_server and not dry_run:
+        payload["mcpServers"] = {
+            key: value for key, value in servers.items() if key != "cortheon"
+        }
+        _atomic_json(config_path, payload, backup_existing=True, sort_keys=False)
+    skill_target = omp_root / "skills" / "cortheon-runtime"
+    removed_skill = False
+    if skill_target.exists():
+        if skill_target.is_symlink():
+            raise InstallError(f"refusing to remove symlinked OMP skill: {skill_target}")
+        skill_file = skill_target / "SKILL.md"
+        bundled = package_asset("omp_skill/cortheon-runtime/SKILL.md")
+        is_ours = bool(
+            skill_file.is_file()
+            and skill_file.read_text(encoding="utf-8")
+            == bundled.read_text(encoding="utf-8")
+        )
+        if is_ours and not dry_run:
+            for child in sorted(skill_target.rglob("*"), reverse=True):
+                if child.is_file() or child.is_symlink():
+                    child.unlink()
+            skill_target.rmdir()
+            removed_skill = True
+    changed = removed_server or removed_skill
+    return InstallResult(
+        host="omp",
+        status="planned" if dry_run and changed else ("removed" if changed else "absent"),
+        target=str(config_path),
+        details={
+            "scope": scope,
+            "removed_server": removed_server,
+            "removed_skill": removed_skill,
+            "changed": changed,
+        },
+    )
+
+
 def uninstall_hosts(
     hosts: Iterable[str],
     *,
@@ -231,12 +305,20 @@ def uninstall_hosts(
                 ),
                 "plugin" if host == "opencode" else "extensions",
             )
+    if "omp" in normalized:
+        _preflight_omp_config(
+            root / ".omp" / "mcp.json"
+            if scope == "project"
+            else _omp_config_home() / "mcp.json"
+        )
     results: list[InstallResult] = []
     for host in normalized:
         if host in {"opencode", "pi"}:
             results.append(_uninstall_adapter(host, scope=scope, project_dir=root, dry_run=dry_run))
         elif host == "codex":
             results.append(_uninstall_codex(dry_run=dry_run, run_cli=run_codex_cli))
+        elif host == "omp":
+            results.append(_uninstall_omp(scope=scope, project_dir=root, dry_run=dry_run))
         else:
             results.append(
                 InstallResult(
@@ -257,6 +339,11 @@ for _definition in (
     _uninstall_adapter,
     _uninstall_codex,
     uninstall_hosts,
+):
+    _definition.__module__ = "cortheon.cognitive_install"
+
+for _definition in (
+    _uninstall_omp,
 ):
     _definition.__module__ = "cortheon.cognitive_install"
 
