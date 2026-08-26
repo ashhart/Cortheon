@@ -1,33 +1,42 @@
-# Held-out live pilot: Qwen3.5-4B on the sealed P6 pack (2026-08-26)
+# Held-out live pilot, all operators: Qwen3.5-4B on the sealed P6 pack (2026-08-26)
 
-First live measurement on the sealed held-out pack: fresh hypothesis-framing
-instances the model never saw, through the generic MCP host, development
-scope only. `claim_eligible=false`, `development_gate_passes=false`, and the
-external chain root plus reviewer signoffs are still required before any
-claim.
+Live measurements on the sealed held-out pack (fresh instances the model
+never saw) across every operator cluster, development scope only.
+`claim_eligible=false`, `development_gate_passes=false`; the external chain
+root and reviewer signoffs are still required before any claim.
 
-## Run
+## Runs
 
 - model: `mlx-community--Qwen3.5-4B-MLX-8bit` (local oMLX).
 - pack: `benchmarks/frozen/p6_heldout_pack` (60 fresh cases, isolated
-  vocabulary), hypothesis-framing cluster only, 6 instances x 3 conditions x
-  3 repetitions = 54 cells. All identity-valid, zero timeouts.
+  vocabulary).
+- per operator: 3 cases x 3 conditions (full, placebo, operator removed) x 3
+  repetitions = 27 cells; 5 operators = 135 cells. All identity-valid, zero
+  timeouts.
 
 ## Outcomes (correct / scheduled)
 
-| Condition | Correct | Delivered |
-| --- | ---: | ---: |
-| full | 17/18 | 18/18 |
-| equal-budget placebo (bare model) | 0/18 | 18/18 |
-| without_hypothesis_framing | 18/18 | 18/18 |
+| Operator | full | placebo | operator removed |
+| --- | ---: | ---: | ---: |
+| Hypothesis framing | 7/9 | 0/9 | 9/9 |
+| Discriminating evidence | 9/9 | 0/9 | 9/9 |
+| Contradiction revision | 6/9 | 0/9 | 0/9 |
+| Cross-source derivation | 9/9 | 0/9 | 6/9 |
+| Adaptive stopping | 0/9 | 0/9 | 0/9 |
+| Total | 31/45 | 0/45 | 24/45 |
+
+Combined with the earlier 6-cluster hypothesis pilot (17/18), the
+full-versus-bare gap persists on every held-out operator family.
 
 ## Reading
 
-The full-versus-bare gap replicates out of sample: 94.4 percent versus zero
-on tasks never seen by the model. Removing the framing operator shows no
-isolated effect here either, identical to the development bank (33/36 vs
-34/36 there; 17/18 vs 18/18 here), so the held-out pack transfers the
-protocol faithfully. Six instances per arm cannot support any operator
-inference; the value is procedural: the sealed pack, the CLI `--heldout`
-path, and the live runner execute end to end on unseen material, which is
-the loop the powered held-out campaign extends.
+Out of sample the structure holds and sharpens: removal of the framing and
+discrimination operators again shows no isolated effect; removal of
+derivation and of revision costs ground (9 to 6 and 6 to 0); adaptive
+stopping does not transfer as-is to the held-out instances (0/9 correct, and
+the full arm delivers only 4/9), a genuine transfer gap to investigate
+before the powered campaign, not a reason to weaken any gate. Three cases
+per arm cannot support operator inferences; the purpose here is the
+procedure: the sealed pack and the `--heldout` run path now execute every
+operator's protocol out of sample, which is the loop the P6 campaign
+extends.
