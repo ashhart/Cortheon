@@ -34,9 +34,13 @@ Out of sample the structure holds and sharpens: removal of the framing and
 discrimination operators again shows no isolated effect; removal of
 derivation and of revision costs ground (9 to 6 and 6 to 0); adaptive
 stopping does not transfer as-is to the held-out instances (0/9 correct, and
-the full arm delivers only 4/9), a genuine transfer gap to investigate
-before the powered campaign, not a reason to weaken any gate. Three cases
-per arm cannot support operator inferences; the purpose here is the
-procedure: the sealed pack and the `--heldout` run path now execute every
-operator's protocol out of sample, which is the loop the P6 campaign
-extends.
+the full arm delivers only 4/9), a genuine transfer gap before the powered
+campaign. Root cause, traced: the stopping protocol asks the host to
+"execute the next probe", and neither the scripted read-receipt responder
+nor the live model on fresh vocabulary satisfies the execution telemetry the
+runtime requires (the pack itself parses and reads fine, so geometry is not
+the fault). That is a model-compliance plus responder limitation, not a pack
+defect and not a reason to weaken any gate. Three cases per arm cannot
+support operator inferences; the purpose here is the procedure: the sealed
+pack and the `--heldout` run path now execute every operator's protocol out
+of sample, which is the loop the P6 campaign extends.
