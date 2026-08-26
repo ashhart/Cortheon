@@ -27,6 +27,7 @@ SHIPPED_PYTHON_MODULES = {
     "cortheon/cognitive_protocol.py",
     "cortheon/cognitive_repair.py",
     "cortheon/cognitive_runtime.py",
+    "cortheon/omp_host.py",
     "cortheon/sanitize.py",
     *(
         f"cortheon/cognitive_core/{path.name}"

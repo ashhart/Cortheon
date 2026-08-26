@@ -52,6 +52,7 @@ RUNTIME_MODULES = frozenset(
         "cognitive_protocol",
         "cognitive_repair",
         "cognitive_runtime",
+        "omp_host",
         "sanitize",
     }
 )
