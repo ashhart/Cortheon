@@ -29,7 +29,7 @@ CASES = development_cases()
 def _workspace() -> Path:
     root = Path(tempfile.mkdtemp())
     for case in CASES[:5]:
-        _materialize_workspace(root, case)
+        _materialize_workspace(root / case.case_id, case)
     return root
 
 
@@ -37,10 +37,16 @@ def _example(operator: str):
     return next(case for case in CASES if case.operator == operator)
 
 
+def _root(root: Path, case) -> Path:
+    return root / case.case_id
+
+
 def test_replay_cells_are_deterministic() -> None:
     root = _workspace()
-    first = replay_case(_example("hypothesis_framing"), root)
-    second = replay_case(_example("hypothesis_framing"), root)
+    first = replay_case(_example("hypothesis_framing"), _root(root, _example("hypothesis_framing")))
+    second = replay_case(
+        _example("hypothesis_framing"), _root(root, _example("hypothesis_framing"))
+    )
     assert first == second
     assert isinstance(first, ReplayCell)
     assert first.case_id == "hypothesis_01"
@@ -58,15 +64,26 @@ def test_oracle_answer_payload_is_schema_valid_for_every_family() -> None:
 
 def test_workspace_materializes_the_live_geometry() -> None:
     root = _workspace()
-    projection = root / "public-projection.json"
-    assert projection.is_file()
-    assert (root / "evidence" / "source_a.txt").is_file()
-    assert (root / "evidence" / "source_b.txt").is_file()
+    case_root = root / CASES[0].case_id
+    assert (case_root / "public-projection.json").is_file()
+    assert (case_root / "evidence" / "source_a.txt").is_file()
+    assert (case_root / "evidence" / "source_b.txt").is_file()
+
+
+def test_replay_certifies_the_oracle_correct_hypothesis_case() -> None:
+    root = _workspace()
+    case = _example("hypothesis_framing")
+    cell = replay_case(case, _root(root, case))
+    # The scripted responder submits the oracle-correct answer; the real
+    # completion gates must certify it and the oracle must grade it correct.
+    assert cell.certified, (cell.withheld_reasons, cell.errors)
+    assert cell.correct
+    assert cell.delivered
 
 
 def test_replay_records_the_runtime_decision_path() -> None:
     root = _workspace()
-    cell = replay_case(_example("hypothesis_framing"), root)
+    cell = replay_case(_example("hypothesis_framing"), _root(root, _example("hypothesis_framing")))
     assert cell.requests
     assert all(isinstance(request, str) for request in cell.requests)
     # Either the runtime certified the answer or it documented why not.
@@ -76,8 +93,8 @@ def test_replay_records_the_runtime_decision_path() -> None:
 def test_disabling_an_operator_changes_the_decision_path() -> None:
     root = _workspace()
     case = _example("adaptive_stopping")
-    full = replay_case(case, root)
-    ablated = replay_case(case, root, disabled_operator="adaptive_stopping")
+    full = replay_case(case, _root(root, case))
+    ablated = replay_case(case, _root(root, case), disabled_operator="adaptive_stopping")
     assert full.request_digest == ablated.request_digest or full.withheld_reasons != (), (
         full.request_digest,
         ablated.request_digest,
@@ -88,7 +105,7 @@ def test_disabling_an_operator_changes_the_decision_path() -> None:
 
 def test_bank_swim_lane_is_bounded_and_summarized() -> None:
     root = _workspace()
-    cells = replay_bank(CASES[:2], {case.case_id: root for case in CASES[:2]})
+    cells = replay_bank(CASES[:2], {case.case_id: _root(root, case) for case in CASES[:2]})
     assert len(cells) == 2 * (1 + len(OPERATORS))
     summary = replay_summary(cells)
     assert set(summary) == {"full", *(f"ablation_{i}" for i in range(len(OPERATORS))), "_as_of"}

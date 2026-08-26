@@ -1,10 +1,8 @@
 """Deterministic runtime-decision replay over the operator-lift case bank.
 
-Development instrument, not a claim gate: it drives the real
-``CognitiveRuntime`` on each sealed case with a scripted responder,
-resolving every operator condition in milliseconds so runtime decision
-paths can be measured and diffed before any live model run. Not
-claim-eligible: no model, no host, no held-out grading.
+Not a claim gate: drives the real CognitiveRuntime on each sealed case with
+a scripted responder, per operator condition, in milliseconds. No model, no
+held-out grading.
 """
 
 from __future__ import annotations
@@ -100,7 +98,7 @@ def _materialize_workspace(root: Path, case: LiftCase) -> None:
     """Mirror the live runner's public workspace for replay reads."""
     from cortheon.operator_lift.sealing import public_case
 
-    (root / "evidence").mkdir(exist_ok=True)
+    (root / "evidence").mkdir(parents=True, exist_ok=True)
     (root / "public-projection.json").write_text(
         json.dumps(public_case(case), sort_keys=True, separators=(",", ":")), encoding="utf-8"
     )
@@ -168,8 +166,6 @@ class ReplayResponder:
     def framing(self) -> bool:
         return bool(self.operators.get("hypothesis_framing"))
 
-    # Host side -------------------------------------------------------------
-
     def _file_observation(self, path: str) -> dict[str, Any]:
         target = (self.root / path).resolve()
         if not target.is_relative_to(self.root) or not target.is_file():
@@ -217,11 +213,7 @@ class ReplayResponder:
             ]
         raise ValueError(f"replay: unexpected host capability {capability!r}")
 
-    # Model side ------------------------------------------------------------
-
     def _claims(self) -> list[dict[str, Any]]:
-        # Quote the accepted evidence without its numeric tokens, so claim
-        # grounding holds without fabricating a reproducible calculation.
         return [
             {
                 "claim": re.sub(r"\b\d+(?:[.,]\d+)*\b", "N", content)[:400].strip(),
@@ -386,6 +378,10 @@ class ReplayResponder:
                     self._gaps = tuple(str(item) for item in gaps)
                 if self._verdict == "complete":
                     break
+            elif payload.get("status") == "complete":
+                # Terminal certification shape: status replaces the verification verdict.
+                self._verdict = "complete"
+                break
             # A withhhold is a terminal outcome for this runtime: stop here.
             break
         verdict = None
@@ -395,6 +391,8 @@ class ReplayResponder:
                 verdict = verification.get("verdict")
             if verdict is None and self._verdict is not None:
                 verdict = self._verdict
+        if payload.get("status") == "complete" and verdict != "complete":
+            verdict = "complete"
         if verdict != "complete" and not errors and not self._gaps:
             errors.append("replay: runtime reached no terminal decision for the submission")
         self._errors = errors
