@@ -86,7 +86,7 @@ def _config(args: argparse.Namespace) -> ExecutionConfig:
 
 def run(args: argparse.Namespace) -> dict[str, object]:
     config = _config(args)
-    if args.heldout:
+    if getattr(args, "heldout", False):
         from cortheon.operator_lift.heldout import heldout_cases
 
         cases = heldout_cases()
