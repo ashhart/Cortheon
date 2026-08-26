@@ -28,6 +28,7 @@ MEMBERS = {
     "models.py",
     "oracles.py",
     "replay.py",
+    "replay_responder.py",
     "report.py",
     "sealing.py",
     "statistics.py",
