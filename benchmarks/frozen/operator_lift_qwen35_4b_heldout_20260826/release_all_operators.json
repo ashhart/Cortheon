@@ -1,4 +1,6 @@
 {
+  "claim_eligible": false,
+  "description": "Unsealed diagnostic concatenation of five independent 27-cell release chains.",
   "records": [
     {
       "case_commitment": "0a6dcbf4d8713891b503924b159ab53418b4cc1fe370321145f93ec4e21d7f7f",
@@ -3916,5 +3918,7 @@
       "type": "cell_evaluated"
     }
   ],
-  "schema_version": 1
+  "schema_version": 1,
+  "sealed": false,
+  "source_chains": 5
 }

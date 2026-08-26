@@ -91,6 +91,25 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
         "required": ["tool", "outcome", "args"],
         "additionalProperties": False,
     }
+    source_record = {
+        "type": "object",
+        "description": (
+            "Structured review extracted from the fetched source. Scholarly reviews "
+            "use identifier, method, and limitations. Repository reviews use "
+            "repository_url, maintenance, license, tests, and compatibility."
+        ),
+        "properties": {
+            "identifier": string,
+            "method": string,
+            "limitations": string,
+            "repository_url": string,
+            "maintenance": string,
+            "license": string,
+            "tests": string,
+            "compatibility": string,
+        },
+        "additionalProperties": False,
+    }
     observation = {
         "type": "object",
         "properties": {
@@ -120,6 +139,8 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
                     "discovery",
                     "corroboration",
                     "primary_fetch",
+                    "scholarly_validation",
+                    "implementation_reference",
                     "contradiction_check",
                     "freshness_check",
                     "passive",
@@ -133,6 +154,7 @@ def tool_definitions(*, advanced: bool = False) -> list[dict[str, Any]]:
             "supports": string_array,
             "contradicts": string_array,
             "host_receipt": host_receipt,
+            "source_record": source_record,
         },
         "required": ["kind", "content"],
         "additionalProperties": False,

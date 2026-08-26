@@ -77,7 +77,7 @@ def test_omp_host_ops_are_receipted_read_only_and_bounded(tmp_path: Path) -> Non
     assert "pyproject.toml" in found.content
 
     listed = host.run("shell", command="ls")
-    assert listed.receipt["outcome"] == "result"
+    assert listed.receipt["outcome"] == "error"
     blocked = host.run("shell", command="echo owned > owned.txt")
     assert blocked.receipt["outcome"] == "error"
     assert not (root / "owned.txt").exists()
@@ -85,6 +85,78 @@ def test_omp_host_ops_are_receipted_read_only_and_bounded(tmp_path: Path) -> Non
     escaped = host.run("read", path="..")
     assert escaped.receipt["outcome"] == "error"
     assert escaped.receipt["args"]["filePath"] == ".."
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "find . -delete",
+        "find . -exec rm -f {} ;",
+        "rg --pre 'touch marker.txt' widget",
+        "cat /etc/passwd",
+    ],
+)
+def test_omp_host_blocks_generic_shell_commands_by_default(
+    tmp_path: Path,
+    command: str,
+) -> None:
+    root = _project(tmp_path)
+    result = OmpHost(root=str(root)).run("shell", command=command)
+
+    assert result.receipt["outcome"] == "error"
+    assert not (root / "marker.txt").exists()
+
+
+def test_omp_host_webfetch_rejects_non_http_urls(tmp_path: Path) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("must not escape through urlopen", encoding="utf-8")
+
+    result = OmpHost(root=str(_project(tmp_path))).run("webfetch", url=secret.as_uri())
+
+    assert result.receipt["outcome"] == "error"
+    assert "must not escape" not in result.content
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/private",
+        "http://[::1]/private",
+        "http://169.254.169.254/latest/meta-data/",
+    ],
+)
+def test_omp_host_webfetch_blocks_non_public_networks(tmp_path: Path, url: str) -> None:
+    result = OmpHost(root=str(_project(tmp_path))).run("webfetch", url=url)
+
+    assert result.receipt["outcome"] == "error"
+    assert "private or non-public" in result.content
+
+
+def test_omp_host_grep_rejects_invalid_or_missing_scope(tmp_path: Path) -> None:
+    host = OmpHost(root=str(_project(tmp_path)))
+
+    assert host.run("grep", pattern="(", path=".").receipt["outcome"] == "error"
+    assert host.run("grep", pattern="(a+)+$", path=".").receipt["outcome"] == "error"
+    assert host.run("grep", pattern="widget", path="missing").receipt["outcome"] == "error"
+
+
+def test_omp_host_grep_does_not_follow_files_outside_root(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("cortheon-private-marker", encoding="utf-8")
+    (root / "leak.txt").symlink_to(secret)
+
+    result = OmpHost(root=str(root)).run("grep", pattern="cortheon-private-marker", path=".")
+
+    assert result.receipt["outcome"] == "no_match"
+    assert "cortheon-private-marker" not in result.content
+
+
+@pytest.mark.parametrize("command", ["python -c 'print(1)'", "node script.js"])
+def test_omp_host_test_runner_rejects_arbitrary_code(tmp_path: Path, command: str) -> None:
+    result = OmpHost(root=str(_project(tmp_path))).run("test", command=command)
+
+    assert result.receipt["outcome"] == "error"
 
 
 def test_omp_host_websearch_without_engine_is_error_never_no_match(tmp_path: Path) -> None:
@@ -121,7 +193,7 @@ def test_omp_host_drives_a_local_inspection_request_and_observes(tmp_path: Path)
 def test_omp_host_webfetch_attests_a_real_url_and_is_accepted(tmp_path: Path) -> None:
     url = _served_fixture()
     root = _project(tmp_path)
-    host = OmpHost(root=str(root))
+    host = OmpHost(root=str(root), allow_private_network=True)
     payload = host.start(
         "Research the current widget pricing guidance from published sources.",
         task_kind="research",
@@ -145,7 +217,7 @@ def test_omp_host_webfetch_attests_a_real_url_and_is_accepted(tmp_path: Path) ->
 def test_omp_host_forged_source_review_observation_is_rejected(tmp_path: Path) -> None:
     url = _served_fixture()
     root = _project(tmp_path)
-    host = OmpHost(root=str(root))
+    host = OmpHost(root=str(root), allow_private_network=True)
     payload = host.start(
         "Find a scientific paper on widget benchmark reliability and report what it finds.",
         task_kind="research",

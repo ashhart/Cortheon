@@ -1,18 +1,22 @@
 # Held-out live pilot, all operators: Qwen3.5-4B on the sealed P6 pack (2026-08-26)
 
-Live measurements on the sealed held-out pack (fresh instances the model
-never saw) across every operator cluster, development scope only.
-`claim_eligible=false`, `development_gate_passes=false`; the external chain
-root and reviewer signoffs are still required before any claim.
+Development measurements on cases from the sealed held-out pack. The retained
+`run.json`, `report.json`, and `release.json` form one sealed 54-cell
+hypothesis-framing pilot. Despite its historical filename,
+`release_all_operators.json` is an explicitly
+unsealed diagnostic concatenation of five independent 27-cell release chains;
+it is useful for debugging but cannot be presented as one auditable release.
+Neither artifact is claim-eligible.
 
 ## Runs
 
 - model: `mlx-community--Qwen3.5-4B-MLX-8bit` (local oMLX).
 - pack: `benchmarks/frozen/p6_heldout_pack` (60 fresh cases, isolated
   vocabulary).
-- per operator: 3 cases x 3 conditions (full, placebo, operator removed) x 3
-  repetitions = 27 cells; 5 operators = 135 cells. All identity-valid, zero
-  timeouts.
+- sealed release: 6 hypothesis-framing cases x 3 conditions x 3 repetitions =
+  54 cells.
+- unsealed diagnostic: 3 cases x 3 conditions x 3 repetitions = 27 cells per
+  operator, concatenated across 5 independent chains (135 records total).
 
 ## Outcomes (correct / scheduled)
 
@@ -25,8 +29,9 @@ root and reviewer signoffs are still required before any claim.
 | Adaptive stopping | 0/9 | 0/9 | 0/9 |
 | Total | 31/45 | 0/45 | 24/45 |
 
-Combined with the earlier 6-cluster hypothesis pilot (17/18), the
-full-versus-bare gap persists on every held-out operator family.
+The table above comes from the unsealed diagnostic. It is not a release result
+and must not be combined with the sealed 54-cell pilot as though both shared a
+single schedule, manifest, or hash chain.
 
 ## Reading
 

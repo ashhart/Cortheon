@@ -12,13 +12,13 @@ SOURCE_SHA256 = {
     "auto_evidence": "386c57c537e2b93628a5a748ff6792760953f12bf2bc52d2cc52c7f3f8baede7",
     "auto_research": "a1f162475caf89a58f352896235f3df33199bfa7aa3be6e623fe804caac649be",
     "completion": "570740b416d4f81095f50108f460d9fce4ac4a01b47d5bfff129e81b6ba9ba15",
-    "evidence": "7ecd198c7ded272e039616f3bad458282a3fa3a786fe41995753bb6fd2e4aa52",
+    "evidence": "a24ce1656dbbcab3adcc518b42bf46e652903cafe2b5fd003941f06474265900",
     "evaluator_control": "a06cfdcb305b3d4bed10844ddc2e8889263c30e34ca3079ca57e43145e0939d5",
     "hook_conversation": "51435ed4a3cc2f03c42ae168d9c00548679de762044fc9adc803e0ec3074ea1d",
-    "hook_output": "799ada5cf88fe3e846839ac853720b7cc2880e2c60d6616304982480d9a60e57",
+    "hook_output": "850bea7ea40d57de7c2e18cf9b5ffe71c56cc1dc824bd05dc1dc6138e714b402",
     "hook_tool_before": "c21c030aa706092944b7add7ea674730f8ad929da6077c7cc16809706c6ccb1e",
     "hooks": "d53ad2f3421e4ac0b16c2095023ac494b30fafadf3a7b87728496357cc3b04eb",
-    "host_access": "c757ad263f62f949a2f314f12b562055f473104923ca82f02fb32f3319694032",
+    "host_access": "cc4469f3c2f5dcc9c70ad598616bc7c2aa9c2e176550316f1fe6098642be5e4a",
     "investigation": "473d4627ad76dc4e259672295456dfb3364eb741549a0a25c087f01a7b2b3d47",
     "joins": "61544f3d9e8a380432a5c246b8eb233a77f324307aa8a930c52ca56bd7ae147d",
     "plans": "f842093a03f886023d848cb7f780a97c05dad822679eabebdc4af46621e2b9f9",
@@ -27,7 +27,7 @@ SOURCE_SHA256 = {
     "state": "1a2036fa42f01de53ca088d41f175e6890d2c1638269940dcf0e7729eeb8b4c9",
     "state_merge": "676b8c591787796bb03d10c75464fb66dbeea32b98bb1d2558faef6b64c673d4",
 }
-COMPACTED_CLOSURE_SHA256 = "aac3c4ad3e8d0b1c3f6e3afe7ca4b6b7c71acd7b2dc3d7087d71efa0150cd143"
+COMPACTED_CLOSURE_SHA256 = "2d0c3091dcb93f4af6eac72f063fa199c1773ef99380d8584f573fb063cd085e"
 
 _IMPORT = re.compile(r'^import\s+.*?\s+from\s+"(?P<spec>[^"]+)"\s*\n', re.MULTILINE | re.DOTALL)
 _EXPORT_LIST = re.compile(r"^export\s*\{.*?\}\s*\n?", re.MULTILINE | re.DOTALL)

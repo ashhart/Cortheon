@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from cortheon.operator_lift.case_bank import development_cases
@@ -54,3 +55,18 @@ def test_heldout_cases_resolve_through_the_runtime() -> None:
     # development bank; the oracle-correct answer must be certified.
     assert cell.certified, (cell.withheld_reasons, cell.errors)
     assert cell.correct
+
+
+def test_retained_heldout_evidence_distinguishes_release_from_diagnostic() -> None:
+    root = Path(__file__).parents[1] / "benchmarks/frozen/operator_lift_qwen35_4b_heldout_20260826"
+    run = json.loads((root / "run.json").read_text(encoding="utf-8"))
+    report = json.loads((root / "report.json").read_text(encoding="utf-8"))
+    release = json.loads((root / "release.json").read_text(encoding="utf-8"))
+
+    diagnostic = json.loads((root / "release_all_operators.json").read_text(encoding="utf-8"))
+
+    assert len(run["schedule"]) == report["completed_cells"] == len(release["records"]) == 54
+    assert diagnostic["claim_eligible"] is False
+    assert diagnostic["sealed"] is False
+    assert diagnostic["source_chains"] == 5
+    assert len(diagnostic["records"]) == 135

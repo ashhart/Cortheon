@@ -63,3 +63,45 @@ def test_analysis_output_is_closed_and_self_digesting() -> None:
         json.dumps(core, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     assert rebuilt == analysis["digest"]
+
+
+def test_strongest_reduced_uses_each_operators_paired_full_rate(tmp_path: Path) -> None:
+    hits = {
+        "hypothesis_framing": (3, 3),
+        "discriminating_evidence": (3, 3),
+        "contradiction_revision": (3, 3),
+        "cross_source_derivation": (3, 1),
+        "adaptive_stopping": (1, 0),
+    }
+    records = []
+    for ordinal, operator in enumerate(OPERATORS, 1):
+        full_hits, removed_hits = hits[operator]
+        for repeat in range(3):
+            common = {"case_ordinal": ordinal, "identity_valid": True}
+            records.extend(
+                (
+                    {
+                        **common,
+                        "condition_id": "full",
+                        "correct": repeat < full_hits,
+                    },
+                    {
+                        **common,
+                        "condition_id": f"ablation_{OPERATORS.index(operator)}",
+                        "correct": repeat < removed_hits,
+                    },
+                    {
+                        **common,
+                        "condition_id": "equal_budget_placebo",
+                        "correct": False,
+                    },
+                )
+            )
+    release = tmp_path / "release.json"
+    release.write_text(json.dumps({"records": records}), encoding="utf-8")
+
+    analysis = campaign_analysis(release)
+
+    assert analysis["strongest_reduced_operator"] == "cross_source_derivation"
+    assert analysis["per_operator"]["cross_source_derivation"]["full_rate"] == 1.0
+    assert analysis["per_operator"]["adaptive_stopping"]["full_rate"] == 1 / 3

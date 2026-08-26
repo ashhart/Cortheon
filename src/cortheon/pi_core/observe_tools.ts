@@ -27,6 +27,7 @@ import {
 	failedWebObservation,
 	isWebRequest,
 	isWebTool,
+	sourceReviewNeedsFetch,
 	webObservations,
 } from "./web_evidence.ts";
 
@@ -183,7 +184,29 @@ export async function observeHostToolResult(
 				request,
 			)
 		: localObservations(event, request);
-	if (!observations) return;
+	if (!observations) {
+		if (
+			sourceReviewNeedsFetch(
+				event.toolName,
+				event.isError,
+				request,
+				event.details,
+			)
+		) {
+			return {
+				content: [
+					...event.content,
+					{
+						type: "text",
+						text:
+							"\n[Cortheon: these are discovery leads. Fetch the strongest source " +
+							"and inspect its method/limitations or repository health.]",
+					},
+				],
+			};
+		}
+		return;
+	}
 	const sessionId = active.sessionId;
 	const requestId = request.request_id;
 	if (!claimObservation(sessionId, requestId)) {

@@ -82,6 +82,9 @@ def campaign_analysis(release_path: Path) -> dict[str, Any]:
     for index, operator in enumerate(OPERATORS):
         ablation = f"ablation_{index}"
         removed_rates = _cluster_rates(valid, ablation)
+        paired_full_rates = {
+            ordinal: full_rates[ordinal] for ordinal in removed_rates if ordinal in full_rates
+        }
         effects = [
             (full_rates[ordinal][0] / full_rates[ordinal][1]) - (hits / total)
             for ordinal, (hits, total) in removed_rates.items()
@@ -89,7 +92,7 @@ def campaign_analysis(release_path: Path) -> dict[str, Any]:
         ]
         per_operator[operator] = {
             "removed_rate": rate_mean(removed_rates),
-            "full_rate": full_rate,
+            "full_rate": rate_mean(paired_full_rates),
             "cluster_effects": [round(effect, 6) for effect in sorted(effects)],
             "median_effect": round(sorted(effects)[len(effects) // 2], 6) if effects else None,
         }
@@ -98,7 +101,10 @@ def campaign_analysis(release_path: Path) -> dict[str, Any]:
     # largest realized loss, measured as the rate drop on its own cluster set.
     def rate_drop(data: dict[str, Any]) -> float:
         removed = data.get("removed_rate")
-        return 0.0 if removed is None else float(removed) - float(full_rate or 0.0)
+        paired_full = data.get("full_rate")
+        if removed is None or paired_full is None:
+            return 0.0
+        return float(removed) - float(paired_full)
 
     strongest_operator = min(
         OPERATORS,

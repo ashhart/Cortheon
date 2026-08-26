@@ -273,3 +273,90 @@ console.log(JSON.stringify({outcome: receipt.outcome}));
     # must never certify an absence the host did not observe.
     assert result["outcome"] == "error"
     assert result["outcome"] != "no_match"
+
+
+def test_opencode_source_review_uses_fetch_and_carries_structured_evidence() -> None:
+    root = Path(__file__).parents[1]
+    script = r"""
+import {sourceReviewNeedsFetch, webEvidenceBatch} from './src/cortheon/opencode_core/evidence.js';
+const state = {request: {parameters: {purpose: 'scholarly_validation'}}};
+const text = [
+  '<title>Widget reliability paper</title>',
+  'Identifier DOI 10.1234/widget.7.',
+  'Method: a controlled benchmark compared three implementations.',
+  'Limitations: the sample covered one runtime only.',
+].join('\n');
+const observations = webEvidenceBatch(
+  'webfetch',
+  {url: 'https://doi.org/10.1234/widget.7'},
+  text,
+  state,
+);
+console.log(JSON.stringify({
+  needsFetch: sourceReviewNeedsFetch('websearch', 'Paper result https://doi.org/x', state),
+  observation: observations[0],
+}));
+"""
+    completed = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["needsFetch"] is True
+    assert result["observation"]["source_record"] == {
+        "identifier": "10.1234/widget.7",
+        "method": "Method: a controlled benchmark compared three implementations.",
+        "limitations": "Limitations: the sample covered one runtime only.",
+    }
+
+
+def test_pi_source_review_uses_fetch_and_carries_structured_evidence() -> None:
+    root = Path(__file__).parents[1]
+    module = (root / "src/cortheon/pi_core/web_evidence.ts").as_uri()
+    script = rf"""
+import {{sourceReviewNeedsFetch, webObservations}} from '{module}';
+const request = {{
+  capability: 'search_or_fetch',
+  query: 'find the strongest paper',
+  parameters: {{purpose: 'scholarly_validation'}},
+}};
+const text = [
+  '<title>Widget reliability paper</title>',
+  'Identifier DOI 10.1234/widget.7.',
+  'Method: a controlled benchmark compared three implementations.',
+  'Limitations: the sample covered one runtime only.',
+].join('\n');
+const observations = webObservations(
+  'webfetch',
+  {{url: 'https://doi.org/10.1234/widget.7'}},
+  [{{type: 'text', text}}],
+  {{url: 'https://doi.org/10.1234/widget.7'}},
+  false,
+  request,
+);
+console.log(JSON.stringify({{
+  needsFetch: sourceReviewNeedsFetch('websearch', false, request, {{results: [{{url: 'https://doi.org/x'}}]}}),
+  observation: observations[0],
+}}));
+"""
+    completed = subprocess.run(
+        ["node", "--experimental-strip-types", "--input-type=module", "-e", script],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["needsFetch"] is True
+    assert result["observation"]["source_record"] == {
+        "identifier": "10.1234/widget.7",
+        "method": "Method: a controlled benchmark compared three implementations.",
+        "limitations": "Limitations: the sample covered one runtime only.",
+    }

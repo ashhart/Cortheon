@@ -50,12 +50,12 @@ PI_SOURCE_SHA256: dict[str, str] = {
     "task_analysis": "ca7ab38d80d5a8d7a554445d7a74096249ad08fe19b7e9e1b34ff17c2b00d39c",
     "observe_claim": "1924150be30ca2d67c374cfaf19485bd20eea6b49a84e52c25aefd89d983d581",
     "tool_events": "ad88e791935be85051cf4eb9095073656989507dcdf27164ae507310e9c00b4f",
-    "observe_tools": "bad63e71939bd5df88ca4e431254c1eba7e7257d2ae3eda96eaefb0892edaf4b",
-    "web_evidence": "c43c31fca36e63d1986aee59fa570977aedeeb5c655acd4b82b4a1af31c14775",
+    "observe_tools": "f9fa1ce7c45c9771ca85e7283c71ba2cafc80a7dadaab5d214e182120337c87e",
+    "web_evidence": "dda06f5d1100a912e5a234f03b2919c64c8759a693f932150be9de22ca5fde8c",
     "terminal": "7705a5b745c701dcf4a6b9003c68466006b8ba70da6fe219fd51f180195fc1df",
     "causal_answer": "3cc6ba2a7b8f4479ee194dedf7d9df18c33b6e4d73cdda14c8b6c04b77ee34bc",
 }
-PI_COMPACTED_CLOSURE_SHA256 = "4d87c7c2cb949433d8dd235ec190e85f428b007637d1d1a0bf9dfadc37810d1c"
+PI_COMPACTED_CLOSURE_SHA256 = "9bc26a2ddcd09c1b76e5b48740f7d9b549a999349852537cd1d41e9e62420248"
 
 # Exact external specifiers this adapter may import from, as
 # spec -> (value symbols, type symbols, default binding or None).

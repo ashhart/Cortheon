@@ -97,6 +97,7 @@ COGNITIVE_CORE_MODULES = frozenset(
 COGNITIVE_MCP_CORE_MODULES = frozenset(
     {"__init__", "arguments", "compat", "protocol", "server", "stdio", "tools"}
 )
+OMP_CORE_MODULES = frozenset({"__init__", "web"})
 COGNITIVE_CLI_CORE_MODULES = frozenset(
     {
         "__init__",
@@ -165,6 +166,7 @@ RUNTIME_SOURCE_FILES = frozenset(
             for module in COGNITIVE_HOOKS_CORE_MODULES
         ),
         *(f"src/cortheon/cognitive_mcp_core/{m}.py" for m in COGNITIVE_MCP_CORE_MODULES),
+        *(f"src/cortheon/omp_core/{module}.py" for module in OMP_CORE_MODULES),
     }
 )
 
@@ -224,6 +226,8 @@ class LeanBuildPy(build_py):
             allowed = COGNITIVE_HOOKS_CORE_MODULES
         elif package == "cortheon.cognitive_mcp_core":
             allowed = COGNITIVE_MCP_CORE_MODULES
+        elif package == "cortheon.omp_core":
+            allowed = OMP_CORE_MODULES
         else:
             return []
         return [module for module in modules if module[1] in allowed]

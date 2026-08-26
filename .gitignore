@@ -39,6 +39,7 @@ build/
 # Internal planning, reviews, and historical development notes.
 /PLAN.md
 /TODO.md
+/memory.md
 /CORTHEON.md
 /docs/WORLD_CLASS.md
 /docs/stage-8-hostile-review.md
