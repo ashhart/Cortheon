@@ -112,15 +112,22 @@ class ReplayResponder:
 
     def _file_observation(self, path: str) -> dict[str, Any]:
         target = (self.root / path).resolve()
-        if not target.is_relative_to(self.root) or not target.is_file():
-            content = _read_receipt(path) + f"No such file: {path}"
-        else:
-            content = (
-                _read_receipt(path) + target.read_text(encoding="utf-8", errors="replace")[:20_000]
-            )
+        inside = target.is_relative_to(self.root) and target.is_file()
+        body = (
+            target.read_text(encoding="utf-8", errors="replace")[:20_000]
+            if inside
+            else (f"No such file: {path}")
+        )
+        # Probe executions register through the runtime's action ledger, which
+        # reads host_receipt.args.path, not filePath.
+        argument = "path" if re.fullmatch(r"actions/[A-Za-z0-9._-]+\.txt", path) else "filePath"
+        receipt = (
+            '[CORTHEON_HOST_EVIDENCE] {"tool":"read","outcome":"result",'
+            '"args":{"' + argument + '":"' + path + '"}}\n'
+        )
         return {
             "kind": "code" if path.endswith(".txt") else "documentation",
-            "content": content,
+            "content": receipt + body,
             "source": f"replay:{path}",
         }
 

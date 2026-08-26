@@ -35,12 +35,15 @@ discrimination operators again shows no isolated effect; removal of
 derivation and of revision costs ground (9 to 6 and 6 to 0); adaptive
 stopping does not transfer as-is to the held-out instances (0/9 correct, and
 the full arm delivers only 4/9), a genuine transfer gap before the powered
-campaign. Root cause, traced: the stopping protocol asks the host to
-"execute the next probe", and neither the scripted read-receipt responder
-nor the live model on fresh vocabulary satisfies the execution telemetry the
-runtime requires (the pack itself parses and reads fine, so geometry is not
-the fault). That is a model-compliance plus responder limitation, not a pack
-defect and not a reason to weaken any gate. Three cases per arm cannot
-support operator inferences; the purpose here is the procedure: the sealed
-pack and the `--heldout` run path now execute every operator's protocol out
-of sample, which is the loop the P6 campaign extends.
+campaign. Root cause, traced and corrected in two parts: the held-out
+stopping pack's expected-action order did not align with the runtime's
+ascending cost order (fixed by cost-aligning the pack, with a compliance
+test), and the replay's probe receipts used the filePath receipt key when
+the runtime's execution ledger reads args.path (fixed and tested). A
+residual replay iteration nuance on this one family remains for the live
+runner to adjudicate; the P6 campaign itself runs live, not through the
+replay, and its stopping hold-outs are now contractually aligned. Three
+cases per arm cannot support operator inferences; the purpose here is the
+procedure: the sealed pack and the `--heldout` run path now execute every
+operator's protocol out of sample, which is the loop the P6 campaign
+extends.

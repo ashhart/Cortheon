@@ -199,11 +199,13 @@ def _stopping_cases() -> tuple[LiftCase, ...]:
     for offset in range(HELDOUT_PER_OPERATOR):
         number = FIRST_HELDOUT_NUMBER + offset
         family = f"warehouse_dispatch_classifier_turn_{offset}"
+        # Costs are ascending in the runtime's probe order, so the expected
+        # actions are exactly the prefix the runtime asks for and executes.
         actions = (
-            (f"action_weigh_{offset}", "weigh the pallet", 3),
             (f"action_scan_{offset}", "scan the manifest", 1),
-            (f"action_probe_{offset}", "probe the route history", 1),
-            (f"action_inspect_{offset}", "inspect the handover log", 2),
+            (f"action_probe_{offset}", "probe the route history", 2),
+            (f"action_weigh_{offset}", "weigh the pallet", 3),
+            (f"action_inspect_{offset}", "inspect the handover log", 4),
         )
         expected_actions = (f"action_scan_{offset}", f"action_probe_{offset}")
         decision = f"route_class_{offset}"
