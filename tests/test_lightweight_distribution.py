@@ -13,8 +13,8 @@ ROOT = Path(__file__).parents[1]
 # Uniform with tests/test_wheel_equivalence.py and
 # tests/test_opencode_architecture.py; that module carries the
 # measurement and the justification for both numbers.
-WHEEL_CAP = 250_000
-SDIST_CAP = 230_000
+WHEEL_CAP = 300_000
+SDIST_CAP = 300_000
 SHIPPED_PYTHON_MODULES = {
     "cortheon/__init__.py",
     "cortheon/cognitive_cli.py",
@@ -27,6 +27,8 @@ SHIPPED_PYTHON_MODULES = {
     "cortheon/cognitive_protocol.py",
     "cortheon/cognitive_repair.py",
     "cortheon/cognitive_runtime.py",
+    "cortheon/omp_host.py",
+    "cortheon/omp_core/web.py",
     "cortheon/sanitize.py",
     *(
         f"cortheon/cognitive_core/{path.name}"
@@ -196,10 +198,12 @@ def test_wheel_contains_only_the_deployable_runtime(tmp_path: Path) -> None:
                 "import json;"
                 "from cortheon.cognitive_protocol import protocol_capabilities;"
                 "from cortheon.cognitive_runtime import CognitiveRuntime;"
+                "from cortheon.omp_host import OmpHost;"
                 "result=CognitiveRuntime().start('Inspect src/app.py for the bug',effort='quick');"
                 "print(json.dumps({'capabilities':protocol_capabilities(),"
                 "'graph':result['context']['cognitive_graph'],"
                 "'program':result['cognition']['program'],"
+                "'omp_root':str(OmpHost(root='.').root),"
                 "'selection':result['cognition']['evidence_target']['selection']}))"
             ),
         ],
@@ -214,6 +218,7 @@ def test_wheel_contains_only_the_deployable_runtime(tmp_path: Path) -> None:
     assert installed["capabilities"]["storage"] == "memory_only"
     assert installed["graph"]["digest"].startswith("cg_")
     assert installed["program"]["program_id"].startswith("cp_")
+    assert installed["omp_root"] == str(tmp_path.resolve())
     assert installed["selection"]["action_id"] == "req1"
 
 

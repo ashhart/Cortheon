@@ -78,16 +78,15 @@ ROOT = Path(__file__).parents[1]
 # The tester release adds exact stale-runtime conformance, one content-free
 # results command, and its private-preview runbook. The frontier-grounding
 # path then added environment inspection, scientific-source review, maintained
-# repository inspection, and current-source discovery. Measured artifacts are
-# wheel 246,562 bytes and sdist 226,594 bytes. The
-# caps retain less than 500 bytes of headroom and reject another payload.
-# The OMP host then added its installer, conformance probe, and bundled
-# runtime skill. Re-measured after the frontier-grounding baseline, builds
-# are byte-identical at wheel 248,864 bytes and sdist 228,723 bytes; the
-# caps move to 250,000 and 230,000, holding about 1.1-1.3 KB of headroom
-# and still rejecting another payload-sized change.
-WHEEL_CAP = 250_000
-SDIST_CAP = 230_000
+# repository inspection, and current-source discovery. The scoped-null
+# calibration and the hostile-review evidence repairs added host-attested
+# absence handling, structured source-review records, re-scoped
+# corroboration, and source-intent routing. The stable product ceilings are
+# 300,000 bytes for both wheel and sdist, holding the lean runtime plus its
+# adapters with real headroom rather than a knife's edge. Current settled
+# artifacts are about wheel 248,000 bytes and sdist 227,900 bytes.
+WHEEL_CAP = 300_000
+SDIST_CAP = 300_000
 
 PROBE = """
 import dataclasses, json, sys

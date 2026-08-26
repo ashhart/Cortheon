@@ -4,11 +4,13 @@ import { boundedHostOutput, maxEvidenceCharacters } from "./state.js"
 function evidenceReceipt(tool, args, output, metadata = {}) {
   let outcome = "result"
   if (tool === "grep") {
-    outcome =
-      !output ||
-      /\b(?:no files found|no matches?(?: found)?|0 matches?)\b/i.test(output)
+    outcome = !output || noResultText(output) ? "no_match" : "match"
+  } else if (tool === "websearch") {
+    outcome = !output || !String(output).trim()
+      ? "error"
+      : noResultText(output)
         ? "no_match"
-        : "match"
+        : "result"
   }
   return (
     "[CORTHEON_HOST_EVIDENCE] " +
@@ -18,6 +20,74 @@ function evidenceReceipt(tool, args, output, metadata = {}) {
       args: safeHostArguments(tool, args),
       ...metadata,
     })
+  )
+}
+
+function noResultText(output) {
+  return /\b(?:no (?:files|results?) found|no matches?(?: found)?|0 (?:matches?|results?))\b/i.test(
+    String(output),
+  )
+}
+
+const sourceReviewPurposes = new Set([
+  "scholarly_validation",
+  "implementation_reference",
+])
+
+function sourceReviewPurpose(state) {
+  const value = state?.request?.parameters?.purpose
+  return sourceReviewPurposes.has(value) ? value : undefined
+}
+
+function reviewFragments(value) {
+  return String(value || "")
+    .replace(/<[^>]+>/g, "\n")
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter((item) => item.length >= 8 && item.length <= 500)
+}
+
+function firstReviewSignal(fragments, pattern) {
+  return fragments.find((item) => pattern.test(item))
+}
+
+function sourceReviewRecord(purpose, url, text) {
+  if (!sourceReviewPurposes.has(purpose)) return undefined
+  const fragments = reviewFragments(text)
+  if (purpose === "scholarly_validation") {
+    const doi = String(text || "").match(/\b10\.\d{4,9}\/[A-Z0-9._;()/:+-]*[A-Z0-9]\b/i)?.[0]
+    const arxiv = String(text || "").match(/\b(?:arXiv[:\s]*)?\d{4}\.\d{4,5}(?:v\d+)?\b/i)?.[0]
+    const method = firstReviewSignal(
+      fragments,
+      /\b(?:method|trial|experiment|benchmark|dataset|sample|participants?|randomi[sz]ed)\b/i,
+    )
+    const limitations = firstReviewSignal(
+      fragments,
+      /\b(?:limitations?|caveats?|bias|restricted?|only|future work|does not generalize)\b/i,
+    )
+    if (!method || !limitations) return undefined
+    return { identifier: doi || arxiv || url, method, limitations }
+  }
+  const maintenance = firstReviewSignal(
+    fragments,
+    /\b(?:maintain|latest release|released|updated|last commit|commits?|archived)\b/i,
+  )
+  const license = firstReviewSignal(fragments, /\blicen[cs]e\b|\bMIT\b|\bApache-2\.0\b/i)
+  const tests = firstReviewSignal(fragments, /\b(?:tests?|CI|continuous integration|workflow)\b/i)
+  const compatibility = firstReviewSignal(
+    fragments,
+    /\b(?:compatib|requires?|supports?|runtime|Python|Node|dependency|version)\b/i,
+  )
+  if (!maintenance || !license || !tests || !compatibility) return undefined
+  return { repository_url: url, maintenance, license, tests, compatibility }
+}
+
+function sourceReviewNeedsFetch(tool, output, state) {
+  return (
+    tool === "websearch" &&
+    Boolean(sourceReviewPurpose(state)) &&
+    Boolean(String(output || "").trim()) &&
+    !noResultText(output)
   )
 }
 
@@ -323,13 +393,34 @@ function webEvidenceBatch(tool, args, output, state) {
   }
   return urls.map((url) => {
     const position = text.indexOf(url)
-    const excerpt =
-      tool === "webfetch"
+    const sourceRecord =
+      tool === "webfetch" ? sourceReviewRecord(purpose, url, text) : undefined
+    const excerpt = sourceRecord
+      ? Object.values(sourceRecord).join("\n")
+      : tool === "webfetch"
         ? focusedWebPassage(text)
         : position >= 0
-        ? text.slice(Math.max(0, position - 300), position + url.length + 900)
-        : text
+          ? text.slice(Math.max(0, position - 300), position + url.length + 900)
+          : text
     const publishedAt = sourceDate(excerpt)
+    if (sourceReviewPurposes.has(purpose) && tool === "webfetch" && !sourceRecord) {
+      const failedReceipt = evidenceReceipt(tool, args, excerpt, {
+        outcome: "error",
+        purpose,
+        retrieved_at: retrievedAt,
+        source_url: url,
+      })
+      return {
+        content:
+          `${failedReceipt}\nSource review lacked the required attributable signals.`,
+        kind: "web",
+        source: url,
+        status: "failed",
+        url,
+        retrieved_at: retrievedAt,
+        purpose,
+      }
+    }
     const receipt = evidenceReceipt(tool, args, excerpt, {
       purpose,
       retrieved_at: retrievedAt,
@@ -347,6 +438,7 @@ function webEvidenceBatch(tool, args, output, state) {
       retrieved_at: retrievedAt,
       published_at: publishedAt,
       purpose,
+      ...(sourceRecord ? { source_record: sourceRecord } : {}),
     }
   })
 }
@@ -367,4 +459,5 @@ export {
   cleanWebFragment,
   focusedWebPassage,
   webEvidenceBatch,
+  sourceReviewNeedsFetch,
 }

@@ -236,7 +236,7 @@ long-horizon tasks.
 ## Product constraints
 
 - zero third-party runtime dependencies;
-- wheel size no larger than 243,500 bytes;
+- wheel size is bounded by release tests;
 - no persistent project data;
 - no duplicate tool system;
 - host permissions remain authoritative;

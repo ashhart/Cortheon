@@ -1,5 +1,3 @@
-"""Host evidence receipt parsing and read-only tool validation."""
-
 from __future__ import annotations
 
 import hashlib
@@ -10,7 +8,12 @@ from collections.abc import Iterable
 from typing import Any
 from urllib.parse import urlsplit
 
-from cortheon.cognitive_core.models import CognitiveRuntimeError, EvidenceRequest, Observation
+from cortheon.cognitive_core.models import (
+    CognitiveRuntimeError,
+    EvidenceRequest,
+    Observation,
+    _source_review_error,
+)
 
 _HOST_EVIDENCE_PREFIX = "[CORTHEON_HOST_EVIDENCE] "
 
@@ -93,12 +96,7 @@ def _receipt_error(
     capability: str,
     request: EvidenceRequest | None,
 ) -> CognitiveRuntimeError:
-    """Reject a receipt with a correct example attached.
-
-    Small models imitate syntax better than they follow prose, so every
-    rejection carries copyable JSON.
-    """
-
+    # Rejections carry copyable JSON; small models imitate syntax better than prose.
     return CognitiveRuntimeError(
         f"{message}. Correct example host_receipt: {_example_receipt_json(capability, request)}"
     )
@@ -108,13 +106,7 @@ def _validate_host_observation_batch(
     request: EvidenceRequest | None,
     observations: list[dict[str, Any]],
 ) -> bool:
-    """Validate structural host provenance and exact request binding.
-
-    Prevents stale, mismatched, hidden, or failed receipts from satisfying
-    an evidence request; native host adapters add the first-line receipt
-    from their tool-result hooks.
-    """
-
+    # Structural provenance: stale, mismatched, hidden, or failed receipts never satisfy a request.
     parsed: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
     for raw in observations:
         if not isinstance(raw, dict):
@@ -146,6 +138,8 @@ def _validate_host_observation_batch(
     for raw, receipt in parsed:
         kind = raw.get("kind")
         status = raw.get("status", "observed")
+        tool = str(receipt["tool"]).casefold() if receipt is not None else ""
+        outcome = str(receipt["outcome"]).casefold() if receipt is not None else ""
         if status == "failed":
             continue
         if capability in {"search", "fetch", "search_or_fetch"} and purpose is not None:
@@ -165,6 +159,22 @@ def _validate_host_observation_batch(
                         sort_keys=True,
                     )
                 )
+            if (
+                capability in {"search", "search_or_fetch"}
+                and tool in {"search", "websearch"}
+                and outcome == "no_match"
+                and raw.get("retrieved_at")
+            ):
+                successful = True
+                continue
+            if purpose in {"scholarly_validation", "implementation_reference"}:
+                error = _source_review_error(raw, receipt)
+                if error is not None:
+                    raise _receipt_error(error, capability, request)
+                if not raw.get("retrieved_at"):
+                    continue
+                successful = True
+                continue
             if not raw.get("url") or not raw.get("retrieved_at"):
                 continue
             successful = True
@@ -175,8 +185,6 @@ def _validate_host_observation_batch(
                 capability,
                 request,
             )
-        tool = str(receipt["tool"]).casefold()
-        outcome = str(receipt["outcome"]).casefold()
         arguments = receipt["args"]
         if outcome in {"error", "failed"}:
             continue
@@ -327,8 +335,7 @@ def _validate_host_observation_batch(
 
 
 def _host_path_matches_request(actual: str, expected: str) -> bool:
-    """Match an exact requested relative path to an honest absolute receipt."""
-
+    # Match an exact requested relative path to an honest absolute receipt.
     normalized_actual = actual.replace("\\", "/").rstrip("/")
     normalized_expected = expected.replace("\\", "/").strip("/")
     return normalized_actual == normalized_expected or normalized_actual.endswith(
@@ -404,9 +411,7 @@ def _read_only_version_invocation(tokens: list[str]) -> bool:
 
 
 def _read_only_shell_receipt(arguments: dict[str, Any]) -> bool:
-    """Accept a shell receipt for read-only requests only when its recorded
-    command is verifiably a reader (ls/find/rg/cat...)."""
-
+    # Shell receipts satisfy read-only requests only as verifiable reader commands.
     command = arguments.get("command")
     if isinstance(command, list):
         command = " ".join(str(item) for item in command)

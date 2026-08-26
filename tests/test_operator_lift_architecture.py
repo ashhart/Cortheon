@@ -9,6 +9,7 @@ ROOT = Path(__file__).parents[1]
 SOURCE = ROOT / "src/cortheon/operator_lift"
 MEMBERS = {
     "__init__.py",
+    "campaign_analysis.py",
     "case_bank.py",
     "case_builders.py",
     "cases_derivation.py",
@@ -25,8 +26,12 @@ MEMBERS = {
     "execution_schedule.py",
     "execution_storage.py",
     "cli.py",
+    "heldout.py",
     "models.py",
     "oracles.py",
+    "preregister.py",
+    "replay.py",
+    "replay_responder.py",
     "report.py",
     "sealing.py",
     "statistics.py",

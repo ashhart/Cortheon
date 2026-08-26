@@ -44,6 +44,11 @@ class RequestMixin(RuntimeState):
         if not evaluation_operator(session.evaluation_profile, "retrieval"):
             raise CognitiveRuntimeError("retrieval is disabled by the evaluation profile")
         if needs_frontier_grounding(session.goal, session.task_kind):
+            if session.task_kind == "research":
+                request = self._next_research_source_request(session)
+                if request is None:
+                    raise CognitiveRuntimeError("the research source plan produced no request")
+                return request
             return self._environment_grounding_request(session)
         parameters: dict[str, Any] = {}
         if session.task_kind == "code":
@@ -80,7 +85,7 @@ class RequestMixin(RuntimeState):
                     )
                     success = (
                         "Return focused, separately sourced excerpts from every named "
-                        "file so the answer can connect them without loading whole files."
+                        "file so the answer can connect them without whole-file loads."
                     )
                 elif (lookup is not None or phrase is not None) and scope is not None:
                     capability = "grep"
@@ -128,7 +133,7 @@ class RequestMixin(RuntimeState):
                     )
                     success = (
                         "Return project-relative code paths with focused matching lines, "
-                        "including a relevant test or observable boundary when one exists."
+                        "including a relevant test or observable boundary."
                     )
             elif paths:
                 capability = "read_many"
@@ -185,7 +190,7 @@ class RequestMixin(RuntimeState):
             )
             success = (
                 "Return dated, attributable results from distinct URL origins plus "
-                "the strongest conflict found or an explicit scoped no-conflict result."
+                "the strongest conflict or an explicit scoped no-conflict result."
                 if revision_enabled
                 else "Return dated, attributable results from distinct URL origins."
             )
@@ -288,7 +293,7 @@ class RequestMixin(RuntimeState):
                     "highest expected uncertainty reduction per unit cost."
                 ),
                 success_condition=(
-                    "Return evidence that clearly supports or contradicts the "
+                    "Return evidence that supports or contradicts the "
                     "hypothesis, with a precise live source reference."
                 ),
                 hypothesis_id=hypothesis.hypothesis_id,
@@ -318,10 +323,7 @@ class RequestMixin(RuntimeState):
                 session,
                 capability=capability,
                 query=query,
-                reason=(
-                    "Actively search for disconfirming evidence selected by expected "
-                    "information gain."
-                ),
+                reason=("Search for disconfirming evidence selected by expected information gain."),
                 success_condition=(
                     "Return the strongest counterexample or a concrete failed "
                     "falsification attempt."
@@ -430,7 +432,7 @@ class RequestMixin(RuntimeState):
         if "predates" in lower or "rerun" in lower:
             capability = "test"
             success = (
-                "Rerun the relevant test against the final captured change and return "
+                "Rerun the relevant test against the captured change and return "
                 "the exact command, zero/nonzero outcome, and focused summary."
             )
         elif "diff" in lower or "what changed" in lower:

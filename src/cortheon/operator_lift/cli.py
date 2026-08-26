@@ -55,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--output-tokens", type=int, default=2_048)
     run.add_argument("--max-steps", type=int, default=8)
     run.add_argument("--max-tool-calls", type=int, default=12)
+    run.add_argument(
+        "--heldout",
+        action="store_true",
+        help="run the sealed held-out P6 pack instead of the development bank",
+    )
     verify = subparsers.add_parser("verify-release")
     verify.add_argument("--release", type=Path, required=True)
     verify.add_argument("--report", type=Path, required=True)
@@ -81,7 +86,12 @@ def _config(args: argparse.Namespace) -> ExecutionConfig:
 
 def run(args: argparse.Namespace) -> dict[str, object]:
     config = _config(args)
-    cases = development_cases()
+    if getattr(args, "heldout", False):
+        from cortheon.operator_lift.heldout import heldout_cases
+
+        cases = heldout_cases()
+    else:
+        cases = development_cases()
     case_by_id = {case.case_id: case for case in cases}
     manifest = execution_manifest(cases)
     pack = public_pack(cases)

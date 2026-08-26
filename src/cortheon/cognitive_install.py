@@ -18,6 +18,7 @@ from typing import Any  # noqa: F401
 from cortheon.cognitive_install_core.config import (  # noqa: F401
     _atomic_json,
     _configured_codex_plugins,
+    _installed_mcp_command,
     _is_packaged_adapter_reference,
     _load_json_config,
     _omp_config_home,
@@ -28,24 +29,19 @@ from cortheon.cognitive_install_core.config import (  # noqa: F401
 )
 from cortheon.cognitive_install_core.hosts import (  # noqa: F401
     _configured_codex_marketplaces,
-    _install_omp_skill,
-    _installed_mcp_command,
     _normalize_hosts,
     _preflight_hosts,
     _preflight_json_string_list,
-    _preflight_omp_config,
     _run,
     generic_mcp_config,
     install_codex,
     install_hosts,
-    install_omp,
     install_opencode,
     install_pi,
 )
 from cortheon.cognitive_install_core.lifecycle import (  # noqa: F401
     _uninstall_adapter,
     _uninstall_codex,
-    _uninstall_omp,
     host_installation_status,
     uninstall_hosts,
 )
@@ -56,6 +52,12 @@ from cortheon.cognitive_install_core.model import (  # noqa: F401
     InstallError,
     InstallResult,
     install_facade_patch_bridge,
+)
+from cortheon.cognitive_install_core.omp import (  # noqa: F401
+    _install_omp_skill,
+    _preflight_omp_config,
+    _uninstall_omp,
+    install_omp,
 )
 
 install_facade_patch_bridge(sys.modules[__name__])

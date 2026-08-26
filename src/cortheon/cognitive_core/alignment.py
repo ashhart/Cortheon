@@ -7,7 +7,6 @@ from typing import Any
 
 from cortheon.cognitive_core.claims import _NEGATION_RE
 from cortheon.cognitive_core.models import Investigation, Observation, PublicClaim
-from cortheon.cognitive_core.profiles import _has_hint
 from cortheon.cognitive_core.receipts import (
     _HOST_EVIDENCE_PREFIX,
     _host_path_matches_request,
@@ -17,6 +16,7 @@ from cortheon.cognitive_core.receipts import (
 from cortheon.cognitive_core.research_gaps import (
     _answer_acknowledges_research_conflict,
     _answer_urls,
+    _latest_release_goal,
     _research_release_analysis,
 )
 from cortheon.cognitive_core.semantic_graph import _semantic_terms
@@ -107,12 +107,7 @@ def _research_alignment_check(
             ),
         }
     release = _research_release_analysis(session.goal, cited)
-    latest_release_question = _has_hint(
-        session.goal, frozenset({"latest", "newest", "current"})
-    ) and _has_hint(
-        session.goal,
-        frozenset({"release", "released", "version"}),
-    )
+    latest_release_question = _latest_release_goal(session.goal)
     if latest_release_question and release is None and "corroboration" not in session.waivers:
         return {
             "name": "evidence_alignment",

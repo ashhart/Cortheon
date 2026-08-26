@@ -6,6 +6,10 @@ const WEB_CAPABILITIES = new Set(["search", "fetch", "search_or_fetch"]);
 const MAX_WEB_RESULTS = 8;
 const MAX_PURPOSE_CHARACTERS = 500;
 const MAX_RESULT_TEXT_CHARACTERS = 10_000;
+const SOURCE_REVIEW_PURPOSES = new Set([
+	"scholarly_validation",
+	"implementation_reference",
+]);
 
 export function isWebTool(tool: string): boolean {
 	return WEB_TOOLS.has(tool.toLowerCase());
@@ -89,6 +93,75 @@ function purpose(request: EvidenceRequest): string | undefined {
 	return value && value.length <= MAX_PURPOSE_CHARACTERS ? value : undefined;
 }
 
+function reviewFragments(value: unknown): Array<string> {
+	return String(value || "")
+		.replace(/<[^>]+>/g, "\n")
+		.split(/\n+|(?<=[.!?])\s+/)
+		.map((item) => item.replace(/\s+/g, " ").trim())
+		.filter((item) => item.length >= 8 && item.length <= 500);
+}
+
+function firstReviewSignal(
+	fragments: Array<string>,
+	pattern: RegExp,
+): string | undefined {
+	return fragments.find((item) => pattern.test(item));
+}
+
+function sourceReviewRecord(
+	requestPurpose: string,
+	url: string,
+	text: string,
+): Record<string, string> | undefined {
+	if (!SOURCE_REVIEW_PURPOSES.has(requestPurpose)) return;
+	const fragments = reviewFragments(text);
+	if (requestPurpose === "scholarly_validation") {
+		const doi = text.match(/\b10\.\d{4,9}\/[A-Z0-9._;()/:+-]*[A-Z0-9]\b/i)?.[0];
+		const arxiv = text.match(/\b(?:arXiv[:\s]*)?\d{4}\.\d{4,5}(?:v\d+)?\b/i)?.[0];
+		const method = firstReviewSignal(
+			fragments,
+			/\b(?:method|trial|experiment|benchmark|dataset|sample|participants?|randomi[sz]ed)\b/i,
+		);
+		const limitations = firstReviewSignal(
+			fragments,
+			/\b(?:limitations?|caveats?|bias|restricted?|only|future work|does not generalize)\b/i,
+		);
+		if (!method || !limitations) return;
+		return { identifier: doi || arxiv || url, method, limitations };
+	}
+	const maintenance = firstReviewSignal(
+		fragments,
+		/\b(?:maintain|latest release|released|updated|last commit|commits?|archived)\b/i,
+	);
+	const license = firstReviewSignal(
+		fragments,
+		/\blicen[cs]e\b|\bMIT\b|\bApache-2\.0\b/i,
+	);
+	const tests = firstReviewSignal(
+		fragments,
+		/\b(?:tests?|CI|continuous integration|workflow)\b/i,
+	);
+	const compatibility = firstReviewSignal(
+		fragments,
+		/\b(?:compatib|requires?|supports?|runtime|Python|Node|dependency|version)\b/i,
+	);
+	if (!maintenance || !license || !tests || !compatibility) return;
+	return { repository_url: url, maintenance, license, tests, compatibility };
+}
+
+export function sourceReviewNeedsFetch(
+	tool: string,
+	isError: boolean,
+	request: EvidenceRequest | undefined,
+	detailsValue: unknown,
+): boolean {
+	if (tool.toLowerCase() !== "websearch" || isError || !request) return false;
+	const requestPurpose = purpose(request);
+	if (!requestPurpose || !SOURCE_REVIEW_PURPOSES.has(requestPurpose)) return false;
+	const details = objectValue(detailsValue);
+	return Boolean(Array.isArray(details?.results) && details.results.length > 0);
+}
+
 function webObservation(
 	tool: string,
 	request: EvidenceRequest,
@@ -97,6 +170,7 @@ function webObservation(
 	publishedAt: string | undefined,
 	metadata: Record<string, unknown>,
 	retrievedAt: string,
+	sourceRecord?: Record<string, string>,
 ): Record<string, unknown> {
 	const requestPurpose = purpose(request)!;
 	const receipt = {
@@ -123,6 +197,7 @@ function webObservation(
 		...(publishedAt ? { published_at: publishedAt } : {}),
 		purpose: requestPurpose,
 		status: "observed",
+		...(sourceRecord ? { source_record: sourceRecord } : {}),
 	};
 }
 
@@ -150,6 +225,32 @@ export function failedWebObservation(
 		source: `pi:${tool}`,
 		status: "failed",
 		...(requestPurpose ? { purpose: requestPurpose } : {}),
+	};
+}
+
+function scopedNullWebObservation(
+	request: EvidenceRequest,
+	retrievedAt: string,
+): Record<string, unknown> {
+	const requestPurpose = purpose(request)!;
+	const receipt = {
+		tool: "websearch",
+		outcome: "no_match",
+		args: {
+			query: String(request.query || "").slice(0, 500),
+			purpose: requestPurpose,
+		},
+		retrieved_at_source: "pi_tool_result",
+	};
+	return {
+		kind: "web",
+		content:
+			`[CORTHEON_HOST_EVIDENCE] ${JSON.stringify(receipt)}\n` +
+			"No attributable results were returned by the scoped web search.",
+		source: "pi:websearch:scoped-null",
+		status: "observed",
+		retrieved_at: retrievedAt,
+		purpose: requestPurpose,
 	};
 }
 
@@ -197,6 +298,21 @@ function fetchObservations(
 			),
 		];
 	}
+	const requestPurpose = purpose(request)!;
+	const sourceRecord = sourceReviewRecord(
+		requestPurpose,
+		urls[urls.length - 1]!,
+		text,
+	);
+	if (SOURCE_REVIEW_PURPOSES.has(requestPurpose) && !sourceRecord) {
+		return [
+			failedWebObservation(
+				"webfetch",
+				request,
+				"source review lacked the required attributable signals",
+			),
+		];
+	}
 	return [
 		webObservation(
 			"webfetch",
@@ -206,6 +322,7 @@ function fetchObservations(
 			publishedAt,
 			details,
 			retrievedAt,
+			sourceRecord,
 		),
 	];
 }
@@ -216,7 +333,7 @@ function searchObservations(
 	retrievedAt: string,
 ): Array<Record<string, unknown>> {
 	const raw = Array.isArray(details.results) ? details.results : undefined;
-	if (!raw || raw.length === 0 || raw.length > MAX_WEB_RESULTS) {
+	if (!raw || raw.length > MAX_WEB_RESULTS) {
 		return [
 			failedWebObservation(
 				"websearch",
@@ -225,6 +342,7 @@ function searchObservations(
 			),
 		];
 	}
+	if (raw.length === 0) return [scopedNullWebObservation(request, retrievedAt)];
 	const observations: Array<Record<string, unknown>> = [];
 	const seen = new Set<string>();
 	for (const candidate of raw) {
@@ -311,6 +429,7 @@ export function webObservations(
 		];
 	}
 	const retrievedAt = new Date().toISOString();
+	if (sourceReviewNeedsFetch(normalizedTool, isError, request, details)) return;
 	return normalizedTool === "webfetch"
 		? fetchObservations(input, details, content, request, retrievedAt)
 		: searchObservations(details, request, retrievedAt);

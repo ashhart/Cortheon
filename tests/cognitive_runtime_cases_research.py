@@ -302,6 +302,57 @@ class ResearchMixin(RuntimeTestCase):
             "contradiction_check",
         )
 
+    def test_report_about_external_code_is_research_not_local_code_discovery(self) -> None:
+        started = self.runtime.start(
+            "Find scientific papers and GitHub code, then write a report.",
+            effort="quick",
+        )
+
+        self.assertEqual(started["session"]["task_kind"], "research")
+        self.assertEqual(started["session"]["deliverable"], "research_answer")
+        self.assertEqual(
+            started["next_action"]["request"]["parameters"].get("operation"),
+            "scholarly_source_review",
+        )
+        self.assertNotEqual(
+            started["next_action"]["request"]["parameters"].get("operation"),
+            "code_discovery",
+        )
+        paper = self.runtime.observe(
+            started["session"]["session_id"],
+            [
+                {
+                    "kind": "web",
+                    "content": (
+                        '[CORTHEON_HOST_EVIDENCE] {"tool":"webfetch","outcome":"result",'
+                        '"args":{"url":"https://doi.org/10.0000/example"}}\n'
+                        "The paper reports its method, benchmark, result, and limitations."
+                    ),
+                    "source": "https://doi.org/10.0000/example",
+                    "url": "https://doi.org/10.0000/example",
+                    "retrieved_at": datetime.now(UTC).isoformat(),
+                    "purpose": "scholarly_validation",
+                    "source_record": {
+                        "identifier": "10.0000/example",
+                        "method": "controlled benchmark with held-out splits",
+                        "limitations": "single domain",
+                    },
+                }
+            ],
+            request_id=started["next_action"]["request"]["request_id"],
+        )
+        self.assertEqual(
+            paper["next_action"]["request"]["parameters"].get("operation"),
+            "repository_source_review",
+        )
+
+        implementation = self.runtime.start(
+            "Implement a GitHub API client and document it.",
+            effort="quick",
+        )
+        self.assertEqual(implementation["session"]["task_kind"], "code")
+        self.assertEqual(implementation["session"]["deliverable"], "code_change")
+
     def test_latest_release_requires_cross_origin_version_consensus(self) -> None:
         started = self.runtime.start(
             "Research the latest released uv version from current live sources.",

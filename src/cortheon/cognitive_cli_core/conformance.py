@@ -197,6 +197,7 @@ def host_conformance(
         results["omp"] = {
             "assurance": assurance["stdio_mcp"],
             "configured": installation["omp"]["configured"],
+            "integration_valid": installation["omp"]["valid"],
             "skill_present": installation["omp"]["skill_present"],
             "adapter_load": {
                 **probe,
@@ -220,8 +221,9 @@ def host_conformance(
     }
     for result in results.values():
         result["contract"] = invariant_contract
+        integration_valid = result.get("integration_valid", result["configured"])
         result["ok"] = bool(
-            result["configured"]
+            integration_valid
             and result["adapter_load"]["ok"]
             and invariant_contract
             == {

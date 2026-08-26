@@ -57,6 +57,38 @@ RESEARCH_PURPOSES = frozenset(
     }
 )
 
+_SOURCE_REVIEW_PURPOSES = frozenset({"scholarly_validation", "implementation_reference"})
+_SOURCE_RECORD_KEYS = {
+    "scholarly_validation": frozenset({"identifier", "method", "limitations"}),
+    "implementation_reference": frozenset(
+        {"repository_url", "maintenance", "license", "tests", "compatibility"}
+    ),
+}
+
+
+def _source_review_error(
+    raw: dict[str, Any],
+    receipt: dict[str, Any] | None,
+) -> str | None:
+    """Return the structural defect blocking a source-review observation, if any."""
+    required = _SOURCE_RECORD_KEYS.get(str(raw.get("purpose") or ""))
+    if required is None:
+        return None
+    record = raw.get("source_record")
+    if not isinstance(record, dict) or not all(
+        isinstance(record.get(key), str) and 0 < len(record[key]) <= 500 for key in required
+    ):
+        return "source review requires a structured source_record: " + ", ".join(sorted(required))
+    if receipt is None:
+        return "source review requires a fetch receipt for the cited URL"
+    tool = str(receipt.get("tool") or "").casefold()
+    if tool not in {"webfetch", "fetch"}:
+        return "source review requires a fetch receipt for the cited URL"
+    fetched = str(receipt.get("args", {}).get("url") or "").rstrip("/")
+    if not fetched or fetched != str(raw.get("url") or "").rstrip("/"):
+        return "source review URL does not match the fetched receipt URL"
+    return None
+
 
 _ASSIST_WAIVER_CAVEATS: dict[str, str] = {
     "corroboration": (

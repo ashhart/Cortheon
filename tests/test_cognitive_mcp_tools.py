@@ -69,6 +69,22 @@ class CognitiveMcpToolCatalogueTests(unittest.TestCase):
         observation = observation_tool["inputSchema"]["properties"]["observations"]["items"]
         self.assertIn("host_receipt", observation["properties"])
 
+    def test_observe_schema_can_submit_source_review_evidence(self) -> None:
+        observation_tool = next(
+            item for item in tool_definitions() if item["name"] == "cortheon_observe"
+        )
+        observation = observation_tool["inputSchema"]["properties"]["observations"]["items"]
+
+        self.assertIn("source_record", observation["properties"])
+        self.assertIn(
+            "scholarly_validation",
+            observation["properties"]["purpose"]["enum"],
+        )
+        self.assertIn(
+            "implementation_reference",
+            observation["properties"]["purpose"]["enum"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

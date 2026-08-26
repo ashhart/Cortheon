@@ -6,6 +6,7 @@ from typing import Any
 
 from cortheon.cognitive_core.frontier_policy import (
     SOURCE_QUALITY_SIGNALS,
+    needs_repository_sources,
     needs_scholarly_sources,
     source_classes,
 )
@@ -22,20 +23,19 @@ class FrontierGroundingMixin(RuntimeState):
             session,
             capability="inspect",
             query=(
-                "Establish the exact live execution environment before choosing an external "
-                "approach. Inspect project manifests, lockfiles, toolchain declarations, "
-                "installed runtime versions, pinned dependency versions, enabled features, "
-                "and the available API/import surface relevant to this task. Use only "
-                f"read-only host tools. Task: {session.goal}"
+                "Establish the exact live environment before choosing an external approach: "
+                "project manifests, lockfiles, toolchain declarations, installed runtime and "
+                "pinned dependency versions, enabled features, and the relevant API surface. "
+                f"Use only read-only host tools. Task: {session.goal}"
             ),
             reason=(
                 "Current external guidance is useful only after its runtime and API "
                 "assumptions can be matched to the live project."
             ),
             success_condition=(
-                "Return focused host-receipted facts for the runtime, dependency pins, "
-                "manifests or lockfiles, and relevant available APIs. Explicitly mark any "
-                "version that could not be established."
+                "Return host-receipted facts for the runtime, dependency pins, manifests or "
+                "lockfiles, and the relevant API surface. Mark any version that could not "
+                "be established."
             ),
             parameters={
                 "operation": "environment_grounding",
@@ -50,10 +50,119 @@ class FrontierGroundingMixin(RuntimeState):
             },
         )
 
+    def _create_source_review_request(
+        self,
+        session: Investigation,
+        operation: str,
+        environment_ids: list[str] | None = None,
+    ) -> EvidenceRequest:
+        environment_ids = environment_ids or []
+        if operation == "scholarly_source_review":
+            return self._create_request(
+                session,
+                capability="search_or_fetch",
+                query=(
+                    "Find and read the strongest relevant primary paper or rigorous review. "
+                    "Deduplicate by DOI, arXiv ID, or title; extract its method, benchmark, "
+                    f"result, limitations, date, identifier, and transfer conditions. Task: {session.goal}"
+                ),
+                reason="The task needs method-level scientific evidence.",
+                success_condition=(
+                    "Return an attributable paper record with method, result, limitations, "
+                    "and relevance; or a host-receipted scoped null."
+                ),
+                parameters={
+                    "operation": operation,
+                    "purpose": "scholarly_validation",
+                    "deduplicate_by": ["doi", "arxiv_id", "normalized_title"],
+                    "rank_by": ["direct_relevance", "method_quality", "authority", "recency"],
+                    "environment_evidence_ids": environment_ids,
+                    "tool_call_budget": min(3, session.profile.max_calls_per_request),
+                },
+            )
+        if operation != "repository_source_review":
+            raise ValueError(f"unknown research source operation: {operation}")
+        return self._create_request(
+            session,
+            capability="search_or_fetch",
+            query=(
+                "Find and inspect a relevant maintained repository: release or tag, "
+                "maintenance, archived status, license, language and dependency fit, tests "
+                "and CI, docs, and exact implementation and test files. Stars are only a "
+                f"discovery hint. Task: {session.goal}"
+            ),
+            reason="The task needs implementation-level repository evidence.",
+            success_condition=(
+                "Return a repository URL with release, maintenance, license, tests, "
+                "compatibility, and implementation-file evidence, or one host-receipted "
+                "scoped null."
+            ),
+            parameters={
+                "operation": operation,
+                "purpose": "implementation_reference",
+                "required_signals": [
+                    "direct_relevance",
+                    "release_or_tag_fit",
+                    "recent_maintenance",
+                    "not_archived",
+                    "license",
+                    "language_and_dependency_fit",
+                    "tests_and_ci",
+                    "implementation_files",
+                ],
+                "environment_evidence_ids": environment_ids,
+                "tool_call_budget": min(3, session.profile.max_calls_per_request),
+            },
+        )
+
+    def _next_research_source_request(
+        self,
+        session: Investigation,
+    ) -> EvidenceRequest | None:
+        operations = {
+            str(request.parameters.get("operation")): request
+            for request in session.requests.values()
+            if request.parameters.get("operation")
+        }
+        scholarly = operations.get("scholarly_source_review")
+        if needs_scholarly_sources(session.goal):
+            if scholarly is None:
+                return self._create_source_review_request(session, "scholarly_source_review")
+            if scholarly.status != "completed":
+                return None
+        repository = operations.get("repository_source_review")
+        if needs_repository_sources(session.goal):
+            if repository is None:
+                return self._create_source_review_request(session, "repository_source_review")
+            if repository.status != "completed":
+                return None
+        return None
+
+    def _research_source_response(
+        self,
+        session: Investigation,
+    ) -> dict[str, Any] | None:
+        request = self._next_research_source_request(session)
+        if request is None:
+            return None
+        session.phase = "investigating"
+        repository = request.parameters["operation"] == "repository_source_review"
+        return self._payload(
+            session,
+            next_action=self._execute_action(request),
+            guidance=(
+                "Inspect repository code and health; do not equate stars with evidence."
+                if repository
+                else "Read the paper's method and limitations, not only its abstract."
+            ),
+        )
+
     def _frontier_grounding_response(
         self,
         session: Investigation,
     ) -> dict[str, Any] | None:
+        if session.task_kind == "research":
+            return self._research_source_response(session)
         operations = {
             str(request.parameters.get("operation")): request
             for request in session.requests.values()
@@ -83,21 +192,20 @@ class FrontierGroundingMixin(RuntimeState):
                 capability="search_or_fetch",
                 query=(
                     "Search the current web for knowledge that materially improves this task. "
-                    "Use the grounded runtime and dependency facts to reject incompatible "
-                    "examples. Prefer official documentation and releases, directly relevant "
-                    "primary research when applicable, and maintained reference repositories. "
-                    "For repositories, inspect version or tag fit, recent maintenance, tests, "
-                    "license, and exact implementation relevance rather than stars alone. "
-                    f"Task: {session.goal}"
+                    "Use the grounded runtime facts to reject incompatible examples. Prefer "
+                    "official documentation and releases, relevant primary research, and "
+                    "maintained reference repositories. For repositories, check version or "
+                    "tag fit, recent maintenance, tests, license, and implementation "
+                    f"relevance, not stars. Task: {session.goal}"
                 ),
                 reason=(
                     "The model needs current techniques and reference implementations beyond "
                     "its weights, filtered against the live environment."
                 ),
                 success_condition=(
-                    "Return attributable current results covering the strongest compatible "
-                    "primary source and implementation reference, with URLs and dates when "
-                    "available. Include incompatibilities and limitations instead of hiding them."
+                    "Return attributable current results with URLs and dates covering the "
+                    "strongest compatible primary source and implementation reference; "
+                    "include incompatibilities and limitations."
                 ),
                 parameters={
                     "operation": "frontier_discovery",
@@ -126,14 +234,14 @@ class FrontierGroundingMixin(RuntimeState):
                 session,
                 capability="fetch",
                 query=(
-                    "Fetch the strongest primary source already found. Extract the exact "
-                    "version assumptions, API or method, implementation details, limitations, "
-                    f"and evidence that it applies to the live environment. Task: {session.goal}"
+                    "Fetch the strongest primary source already found. Extract its version "
+                    "assumptions, API or method, implementation details, limitations, and "
+                    f"evidence it applies to the live environment. Task: {session.goal}"
                 ),
                 reason="Search results are leads; the load-bearing source must be read directly.",
                 success_condition=(
-                    "Return one focused primary-source passage with URL, retrieval time, source "
-                    "date when available, compatibility details, and explicit limitations."
+                    "Return one focused primary-source passage with URL, retrieval time, "
+                    "source date when available, compatibility, and explicit limitations."
                 ),
                 parameters={
                     "operation": "primary_source_fetch",
@@ -153,34 +261,8 @@ class FrontierGroundingMixin(RuntimeState):
 
         scholarly = operations.get("scholarly_source_review")
         if needs_scholarly_sources(session.goal) and scholarly is None:
-            request = self._create_request(
-                session,
-                capability="search_or_fetch",
-                query=(
-                    "Find and read the strongest directly relevant primary paper or rigorous "
-                    "review. Search title and key-phrase variants across scholarly indexes; "
-                    "deduplicate by DOI, arXiv ID, or title. Prefer direct relevance and sound "
-                    "methodology over citation count, then authority and recency. Extract the "
-                    "method, population or benchmark, result, limitations, date, DOI or stable "
-                    f"URL, and exact transfer conditions. Task: {session.goal}"
-                ),
-                reason=(
-                    "Scientific claims need a source-specific check of methods and transfer "
-                    "conditions, not a search-result summary."
-                ),
-                success_condition=(
-                    "Return one focused primary-paper or rigorous-review record with title, "
-                    "authors or venue, date, DOI or stable URL, method, result, limitations, and "
-                    "relevance to the live task; otherwise return a scoped no-relevant-paper result."
-                ),
-                parameters={
-                    "operation": "scholarly_source_review",
-                    "purpose": "scholarly_validation",
-                    "deduplicate_by": ["doi", "arxiv_id", "normalized_title"],
-                    "rank_by": ["direct_relevance", "method_quality", "authority", "recency"],
-                    "environment_evidence_ids": environment_ids,
-                    "tool_call_budget": min(3, session.profile.max_calls_per_request),
-                },
+            request = self._create_source_review_request(
+                session, "scholarly_source_review", environment_ids
             )
             session.phase = "investigating"
             return self._payload(
@@ -193,41 +275,8 @@ class FrontierGroundingMixin(RuntimeState):
 
         repository = operations.get("repository_source_review")
         if repository is None:
-            request = self._create_request(
-                session,
-                capability="search_or_fetch",
-                query=(
-                    "Find and inspect a directly relevant maintained GitHub implementation. "
-                    "Check the actual repository, not only its search card: release or tag and "
-                    "version fit, recent maintenance, archived status, license, language and "
-                    "dependency fit, tests and CI, documentation, and the exact source and test "
-                    "files implementing the technique. Stars are only a discovery hint. Return a "
-                    f"scoped null if no repository is genuinely transferable. Task: {session.goal}"
-                ),
-                reason=(
-                    "A popular repository is useful only when its maintained implementation and "
-                    "constraints transfer to the live project."
-                ),
-                success_condition=(
-                    "Return one repository URL with maintenance, release, license, test, language, "
-                    "compatibility, and exact implementation-file evidence; or a scoped no-fit result."
-                ),
-                parameters={
-                    "operation": "repository_source_review",
-                    "purpose": "implementation_reference",
-                    "required_signals": [
-                        "direct_relevance",
-                        "release_or_tag_fit",
-                        "recent_maintenance",
-                        "not_archived",
-                        "license",
-                        "language_and_dependency_fit",
-                        "tests_and_ci",
-                        "implementation_files",
-                    ],
-                    "environment_evidence_ids": environment_ids,
-                    "tool_call_budget": min(3, session.profile.max_calls_per_request),
-                },
+            request = self._create_source_review_request(
+                session, "repository_source_review", environment_ids
             )
             session.phase = "investigating"
             return self._payload(
@@ -255,7 +304,7 @@ class FrontierGroundingMixin(RuntimeState):
                 ),
                 success_condition=(
                     "Return the strongest attributable limitation or contradiction, or a scoped "
-                    "no-conflict result, with URL and current retrieval time."
+                    "no-conflict result, with URL and retrieval time."
                 ),
                 parameters={
                     "operation": "counterevidence_search",

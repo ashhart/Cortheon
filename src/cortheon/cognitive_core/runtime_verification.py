@@ -287,7 +287,7 @@ class VerificationMixin(RuntimeState):
         ]
         grounding_passed = not unknown and not failed and not uncited_claims
         grounding_reason = (
-            "Every explicit claim cites available, non-failed live evidence."
+            "Every explicit claim cites non-failed live evidence."
             if grounding_passed
             else _join_reasons(
                 [

@@ -19,6 +19,8 @@ include src/cortheon/cognitive_program.py
 include src/cortheon/cognitive_protocol.py
 include src/cortheon/cognitive_repair.py
 include src/cortheon/cognitive_runtime.py
+include src/cortheon/omp_host.py
+recursive-include src/cortheon/omp_core *.py
 include src/cortheon/sanitize.py
 
 recursive-include src/cortheon/cognitive_core *.py

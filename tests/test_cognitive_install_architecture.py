@@ -13,7 +13,7 @@ import cortheon.cognitive_install as facade
 ROOT = Path(__file__).parents[1]
 FACADE = ROOT / "src/cortheon/cognitive_install.py"
 CORE = ROOT / "src/cortheon/cognitive_install_core"
-CORE_MEMBERS = {"__init__.py", "config.py", "hosts.py", "lifecycle.py", "model.py"}
+CORE_MEMBERS = {"__init__.py", "config.py", "hosts.py", "lifecycle.py", "model.py", "omp.py"}
 OWNERS = {
     "config.py": {
         "package_asset",
@@ -25,19 +25,16 @@ OWNERS = {
         "_pi_config_home",
         "_omp_config_home",
         "_configured_codex_plugins",
+        "_installed_mcp_command",
     },
     "hosts.py": {
         "install_hosts",
         "_preflight_hosts",
         "_preflight_json_string_list",
-        "_preflight_omp_config",
         "install_opencode",
         "install_pi",
         "install_codex",
-        "_installed_mcp_command",
         "generic_mcp_config",
-        "install_omp",
-        "_install_omp_skill",
         "_normalize_hosts",
         "_run",
         "_configured_codex_marketplaces",
@@ -46,10 +43,23 @@ OWNERS = {
         "host_installation_status",
         "_uninstall_adapter",
         "_uninstall_codex",
-        "_uninstall_omp",
         "uninstall_hosts",
     },
     "model.py": {"install_facade_patch_bridge"},
+    "omp.py": {
+        "_omp_targets",
+        "_preflight_omp_config",
+        "_preflight_omp_skill",
+        "_atomic_text",
+        "_install_omp_skill",
+        "_restore_omp_skill",
+        "install_omp",
+        "_omp_skill_owned",
+        "_omp_server_owned",
+        "_omp_installation_status",
+        "_quarantine_skill",
+        "_uninstall_omp",
+    },
 }
 EXPECTED_FACADE_NAMES = {
     "Any",

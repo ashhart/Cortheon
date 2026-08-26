@@ -381,7 +381,7 @@ def build_server(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cortheon cognitive-http",
-        description="Serve the memory-only Cortheon cognitive runtime over local HTTP.",
+        description="Serve the memory-only cognitive runtime over local HTTP.",
     )
     parser.add_argument(
         "--bind",

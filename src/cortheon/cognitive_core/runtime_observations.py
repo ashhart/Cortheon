@@ -148,7 +148,7 @@ class ObservationMixin(RuntimeState):
                     next_action={
                         "type": "reason",
                         "instruction": (
-                            "Classify the newly accepted evidence against the named "
+                            "Classify newly accepted evidence against the named "
                             "hypothesis. Submit supported, refuted, or uncertain with the "
                             "accepted evidence ids; do not gather the same evidence again."
                         ),
@@ -454,7 +454,7 @@ class ObservationMixin(RuntimeState):
         request: Any,
         evidence_ids: list[str],
     ) -> None:
-        """Treat already-seen evidence as neutral instead of requesting it forever."""
+        """Treat seen evidence as neutral instead of requesting it forever."""
 
         selected = request.parameters.get("controller", {}).get("selected", {})
         resolved = selected.get("resolves") if isinstance(selected, dict) else None

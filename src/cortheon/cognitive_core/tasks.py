@@ -134,6 +134,18 @@ _DISCRIMINATING_TEST_DESIGN_RE = re.compile(
 )
 
 
+_EXTERNAL_RESEARCH_REPORT_RE = re.compile(
+    r"\b(?:report|research brief|survey|white paper)\b",
+    flags=re.IGNORECASE,
+)
+
+
+_EXTERNAL_SOURCE_RE = re.compile(
+    r"\b(?:arxiv|doi|github|online|papers?|pubmed|research|sources?|web)\b",
+    flags=re.IGNORECASE,
+)
+
+
 def _is_discriminating_test_design_goal(goal: str) -> bool:
     """Whether the task asks for a test, not for a decided hypothesis."""
 
@@ -377,6 +389,12 @@ def _infer_task_kind(goal: str) -> str:
         )
     ):
         return "documents"
+    if (
+        _EXTERNAL_RESEARCH_REPORT_RE.search(goal)
+        and _EXTERNAL_SOURCE_RE.search(goal)
+        and not _requests_change(goal)
+    ):
+        return "research"
     if _has_hint(goal, _CODE_HINTS):
         return "code"
     if _has_hint(goal, _DOCUMENT_HINTS) and _has_hint(goal, _CROSS_SOURCE_HINTS):

@@ -232,6 +232,7 @@ const observationFields = (item) => ({
   ...(item.retrieved_at ? { retrieved_at: item.retrieved_at } : {}),
   ...(item.published_at ? { published_at: item.published_at } : {}),
   ...(item.purpose ? { purpose: item.purpose } : {}),
+  ...(item.source_record ? { source_record: item.source_record } : {}),
 })
 
 // Submits pending or passive observations to the runtime and merges the

@@ -1,7 +1,7 @@
 import { automaticCompletion } from "./completion.js"
 import { hostEvidenceTools, workspaceMutationTools, certifiedAnswers, investigations, boundedHostOutput } from "./state.js"
 import { decodeToolPayload, evidenceKind, evidenceStatus } from "./state.js"
-import { evidenceReceipt, webEvidenceBatch } from "./evidence.js"
+import { evidenceReceipt, sourceReviewNeedsFetch, webEvidenceBatch } from "./evidence.js"
 import { isTestCommand, testCommand, numericJoin } from "./plans.js"
 import { mergePayload } from "./state_merge.js"
 import { evaluationProfile, operatorEnabled } from "./state.js"
@@ -124,6 +124,15 @@ const createToolAfterHook = ({
           state.request?.capability || "",
         ))
     ) {
+      if (sourceReviewNeedsFetch(tool, output.output, state)) {
+        if (typeof output.output === "string") {
+          output.output +=
+            "\n\n[CORTHEON] These are discovery leads, not reviewed evidence. " +
+            "Fetch the strongest source and inspect its method/limitations or repository " +
+            "health before answering."
+        }
+        return
+      }
       const observations = webEvidenceBatch(tool, input.args, output.output, state)
       state.hostEvidence = undefined
       state.hostEvidenceBatch = observations

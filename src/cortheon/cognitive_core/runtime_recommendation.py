@@ -30,7 +30,7 @@ class RecommendationMixin(RuntimeState):
             return self._payload(
                 session,
                 next_action=self._execute_action(pending),
-                guidance="Satisfy the pending request with a host tool before reasoning further.",
+                guidance="Satisfy the pending request with a host tool before reasoning.",
             )
         verification_enabled = evaluation_operator(
             session.evaluation_profile,
@@ -54,7 +54,7 @@ class RecommendationMixin(RuntimeState):
                     "type": "finish",
                     "instruction": (
                         "The turn budget is exhausted without a verified answer. Preserve "
-                        "the uncertainty and abandon the investigation."
+                        "the uncertainty and abandon it."
                     ),
                     "submit_via": "cortheon_finish",
                 },
@@ -85,7 +85,7 @@ class RecommendationMixin(RuntimeState):
                     next_action=self._execute_action(request),
                     guidance=(
                         "Use the host's web tools and preserve URL, retrieval time, "
-                        "publication date when available, and the request purpose."
+                        "publication date, and the request purpose."
                     ),
                 )
         revision_enabled = evaluation_operator(
@@ -132,7 +132,7 @@ class RecommendationMixin(RuntimeState):
                     "type": "complete",
                     "instruction": (
                         "Frame exactly two evidence-grounded causal hypotheses: the "
-                        "strongest leading explanation and one genuinely distinct rival. "
+                        "strongest explanation and one genuinely distinct rival. "
                         "Keep their requested outcome and scope aligned. Bind the proposed "
                         "intervention, observable result, and refutation target to the "
                         "leader, then submit both hypotheses and narrow evidence-linked claims."
@@ -159,8 +159,8 @@ class RecommendationMixin(RuntimeState):
                         "type": "reason",
                         "instruction": (
                             "Compare the source that established the original hypothesis "
-                            "with the decisive later source. Record whether the decisive "
-                            "source supports or refutes the prior, then name the revised "
+                            "with the decisive later source. Record whether it "
+                            "supports or refutes the prior, then name the revised "
                             "hypothesis. Do not include private chain-of-thought."
                         ),
                         "submit_via": "cortheon_step",
@@ -270,7 +270,7 @@ class RecommendationMixin(RuntimeState):
                     "instruction": (
                         "Compare the available probes against every named hypothesis. "
                         "Choose the one whose positive and negative outcomes reverse "
-                        "which hypothesis they support, and record that compact test design."
+                        "which hypothesis they support, and record that test design."
                     ),
                     "submit_via": "cortheon_step",
                     "required_fields": ["draft"],
@@ -319,7 +319,7 @@ class RecommendationMixin(RuntimeState):
                 next_action=self._execute_action(request),
                 guidance=(
                     "Use the host's tools. Prefer evidence that discriminates between "
-                    "hypotheses over evidence that merely confirms the first idea."
+                    "hypotheses over evidence that confirms the first idea."
                 ),
             )
 
@@ -353,7 +353,7 @@ class RecommendationMixin(RuntimeState):
                     "type": "await_candidate",
                     "instruction": (
                         "Submit the host model's candidate and its model-owned receipts "
-                        "directly for verification."
+                        "for verification."
                     ),
                     "submit_via": "cortheon_verify",
                 },
@@ -384,7 +384,7 @@ class RecommendationMixin(RuntimeState):
                 next_action={
                     "type": "challenge",
                     "instruction": (
-                        "Submit the current draft and its evidence-linked claims for an "
+                        "Submit the draft and its evidence-linked claims for an "
                         "adversarial completion check."
                     ),
                     "submit_via": "cortheon_challenge",
@@ -397,8 +397,8 @@ class RecommendationMixin(RuntimeState):
             next_action={
                 "type": "verify",
                 "instruction": (
-                    "Submit the revised answer, explicit evidence-linked claims, and the "
-                    "ids of evidence that demonstrate task completion."
+                    "Submit the revised answer, explicit evidence-linked claims, and "
+                    "evidence ids demonstrating task completion."
                 ),
                 "submit_via": "cortheon_verify",
             },
@@ -458,7 +458,7 @@ class RecommendationMixin(RuntimeState):
                     "type": "finish",
                     "instruction": (
                         "The bounded disambiguation budget is exhausted and the live "
-                        f"sources still conflict ({description}). Report the unresolved "
+                        f"sources conflict ({description}). Report the unresolved "
                         "alternatives and abandon; do not choose one by plausibility."
                     ),
                     "submit_via": "cortheon_finish",

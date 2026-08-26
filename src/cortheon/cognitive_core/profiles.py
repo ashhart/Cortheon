@@ -23,7 +23,7 @@ EFFORT_PROFILES: dict[str, EffortProfile] = {
     "quick": EffortProfile(
         name="quick",
         max_turns=5,
-        max_observations=8,
+        max_observations=12,
         max_observation_chars=2_000,
         max_total_observation_chars=10_000,
         max_context_chars=4_000,

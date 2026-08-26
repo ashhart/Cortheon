@@ -50,9 +50,48 @@ _RESEARCH_SOURCE_RE = re.compile(
 )
 
 
-def needs_frontier_grounding(goal: str, task_kind: str) -> bool:
-    """Return whether a non-research task explicitly needs current external knowledge."""
+_SCHOLARLY_SOURCE_RE = re.compile(
+    r"\b(?:papers?|stud(?:y|ies)|scientific|clinical|academic|arxiv|doi|"
+    r"primary\s+research|recent\s+research|peer[- ]reviewed)\b",
+    flags=re.IGNORECASE,
+)
 
+
+_REPOSITORY_URL_RE = re.compile(
+    r"(?:github\.com|gitlab\.com|bitbucket\.org)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
+    flags=re.IGNORECASE,
+)
+
+
+_REPOSITORY_ACTION_RE = re.compile(
+    r"\b(?:inspect|read|review|examine|study|analyse?|check|verify|evaluate|"
+    r"reference|maintain(?:ed)?|use|adopt|integrate|migrate|clone|fork|patch|extend)\s+"
+    r"(?:(?:an?|the|its|their)\s+)?(?:open[- ]source\s+)?(?:code\s+)?"
+    r"(?:repositor\w+|codebase|source\s+code|implementation)\b",
+    flags=re.IGNORECASE,
+)
+
+
+_NAMED_REPOSITORY_RE = re.compile(
+    r"\bthe\s+[A-Za-z0-9_.-]+\s+(?:repositor\w+|codebase)\b",
+    flags=re.IGNORECASE,
+)
+
+_REPOSITORY_SITE_NOUN_RE = re.compile(
+    r"\b(?:github|gitlab|bitbucket|open[- ]source)\s+(?:code|repositor\w+|projects?)\b",
+    flags=re.IGNORECASE,
+)
+
+
+_REFERENCE_IMPLEMENTATION_RE = re.compile(
+    r"\b(?:reference|maintained)\s+(?:repositories|repos?|implementations?|code)\b",
+    flags=re.IGNORECASE,
+)
+
+
+def needs_frontier_grounding(goal: str, task_kind: str) -> bool:
+    if task_kind == "research":
+        return needs_scholarly_sources(goal) or needs_repository_sources(goal)
     if task_kind != "code":
         return False
     if _EXPLICIT_FRONTIER_RE.search(goal):
@@ -67,8 +106,6 @@ def needs_frontier_grounding(goal: str, task_kind: str) -> bool:
 
 
 def source_classes(goal: str) -> list[str]:
-    """Return the smallest useful source portfolio for the requested task."""
-
     classes = [
         "official_documentation",
         "official_release_or_standard",
@@ -81,9 +118,17 @@ def source_classes(goal: str) -> list[str]:
 
 
 def needs_scholarly_sources(goal: str) -> bool:
-    """Return whether the task would benefit from primary research."""
+    return bool(_SCHOLARLY_SOURCE_RE.search(goal))
 
-    return bool(_RESEARCH_SOURCE_RE.search(goal))
+
+def needs_repository_sources(goal: str) -> bool:
+    return bool(
+        _REPOSITORY_URL_RE.search(goal)
+        or _REPOSITORY_ACTION_RE.search(goal)
+        or _NAMED_REPOSITORY_RE.search(goal)
+        or _REPOSITORY_SITE_NOUN_RE.search(goal)
+        or _REFERENCE_IMPLEMENTATION_RE.search(goal)
+    )
 
 
 SOURCE_QUALITY_SIGNALS = [

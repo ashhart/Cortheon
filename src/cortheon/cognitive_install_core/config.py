@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from importlib.resources import files
 from pathlib import Path
@@ -97,6 +99,7 @@ def _pi_config_home() -> Path:
     configured = os.environ.get("PI_CODING_AGENT_DIR")
     return Path(configured).expanduser() if configured else Path.home() / ".pi" / "agent"
 
+
 def _omp_config_home() -> Path:
     """Resolve the active OMP profile's native agent directory."""
 
@@ -104,13 +107,14 @@ def _omp_config_home() -> Path:
     if not profile:
         profile = os.environ.get("PI_PROFILE")
     if profile and profile.strip():
-        return Path.home() / ".omp" / "profiles" / profile.strip() / "agent"
+        name = profile.strip()
+        if name in {".", ".."} or re.fullmatch(r"[A-Za-z0-9._-]+", name) is None:
+            raise InstallError("OMP profile names may contain only letters, numbers, ., _, and -")
+        return Path.home() / ".omp" / "profiles" / name / "agent"
     configured = os.environ.get("PI_CODING_AGENT_DIR")
     if configured:
         return Path(configured).expanduser()
     return Path.home() / ".omp" / "agent"
-
-
 
 
 def _configured_codex_plugins(codex: str) -> dict[str, str]:
@@ -139,6 +143,13 @@ def _configured_codex_plugins(codex: str) -> dict[str, str]:
     }
 
 
+def _installed_mcp_command() -> str:
+    installed = Path(sys.executable).with_name("cortheon-mcp")
+    return shutil.which("cortheon-mcp") or (
+        str(installed.resolve()) if installed.is_file() else "cortheon-mcp"
+    )
+
+
 for _definition in (
     package_asset,
     _is_packaged_adapter_reference,
@@ -149,6 +160,7 @@ for _definition in (
     _pi_config_home,
     _omp_config_home,
     _configured_codex_plugins,
+    _installed_mcp_command,
 ):
     _definition.__module__ = "cortheon.cognitive_install"
 
