@@ -81,6 +81,7 @@ for _host_test in (
     "test_host_installation_status_reports_configuration_without_contents",
     "test_uninstall_removes_only_cortheon_adapter_references",
     "test_generic_install_is_rejected_before_any_host_change",
+    *(name for name in vars(_host_install) if name.startswith("test_omp_")),
     "test_codex_uninstall_removes_only_verified_owned_marketplace",
     "test_codex_uninstall_refuses_an_unverified_directory",
     "test_uninstall_preflights_codex_ownership_before_adapter_changes",
@@ -89,12 +90,6 @@ for _host_test in (
 ):
     globals()[_host_test] = getattr(_host_install, _host_test)
 del _host_test
-test_runtime_metrics_are_content_free_and_versioned = (
-    _runtime_operations.test_runtime_metrics_are_content_free_and_versioned
-)
-test_host_conformance_executes_one_probe_per_host = (
-    _runtime_operations.test_host_conformance_executes_one_probe_per_host
-)
-test_doctor_runtime_is_optional_unless_required = (
-    _runtime_operations.test_doctor_runtime_is_optional_unless_required
-)
+for _runtime_test in (name for name in vars(_runtime_operations) if name.startswith("test_")):
+    globals()[_runtime_test] = getattr(_runtime_operations, _runtime_test)
+del _runtime_test

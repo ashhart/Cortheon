@@ -19,7 +19,7 @@ __version__ = _version
 protocol_capabilities = _protocol_capabilities
 
 DEFAULT_RUNTIME_URL = "http://127.0.0.1:8743"
-SUPPORTED_HOSTS = ("opencode", "pi", "codex", "generic")
+SUPPORTED_HOSTS = ("opencode", "pi", "codex", "omp", "generic")
 
 
 def build_parser() -> argparse.ArgumentParser:

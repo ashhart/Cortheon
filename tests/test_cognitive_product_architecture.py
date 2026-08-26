@@ -30,8 +30,8 @@ HELPER_OWNERS = {
     "_opencode_adapter_corpus": "cognitive_product_cases_opencode_session.py",
     "_pi_module_graph_source": "cognitive_product_cases_pi_adapter.py",
 }
-LEGACY_NODE_COUNT = 36
-LEGACY_NODE_DIGEST = "8bd26e03f2b39a713c7faa71b69c97f8496811a62faf172f44db24eb87363cc8"
+LEGACY_NODE_COUNT = 50
+LEGACY_NODE_DIGEST = "bdcb4a64547747d59ff35ac9b8f910f13cc7ba3f34d78e44da1d919ee9985450"
 PARAMETERIZED_TEST = "test_opencode_bounded_repair_fails_closed_and_preserves_files"
 PARAMETER_IDS = ("failing_test", "symlink_target")
 

@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from types import ModuleType
 from typing import Any
 
-SUPPORTED_HOSTS = ("opencode", "pi", "codex", "generic")
+SUPPORTED_HOSTS = ("opencode", "pi", "codex", "omp", "generic")
 MARKETPLACE_NAME = "cortheon-local"
 LEGACY_PACKAGE_NAMES = frozenset({"learn_layer", "cortheon"})
 

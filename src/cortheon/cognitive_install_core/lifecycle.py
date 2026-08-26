@@ -29,6 +29,13 @@ from cortheon.cognitive_install_core.model import (
     InstallError,
     InstallResult,
 )
+from cortheon.cognitive_install_core.omp import (
+    _omp_installation_status,
+    _omp_targets,
+    _preflight_omp_config,
+    _preflight_omp_skill,
+    _uninstall_omp,
+)
 
 
 def host_installation_status(
@@ -122,6 +129,7 @@ def host_installation_status(
         "scope": "process",
         "configuration_only": True,
     }
+    statuses["omp"] = _omp_installation_status(scope=scope, project_dir=root)
     return statuses
 
 
@@ -231,12 +239,18 @@ def uninstall_hosts(
                 ),
                 "plugin" if host == "opencode" else "extensions",
             )
+    if "omp" in normalized:
+        config_path, skill_file = _omp_targets(scope, root)
+        _preflight_omp_config(config_path)
+        _preflight_omp_skill(skill_file)
     results: list[InstallResult] = []
     for host in normalized:
         if host in {"opencode", "pi"}:
             results.append(_uninstall_adapter(host, scope=scope, project_dir=root, dry_run=dry_run))
         elif host == "codex":
             results.append(_uninstall_codex(dry_run=dry_run, run_cli=run_codex_cli))
+        elif host == "omp":
+            results.append(_uninstall_omp(scope=scope, project_dir=root, dry_run=dry_run))
         else:
             results.append(
                 InstallResult(

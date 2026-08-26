@@ -13,7 +13,7 @@ import cortheon.cognitive_install as facade
 ROOT = Path(__file__).parents[1]
 FACADE = ROOT / "src/cortheon/cognitive_install.py"
 CORE = ROOT / "src/cortheon/cognitive_install_core"
-CORE_MEMBERS = {"__init__.py", "config.py", "hosts.py", "lifecycle.py", "model.py"}
+CORE_MEMBERS = {"__init__.py", "config.py", "hosts.py", "lifecycle.py", "model.py", "omp.py"}
 OWNERS = {
     "config.py": {
         "package_asset",
@@ -23,7 +23,9 @@ OWNERS = {
         "_xdg_config_home",
         "_xdg_data_home",
         "_pi_config_home",
+        "_omp_config_home",
         "_configured_codex_plugins",
+        "_installed_mcp_command",
     },
     "hosts.py": {
         "install_hosts",
@@ -44,6 +46,20 @@ OWNERS = {
         "uninstall_hosts",
     },
     "model.py": {"install_facade_patch_bridge"},
+    "omp.py": {
+        "_omp_targets",
+        "_preflight_omp_config",
+        "_preflight_omp_skill",
+        "_atomic_text",
+        "_install_omp_skill",
+        "_restore_omp_skill",
+        "install_omp",
+        "_omp_skill_owned",
+        "_omp_server_owned",
+        "_omp_installation_status",
+        "_quarantine_skill",
+        "_uninstall_omp",
+    },
 }
 EXPECTED_FACADE_NAMES = {
     "Any",
@@ -63,6 +79,10 @@ EXPECTED_FACADE_NAMES = {
     "_pi_config_home",
     "_preflight_hosts",
     "_preflight_json_string_list",
+    "_preflight_omp_config",
+    "_installed_mcp_command",
+    "_install_omp_skill",
+    "_omp_config_home",
     "_run",
     "_xdg_config_home",
     "_xdg_data_home",
@@ -76,9 +96,11 @@ EXPECTED_FACADE_NAMES = {
     "install_hosts",
     "install_opencode",
     "install_pi",
+    "install_omp",
     "uninstall_hosts",
     "_uninstall_adapter",
     "_uninstall_codex",
+    "_uninstall_omp",
     "json",
     "os",
     "package_asset",
@@ -112,6 +134,12 @@ SIGNATURES = {
     "_xdg_config_home": "() -> 'Path'",
     "_xdg_data_home": "() -> 'Path'",
     "_pi_config_home": "() -> 'Path'",
+    "_omp_config_home": "() -> 'Path'",
+    "_installed_mcp_command": "() -> 'str'",
+    "_preflight_omp_config": "(path: 'Path') -> 'None'",
+    "install_omp": "(*, scope: 'str', project_dir: 'Path', dry_run: 'bool') -> 'InstallResult'",
+    "_install_omp_skill": "(skill_root: 'Path', *, dry_run: 'bool') -> 'bool'",
+    "_uninstall_omp": "(*, scope: 'str', project_dir: 'Path', dry_run: 'bool') -> 'InstallResult'",
 }
 
 

@@ -56,7 +56,7 @@ def doctor(
     for name, path in surface._asset_paths().items():
         record(f"asset:{name}", Path(path).exists(), path=path)
 
-    for host in ("opencode", "pi", "codex"):
+    for host in ("opencode", "pi", "codex", "omp"):
         executable = shutil.which(host)
         record(
             f"host:{host}",

@@ -32,6 +32,7 @@ include src/cortheon/opencode_plugin.js
 recursive-include src/cortheon/opencode_core *.js
 include src/cortheon/pi_extension.ts
 recursive-include src/cortheon/pi_core *.ts
+include src/cortheon/omp_skill/cortheon-runtime/SKILL.md
 
 # The Codex plugin ships whole, minus the console-script shim the wheel's own
 # entry point replaces and the agent profile that is not Codex's.

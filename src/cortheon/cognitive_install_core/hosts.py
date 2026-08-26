@@ -15,6 +15,7 @@ from typing import Any
 from cortheon.cognitive_install_core.config import (
     _atomic_json,
     _configured_codex_plugins,
+    _installed_mcp_command,
     _is_packaged_adapter_reference,
     _load_json_config,
     _pi_config_home,
@@ -27,6 +28,12 @@ from cortheon.cognitive_install_core.model import (
     SUPPORTED_HOSTS,
     InstallError,
     InstallResult,
+)
+from cortheon.cognitive_install_core.omp import (
+    _omp_targets,
+    _preflight_omp_config,
+    _preflight_omp_skill,
+    install_omp,
 )
 
 
@@ -67,6 +74,8 @@ def install_hosts(
             results.append(install_pi(scope=scope, project_dir=root, dry_run=dry_run))
         elif host == "codex":
             results.append(install_codex(dry_run=dry_run, run_cli=run_codex_cli))
+        elif host == "omp":
+            results.append(install_omp(scope=scope, project_dir=root, dry_run=dry_run))
     return results
 
 
@@ -94,6 +103,10 @@ def _preflight_hosts(
             else _pi_config_home() / "settings.json"
         )
         _preflight_json_string_list(path, "extensions")
+    if "omp" in hosts:
+        config_path, skill_file = _omp_targets(scope, project_dir)
+        _preflight_omp_config(config_path)
+        _preflight_omp_skill(skill_file)
     if "codex" in hosts and run_codex_cli and not dry_run:
         codex = shutil.which("codex")
         if codex is None:
@@ -325,10 +338,7 @@ def install_codex(
 
 
 def generic_mcp_config() -> InstallResult:
-    installed = Path(sys.executable).with_name("cortheon-mcp")
-    command = shutil.which("cortheon-mcp") or (
-        str(installed.resolve()) if installed.is_file() else "cortheon-mcp"
-    )
+    command = _installed_mcp_command()
     return InstallResult(
         host="generic",
         status="configuration",

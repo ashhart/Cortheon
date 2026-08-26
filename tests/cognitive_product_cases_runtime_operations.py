@@ -29,6 +29,7 @@ def test_host_conformance_executes_one_probe_per_host():
     statuses = {
         host: {"configured": True, "valid": True} for host in ("opencode", "pi", "codex", "generic")
     }
+    statuses["omp"] = {"configured": True, "valid": True, "skill_present": True}
 
     def run(command, **_kwargs):
         executable = Path(command[0]).name
@@ -76,7 +77,7 @@ def test_host_conformance_executes_one_probe_per_host():
 
     assert report["ok"] is True
     assert report["cross_host_contract_consistent"] is True
-    assert set(report["hosts"]) == {"opencode", "pi", "codex", "generic"}
+    assert set(report["hosts"]) == {"opencode", "pi", "codex", "generic", "omp"}
     assert all(item["ok"] for item in report["hosts"].values())
     assert report["hosts"]["generic"]["adapter_load"]["mcp_initialized"] is True
     assert report["hosts"]["codex"]["adapter_load"]["plugin_assets_valid"] is True
