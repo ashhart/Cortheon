@@ -1,0 +1,22 @@
+{
+  "cases": 60,
+  "first_numbers": {
+    "per_operator_start": 13
+  },
+  "isolation": {
+    "case_id_overlap": [],
+    "collisions": [],
+    "development_tokens": 272,
+    "isolated": true
+  },
+  "operator_order": [
+    "hypothesis_framing",
+    "discriminating_evidence",
+    "contradiction_revision",
+    "cross_source_derivation",
+    "adaptive_stopping"
+  ],
+  "pack_sha256": "c162dad20915bf7615f1051e5ac1ff7fdcfffe0cab91b7149f8678a3b7e39ae9",
+  "purpose": "P6 held-out qualification pack",
+  "schema_version": 1
+}

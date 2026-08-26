@@ -26,6 +26,7 @@ MEMBERS = {
     "execution_schedule.py",
     "execution_storage.py",
     "cli.py",
+    "heldout.py",
     "models.py",
     "oracles.py",
     "preregister.py",
