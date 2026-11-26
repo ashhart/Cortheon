@@ -10,6 +10,41 @@ Even when the user provides **no test suite and no math answer key**, Cortheon s
 
 ---
 
+## Quick Start (60 Seconds)
+
+Works with **TensorFold**, **Ollama** (`http://127.0.0.1:11434/v1`), **llama.cpp** (`http://127.0.0.1:8080/v1`), **vLLM**, and **LM Studio** (`http://127.0.0.1:1234/v1`).
+
+```sh
+# 1. Install Cortheon
+git clone https://github.com/ashhart/Cortheon.git && cd Cortheon
+uv venv .venv && uv pip install --python .venv/bin/python -e .
+
+# 2. Install the /cortheon slash command across OMP, Pi, OpenCode, Claude Code, Cursor & Codex
+.venv/bin/cortheon install-commands --harness all
+
+# 3. Start the universal proxy (or serve TensorFold natively with --cortheon --cortheon-exec --parallel 8)
+.venv/bin/cortheon proxy --upstream http://127.0.0.1:8080/v1 --port 18652
+```
+
+### Then use `/cortheon` inside your coding harness to get going
+
+Open **OMP**, **Pi**, **OpenCode**, **Claude Code**, or **Cursor** and type:
+
+```text
+/cortheon 7 servers sit in a ring (0..6). A token starts at server 1 (already visited) and moves +1 mod 7 w.p. 2/3 or -1 mod 7 w.p. 1/3, except at server 0 it teleports uniformly to one of 0..6. Find the exact rational expected ticks until all 7 servers are visited.
+```
+
+Or verify invariants first and immediately build + test in one flow (OMP & Pi):
+
+```text
+/cortheon build Implement an MVCC Serializable Snapshot Isolation (SSI) KV store with SIREAD locks, 3-tx Read-Only Anomaly detection, and a 1,000-schedule serializability fuzzer.
+```
+
+- Want a **60-second live Vanilla vs Cortheon duel** on your local model? Run `.venv/bin/cortheon showdown --url http://127.0.0.1:8080/v1`.
+- Need copy-paste provider configs for **OMP**, **Pi**, **OpenCode**, **Claude Code**, **Cursor**, **TensorFold Native**, and the split-pane `tmux` cockpit? See **[`GETTING_STARTED.md`](GETTING_STARTED.md)**.
+
+---
+
 ## Live Measured Results (Three Frozen Local Model Families — Zero Weight Changes)
 
 > **Full Benchmark Ledger & Per-Problem Result JSONs:** See **[`BENCHMARKS.md`](BENCHMARKS.md)** and **[`results/`](results/)** ([`results/summary.json`](results/summary.json)) for the complete per-problem logs, flips/regressions, calibration tables, and exact reproduction commands across every suite.

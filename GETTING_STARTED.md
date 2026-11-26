@@ -1,6 +1,32 @@
 # Getting Started with Cortheon v2
 
-Run **execution-verified `B=4` parallel consensus** on top of any local OpenAI-compatible model (**TensorFold**, **Ollama**, **llama.cpp**, **vLLM**, **LM Studio**) and wire it directly into **OMP (`oh-my-pi`)**, **Pi (`pi-coding-agent`)**, **OpenCode**, **Claude Code**, **Cursor**, or your own scripts.
+Run **execution-verified `B=4` parallel consensus** on top of any local OpenAI-compatible model (**TensorFold**, **Ollama**, **llama.cpp**, **vLLM**, **LM Studio**) and invoke **`/cortheon`** directly inside **OMP (`oh-my-pi`)**, **Pi (`pi-coding-agent`)**, **OpenCode**, **Claude Code**, **Cursor**, or **Codex**.
+
+## 30-Second Quick Start → Use `/cortheon`
+
+```sh
+# 1. Clone & install Cortheon
+git clone https://github.com/ashhart/Cortheon.git && cd Cortheon
+uv venv .venv && uv pip install --python .venv/bin/python -e .
+
+# 2. Install `/cortheon` across OMP, Pi, OpenCode, Claude Code, Cursor & Codex
+.venv/bin/cortheon install-commands --harness all
+
+# 3. Start the proxy against your local model (skip if running TensorFold native --cortheon --cortheon-exec)
+.venv/bin/cortheon proxy --upstream http://127.0.0.1:8080/v1 --port 18652
+```
+
+Then open your coding harness and type **`/cortheon`** to get going:
+
+```text
+# Verify hard math, algorithms, or systems sizing via B=4 execution consensus:
+/cortheon 7 servers sit in a ring (0..6); start at 1 (visited); move +1 mod 7 w.p. 2/3 or -1 w.p. 1/3, except at 0 teleport uniformly to 0..6. Exact rational expected ticks to visit all 7?
+
+# Verify invariants first via B=4 consensus, then hand off straight to the agent to build & test (OMP / Pi):
+/cortheon build Build ssi_kv.py implementing true MVCC Serializable Snapshot Isolation with SIREAD locks and a 1,000-schedule serializability fuzzer.
+```
+
+*(Set `export CORTHEON_URL=http://127.0.0.1:18652/v1` — or `:18651/v1` for TensorFold native — if your server runs on another host/port.)*
 
 ---
 
