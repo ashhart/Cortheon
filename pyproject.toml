@@ -1,72 +1,32 @@
 [build-system]
-# Build-only compression; the runtime remains dependency-free.
-requires = ["setuptools>=77", "zopfli>=0.4.3"]
-# The in-tree backend loads the root-level build support package under PEP 517.
-build-backend = "build_backend"
-backend-path = ["."]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortheon"
-version = "0.1.0"
-description = "A lightweight reasoning runtime for local models."
+version = "2.0.0"
+description = "Unified consensus and mechanical verification runtime that elevates frozen local models to frontier performance with zero weight changes."
+readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
-keywords = ["agents", "mcp", "reasoning", "verification", "local-models"]
-authors = [
-  { name = "Cortheon contributors" }
+dependencies = [
+    "httpx>=0.27",
+    "sympy>=1.13",
+    "z3-solver>=4.13",
+    "numpy>=1.26",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pytest>=8.0",
 ]
-classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3.14",
-  "Topic :: Software Development :: Libraries :: Application Frameworks",
-]
-dependencies = []
 
 [project.optional-dependencies]
-# Package tests build artifacts without isolation.
-test = ["build>=1.2.2", "pytest>=8", "setuptools>=77", "zopfli>=0.4.3"]
+test = ["pytest>=8.0"]
 
 [project.scripts]
-cortheon-mcp = "cortheon.cognitive_mcp:main"
-cortheon = "cortheon.cognitive_cli:main"
+cortheon = "cortheon.cli:main"
+flash-forge = "flash_forge.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+include = ["cortheon*", "flash_forge*"]
 
 [tool.setuptools.package-data]
-cortheon = [
-  "opencode_plugin.js",
-  "opencode_core/*.js",
-  "pi_extension.ts",
-  "pi_core/*.ts",
-  "codex_plugins/cortheon/.mcp.json",
-  "codex_plugins/cortheon/.codex-plugin/plugin.json",
-  "codex_plugins/cortheon/hooks/hooks.json",
-  # Codex copies this complete hook package into its plugin cache.
-  "codex_plugins/cortheon/hooks/*.py",
-  "codex_plugins/cortheon/skills/cortheon-runtime/SKILL.md",
-  "omp_skill/cortheon-runtime/SKILL.md",
-]
-
-[tool.pytest.ini_options]
-norecursedirs = ["tests/fixtures"]
-# Package tests import the in-tree backend from the repository root.
-pythonpath = ["src", "."]
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "RUF", "SIM", "UP"]
-
-[tool.pyright]
-include = ["src"]
-extraPaths = ["src", "src/cortheon/codex_plugins/cortheon/hooks"]
-pythonVersion = "3.11"
-typeCheckingMode = "basic"
+flash_forge = ["_skill/*.md", "_skill/*.json", "_skill/cards/*.md"]
