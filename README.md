@@ -40,6 +40,7 @@ Or verify invariants first and immediately build + test in one flow (OMP & Pi):
 /cortheon build Implement an MVCC Serializable Snapshot Isolation (SSI) KV store with SIREAD locks, 3-tx Read-Only Anomaly detection, and a 1,000-schedule serializability fuzzer.
 ```
 
+- Want **8 copy-paste "local-model-killer" prompts** (with mechanically verified exact ground truths) to test Vanilla vs `/cortheon` live? See **[`CHALLENGE_PROMPTS.md`](CHALLENGE_PROMPTS.md)**.
 - Want a **60-second live Vanilla vs Cortheon duel** on your local model? Run `.venv/bin/cortheon showdown --url http://127.0.0.1:8080/v1`.
 - Need copy-paste provider configs for **OMP**, **Pi**, **OpenCode**, **Claude Code**, **Cursor**, **TensorFold Native**, and the split-pane `tmux` cockpit? See **[`GETTING_STARTED.md`](GETTING_STARTED.md)**.
 
@@ -172,6 +173,7 @@ asyncio.run(main())
 ## Core Modules & Reproducible Benchmarks
 
 - [`GETTING_STARTED.md`](GETTING_STARTED.md) — Quick Start guide for **OMP (`oh-my-pi`)**, **Pi**, **OpenCode**, **Claude Code**, **Cursor**, and **TensorFold Native** (`--cortheon --cortheon-exec --parallel 8`)
+- [`CHALLENGE_PROMPTS.md`](CHALLENGE_PROMPTS.md) — 8 copy-paste "local-model-killer" prompts with mechanically verified ground truths (25-digit Markov, automaton combinatorics, Z3 optimization, SSI boss fight)
 - [`BENCHMARKS.md`](BENCHMARKS.md) & [`results/`](results/) — Complete benchmark ledger + 23 per-problem result JSONs across 3 frozen local model families
 - [`cortheon/`](cortheon/__init__.py) — Clean public SDK & `cortheon` CLI entrypoint (`Cortheon`, `CortheonConfig`, `CortheonResult`)
 - [`flash_forge/code_forge.py`](flash_forge/code_forge.py) — `CodeForge v5` Behavioral Differential Consensus + Starter-API Fidelity + Native `stdin_mode` + Helper-Aware Strict `B=2` Shield

@@ -363,3 +363,5 @@ Try a problem no frozen local model can compute in its head — an asymmetric 7-
 ```
 
 You should see Wave-1 PAL scripts lock exact consensus (`2630600114653531854763423/183488738276457059168800`) and cancel remaining straggler streams automatically!
+
+Want 7 more copy-pasteable prompts that break single-pass local models (with verified ground truths)? See **[`CHALLENGE_PROMPTS.md`](CHALLENGE_PROMPTS.md)**.
