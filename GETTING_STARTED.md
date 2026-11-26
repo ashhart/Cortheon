@@ -57,7 +57,27 @@ Virtual model IDs exposed at `http://127.0.0.1:18652/v1`:
 
 ---
 
-## Step 2 — Connect Your Coding Agent
+## Step 2 — Install `/cortheon` Across Every Harness (One Command)
+
+Install the native **`/cortheon`** slash command across **OMP (`oh-my-pi`)**, **Pi (`pi-coding-agent`)**, **OpenCode**, **Claude Code**, **Cursor**, and **Codex** in one command:
+
+```sh
+# Install /cortheon globally across ALL supported harnesses:
+.venv/bin/cortheon install-commands --harness all
+
+# Or target a specific harness, OMP profile, or project directory:
+.venv/bin/cortheon install-commands --harness omp --profile cortheon
+.venv/bin/cortheon install-commands --harness opencode,claude,cursor --project /path/to/repo
+```
+
+What you get in every harness:
+- **OMP & Pi (`cortheon.ts` extension):** Native **`/cortheon <question>`** with a live inline TUI progress widget, **`/cortheon build <task>`** (verifies via `B=4` consensus first, then hands the verified ground truth straight to the agent to implement & test), plus a first-class **`cortheon_verify`** tool!
+- **OpenCode (`.opencode/command/cortheon.md`), Claude Code (`.claude/commands/cortheon.md`), Cursor (`.cursor/commands/cortheon.md`):** Native **`/cortheon <question or task>`** slash command!
+- **Codex / Generic Agents (`.agents/skills/cortheon/SKILL.md`):** Full Cortheon v2 skill pack + phase micro-cards!
+
+---
+
+## Step 3 — Connect Your Coding Agent Provider
 
 ### 1. OMP (`oh-my-pi`) — Isolated Profile + `Ctrl+P` Cortheon Toggle + Live `tmux` Split
 
@@ -214,10 +234,10 @@ Add Cortheon as a custom OpenAI-compatible provider in **`~/.pi/agent/models.jso
 }
 ```
 
-Then launch Pi and install the Cortheon skill pack so Pi knows when to invoke `cortheon solve` / `cortheon dev`:
+Then launch Pi and install the `/cortheon` slash command + `cortheon_verify` tool:
 
 ```sh
-.venv/bin/cortheon install-skill
+.venv/bin/cortheon install-commands --harness pi
 pi --model cortheon/cortheon
 ```
 
@@ -282,10 +302,10 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:18652 ANTHROPIC_API_KEY=local \
     -d '{"model":"cortheon","max_tokens":4096,"messages":[{"role":"user","content":"Find all integers n such that n^2 + 19n + 92 is a perfect square."}]}'
 ```
 
-For full autonomous tool-using coding inside Claude Code or Codex, install the Cortheon skill so your agent delegates hard verification/architecture/algorithmic subproblems to `cortheon solve` / `cortheon dev`:
+For full autonomous tool-using coding inside Claude Code or Codex, install the `/cortheon` slash command & skill so you can type `/cortheon <prompt>` anytime:
 
 ```sh
-.venv/bin/cortheon install-skill
+.venv/bin/cortheon install-commands --harness claude,codex
 ```
 
 ---

@@ -671,6 +671,35 @@ def test_proxy_tool_turn_passthrough(monkeypatch):
     assert forwarded[0]["json"]["model"] == "glm-5.3-flash-tfq3"
 
 
+def test_install_commands_all_harnesses(tmp_path: Path):
+    from flash_forge.integrations import ALL_HARNESSES, install_commands
+
+    home = tmp_path / "home"
+    proj = tmp_path / "repo"
+    home.mkdir()
+    proj.mkdir()
+
+    global_paths = install_commands(ALL_HARNESSES, home_dir=home, omp_profile="cortheon")
+    assert len(global_paths) == len(ALL_HARNESSES)
+    assert (home / ".omp/profiles/cortheon/agent/extensions/cortheon.ts").is_file()
+    assert (home / ".pi/agent/extensions/cortheon.ts").is_file()
+    assert (home / ".config/opencode/command/cortheon.md").is_file()
+    assert (home / ".claude/commands/cortheon.md").is_file()
+    assert (home / ".cursor/commands/cortheon.md").is_file()
+    assert (home / ".agents/skills/cortheon/SKILL.md").is_file()
+
+    # Project-local install works across all harnesses too
+    proj_paths = install_commands(ALL_HARNESSES, home_dir=home, project_dir=proj)
+    assert len(proj_paths) == len(ALL_HARNESSES)
+    assert (proj / ".omp/extensions/cortheon.ts").is_file()
+    assert (proj / ".pi/extensions/cortheon.ts").is_file()
+    assert (proj / ".opencode/command/cortheon.md").is_file()
+    assert (proj / ".claude/commands/cortheon.md").is_file()
+    assert (proj / ".cursor/commands/cortheon.md").is_file()
+    assert (proj / ".agents/skills/cortheon/SKILL.md").is_file()
+
+
+
 
 
 

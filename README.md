@@ -114,8 +114,8 @@ uv pip install --python .venv/bin/python -e .
   --upstream http://127.0.0.1:8080/v1 \
   --port 18652
 
-# Point Claude Code / Anthropic SDK directly at local Cortheon:
-# ANTHROPIC_BASE_URL=http://127.0.0.1:18652 ANTHROPIC_API_KEY=local claude
+# 6. Install the `/cortheon` slash command across OMP, Pi, OpenCode, Claude Code, Cursor & Codex:
+.venv/bin/cortheon install-commands --harness all
 ```
 
 ### Python SDK

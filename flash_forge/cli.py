@@ -13,6 +13,7 @@ import uvicorn
 from .code_forge import CodeForgeTrace
 from .dev_agent import run_dev_forge
 from .engine import FlashForge, ForgeConfig
+from .integrations import ALL_HARNESSES, install_commands
 from .memory import EpisodicMemory
 from .proxy import create_app
 from .reason_forge import ReasonForgeTrace
@@ -75,7 +76,29 @@ def main() -> None:
     p_mem = sub.add_parser("memory", help="Inspect episodic reflexion memory")
     p_mem.add_argument("--limit", type=int, default=20)
 
+    p_inst = sub.add_parser(
+        "install-commands",
+        help="Install /cortheon slash command & tool across OMP, Pi, OpenCode, Claude Code, Cursor, and Codex",
+    )
+    p_inst.add_argument(
+        "--harness",
+        default="all",
+        help=f"Comma-separated list or 'all' ({', '.join(ALL_HARNESSES)})",
+    )
+    p_inst.add_argument("--project", default=None, help="Install project-locally into this directory instead of $HOME")
+    p_inst.add_argument("--profile", default=None, help="Optional OMP profile name (e.g. cortheon)")
+    p_inst.add_argument("--url", default="http://127.0.0.1:18651/v1", help="Default Cortheon endpoint URL for markdown commands")
+
     args = parser.parse_args()
+
+    if args.cmd == "install-commands":
+        targets = ALL_HARNESSES if args.harness.strip().lower() == "all" else [x.strip() for x in args.harness.split(",") if x.strip()]
+        proj_path = Path(args.project) if args.project else None
+        written = install_commands(targets, project_dir=proj_path, omp_profile=args.profile, default_url=args.url)
+        print(f"[Cortheon] Installed /cortheon across {len(written)} target(s):")
+        for p in written:
+            print(f"  - {p}")
+        return
 
     if args.cmd == "proxy":
         app = create_app(upstream_url=args.upstream, referee_url=args.referee_url, num_streams=args.streams)

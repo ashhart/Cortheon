@@ -29,4 +29,4 @@ flash-forge = "flash_forge.cli:main"
 include = ["cortheon*", "flash_forge*"]
 
 [tool.setuptools.package-data]
-flash_forge = ["_skill/*.md", "_skill/*.json", "_skill/cards/*.md"]
+flash_forge = ["_skill/*.md", "_skill/*.json", "_skill/cards/*.md", "_integrations/*"]
