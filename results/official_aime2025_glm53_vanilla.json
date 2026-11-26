@@ -1,0 +1,191 @@
+{
+  "dataset": "MathArena/aime_2025",
+  "model": "glm-5.3-flash-tfq3",
+  "arm": "vanilla",
+  "passed": 15,
+  "total": 30,
+  "pass_rate_pct": 50.0,
+  "avg_wall_s": 125.47,
+  "results": [
+    {
+      "pid": "AIME25_01",
+      "passed": true,
+      "wall_s": 16.83,
+      "detail": "OK (70)"
+    },
+    {
+      "pid": "AIME25_02",
+      "passed": false,
+      "wall_s": 153.58,
+      "detail": "WRONG: got='720' expected='588'"
+    },
+    {
+      "pid": "AIME25_03",
+      "passed": true,
+      "wall_s": 28.25,
+      "detail": "OK (16)"
+    },
+    {
+      "pid": "AIME25_04",
+      "passed": true,
+      "wall_s": 34.8,
+      "detail": "OK (117)"
+    },
+    {
+      "pid": "AIME25_05",
+      "passed": true,
+      "wall_s": 71.68,
+      "detail": "OK (279)"
+    },
+    {
+      "pid": "AIME25_06",
+      "passed": true,
+      "wall_s": 47.89,
+      "detail": "OK (504)"
+    },
+    {
+      "pid": "AIME25_07",
+      "passed": false,
+      "wall_s": 61.21,
+      "detail": "WRONG: got='12' expected='821'"
+    },
+    {
+      "pid": "AIME25_08",
+      "passed": true,
+      "wall_s": 70.77,
+      "detail": "OK (77)"
+    },
+    {
+      "pid": "AIME25_09",
+      "passed": false,
+      "wall_s": 360.0,
+      "detail": "empty (expected 62)"
+    },
+    {
+      "pid": "AIME25_10",
+      "passed": false,
+      "wall_s": 360.0,
+      "detail": "empty (expected 81)"
+    },
+    {
+      "pid": "AIME25_11",
+      "passed": false,
+      "wall_s": 360.0,
+      "detail": "empty (expected 259)"
+    },
+    {
+      "pid": "AIME25_12",
+      "passed": false,
+      "wall_s": 117.02,
+      "detail": "WRONG: got='509' expected='510'"
+    },
+    {
+      "pid": "AIME25_13",
+      "passed": false,
+      "wall_s": 119.34,
+      "detail": "WRONG: got='322' expected='204'"
+    },
+    {
+      "pid": "AIME25_14",
+      "passed": false,
+      "wall_s": 143.86,
+      "detail": "WRONG: got='200' expected='60'"
+    },
+    {
+      "pid": "AIME25_15",
+      "passed": true,
+      "wall_s": 47.54,
+      "detail": "OK (735)"
+    },
+    {
+      "pid": "AIME25_16",
+      "passed": true,
+      "wall_s": 46.93,
+      "detail": "OK (468)"
+    },
+    {
+      "pid": "AIME25_17",
+      "passed": true,
+      "wall_s": 29.43,
+      "detail": "OK (49)"
+    },
+    {
+      "pid": "AIME25_18",
+      "passed": false,
+      "wall_s": 74.54,
+      "detail": "WRONG: got='18' expected='82'"
+    },
+    {
+      "pid": "AIME25_19",
+      "passed": true,
+      "wall_s": 26.83,
+      "detail": "OK (106)"
+    },
+    {
+      "pid": "AIME25_20",
+      "passed": false,
+      "wall_s": 121.19,
+      "detail": "WRONG: got='120' expected='336'"
+    },
+    {
+      "pid": "AIME25_21",
+      "passed": true,
+      "wall_s": 214.56,
+      "detail": "OK (293)"
+    },
+    {
+      "pid": "AIME25_22",
+      "passed": false,
+      "wall_s": 63.43,
+      "detail": "WRONG: got='75' expected='237'"
+    },
+    {
+      "pid": "AIME25_23",
+      "passed": true,
+      "wall_s": 96.18,
+      "detail": "OK (610)"
+    },
+    {
+      "pid": "AIME25_24",
+      "passed": false,
+      "wall_s": 31.36,
+      "detail": "WRONG: got='66' expected='149'"
+    },
+    {
+      "pid": "AIME25_25",
+      "passed": false,
+      "wall_s": 100.9,
+      "detail": "WRONG: got='685' expected='907'"
+    },
+    {
+      "pid": "AIME25_26",
+      "passed": true,
+      "wall_s": 136.01,
+      "detail": "OK (113)"
+    },
+    {
+      "pid": "AIME25_27",
+      "passed": true,
+      "wall_s": 189.95,
+      "detail": "OK (19)"
+    },
+    {
+      "pid": "AIME25_28",
+      "passed": false,
+      "wall_s": 312.99,
+      "detail": "WRONG: got=\"Hmm, this seems intractable directly for 2025 iterations... unless there's mod-1000 periodicity structure. Since we only need mod 1000 of m + n, and denominators q_k are powers times 6^{2^{k-1}}, we can compu"
+    },
+    {
+      "pid": "AIME25_29",
+      "passed": false,
+      "wall_s": 143.34,
+      "detail": "WRONG: got='378' expected='104'"
+    },
+    {
+      "pid": "AIME25_30",
+      "passed": true,
+      "wall_s": 183.7,
+      "detail": "OK (240)"
+    }
+  ]
+}

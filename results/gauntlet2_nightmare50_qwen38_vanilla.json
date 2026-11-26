@@ -1,0 +1,411 @@
+{
+  "dataset": "gauntlet2_nightmare_50",
+  "model": "qwen3.8-flash-next-tfq3",
+  "arm": "vanilla",
+  "passed": 19,
+  "total": 50,
+  "pass_rate_pct": 38.0,
+  "avg_wall_s": 77.27,
+  "results": [
+    {
+      "pid": "H01_noncoprime_crt_huge",
+      "passed": false,
+      "wall_s": 55.97,
+      "track": "math_nm",
+      "title": "Generalized Non-Coprime CRT Smallest Solution > 10^12",
+      "detail": "WRONG: got='1000000000631' expected='1000000000523'"
+    },
+    {
+      "pid": "H02_lucas_binom_10e18",
+      "passed": false,
+      "wall_s": 62.67,
+      "track": "math_nm",
+      "title": "Lucas Theorem Binomial Coefficient at N ~ 7.5*10^17 (mod 1000003)",
+      "detail": "WRONG: got='0' expected='739078'"
+    },
+    {
+      "pid": "H03_cond_markov_hitting_time",
+      "passed": false,
+      "wall_s": 63.71,
+      "track": "math_nm",
+      "title": "Conditional Expected Hitting Time Given Absorption at WIN (Doob h-Transform)",
+      "detail": "WRONG: got='152/335' expected='1560/133'"
+    },
+    {
+      "pid": "H04_matrix_exp_forbidden_strings",
+      "passed": false,
+      "wall_s": 68.62,
+      "track": "math_nm",
+      "title": "Length-10^15 Constrained Strings Automaton Matrix Exp (mod 10^9+7)",
+      "detail": "WRONG: got='168139424' expected='959237563'"
+    },
+    {
+      "pid": "H05_pell_d61_fundamental",
+      "passed": true,
+      "wall_s": 60.6,
+      "track": "math_nm",
+      "title": "Fermat's Pell Equation x^2 - 61*y^2 = 1 Minimal Positive x",
+      "detail": "OK (1766319049)"
+    },
+    {
+      "pid": "H06_mobius_squarefree_10e9",
+      "passed": false,
+      "wall_s": 56.01,
+      "track": "math_nm",
+      "title": "Exact Count of Squarefree Integers in [1, 10^9] via Mobius Function",
+      "detail": "WRONG: got='607926946' expected='607927124'"
+    },
+    {
+      "pid": "H07_cubic_roots_symmetric_poly",
+      "passed": true,
+      "wall_s": 77.81,
+      "track": "math_nm",
+      "title": "Exact Integer Symmetric Polynomial of Cubic Roots (9th Powers + Quartic Diffs)",
+      "detail": "OK (1074565)"
+    },
+    {
+      "pid": "H08_seven_card_full_house_prob",
+      "passed": false,
+      "wall_s": 64.09,
+      "track": "math_nm",
+      "title": "Exact 7-Card Poker Full-House Multiplicity Probability",
+      "detail": "WRONG: got='42/1955' expected='726/27965'"
+    },
+    {
+      "pid": "H09_kirchhoff_multigraph_trees",
+      "passed": false,
+      "wall_s": 50.11,
+      "track": "math_nm",
+      "title": "Kirchhoff Matrix-Tree Exact Spanning Trees on 9-Vertex Multigraph",
+      "detail": "WRONG: got='197947' expected='209314'"
+    },
+    {
+      "pid": "H10_euclidean_floor_sum_10e12",
+      "passed": false,
+      "wall_s": 60.9,
+      "track": "math_nm",
+      "title": "Exact Euclidean Floor Sum up to N = 10^12 (mod 10^9+7)",
+      "detail": "WRONG: got='424742132' expected='575143907'"
+    },
+    {
+      "pid": "H11_coprime_taxicab_diophantine",
+      "passed": false,
+      "wall_s": 92.89,
+      "track": "logic_nm",
+      "title": "Constrained Coprime Taxicab Diophantine Minimum Sum",
+      "detail": "WRONG: got='49' expected='42'"
+    },
+    {
+      "pid": "H12_blocked_weighted_8queens",
+      "passed": false,
+      "wall_s": 67.19,
+      "track": "logic_nm",
+      "title": "Maximum-Weight 8-Queens Placement with Blocked Squares",
+      "detail": "WRONG: got='124' expected='102'"
+    },
+    {
+      "pid": "H13_rcpsp_capacity6_makespan",
+      "passed": false,
+      "wall_s": 180.0,
+      "track": "logic_nm",
+      "title": "Resource-Constrained Project Scheduling (RCPSP, 8 Jobs, Capacity 6)",
+      "detail": "empty (expected 20)"
+    },
+    {
+      "pid": "H14_min_cost_max_flow_15",
+      "passed": false,
+      "wall_s": 54.55,
+      "track": "logic_nm",
+      "title": "Exact Minimum-Cost Flow (15 Units on 8-Node Directed Network)",
+      "detail": "WRONG: got='161' expected='156'"
+    },
+    {
+      "pid": "H15_zero_sum_4x4_mixed_value",
+      "passed": false,
+      "wall_s": 57.76,
+      "track": "logic_nm",
+      "title": "Exact Rational Minimax Value of 4x4 Zero-Sum Matrix Game (No Saddle Point)",
+      "detail": "WRONG: got='33/31' expected='159/178'"
+    },
+    {
+      "pid": "H16_min_cost_4coloring_12v",
+      "passed": false,
+      "wall_s": 51.07,
+      "track": "logic_nm",
+      "title": "Exact Min-Cost Proper 4-Coloring of 12-Vertex Chorded Graph",
+      "detail": "WRONG: got='52' expected='54'"
+    },
+    {
+      "pid": "H17_six_house_zebra_deduction",
+      "passed": true,
+      "wall_s": 73.96,
+      "track": "logic_nm",
+      "title": "6-House Unique Multi-Attribute Zebra Logic CSP",
+      "detail": "OK (Bob,Milk)"
+    },
+    {
+      "pid": "H18_min_weighted_feedback_arc_set",
+      "passed": false,
+      "wall_s": 50.19,
+      "track": "logic_nm",
+      "title": "NP-Hard Exact Minimum Weighted Feedback Arc Set (9 Vertices, 20 Edges)",
+      "detail": "WRONG: got='23' expected='27'"
+    },
+    {
+      "pid": "H19_weighted_4jug_dijkstra",
+      "passed": true,
+      "wall_s": 53.63,
+      "track": "logic_nm",
+      "title": "4-Jug Minimum Total Liters Poured (Dijkstra vs BFS Trap)",
+      "detail": "OK (15)"
+    },
+    {
+      "pid": "H20_product_automaton_len35_mod7",
+      "passed": false,
+      "wall_s": 71.16,
+      "track": "logic_nm",
+      "title": "Length-35 Binary Strings Containing '101', Avoiding '111', Divisible by 7",
+      "detail": "WRONG: got='16666666' expected='293513061'"
+    },
+    {
+      "pid": "H41_python_descriptor_generator_trap",
+      "passed": true,
+      "wall_s": 17.65,
+      "track": "sys_sec_nm",
+      "title": "Python Data vs Non-Data Descriptor + Generator send()/throw()/finally Trace",
+      "detail": "OK (DD,inst_y,init,mid,after,got:7|caught|fin)"
+    },
+    {
+      "pid": "H42_ieee754_ulp_subnormal_bankers",
+      "passed": true,
+      "wall_s": 59.29,
+      "track": "sys_sec_nm",
+      "title": "IEEE-754 Binary64 ULP Distance + Subnormal Bit Pattern + Bankers Rounding",
+      "detail": "OK (5174)"
+    },
+    {
+      "pid": "H43_sqlite_recursive_cte_windows",
+      "passed": false,
+      "wall_s": 51.55,
+      "track": "sys_sec_nm",
+      "title": "SQLite Recursive CTE + Window LAG/Running SUM with NULLs",
+      "detail": "WRONG: got='5659' expected='5667'"
+    },
+    {
+      "pid": "H44_16bit_isa_carry_loop_trace",
+      "passed": false,
+      "wall_s": 54.9,
+      "track": "sys_sec_nm",
+      "title": "20-Iteration 16-Bit Register/Carry/ROR Mini-ISA Exact Hex State",
+      "detail": "WRONG: got='27e5,013d' expected='0696,ef93'"
+    },
+    {
+      "pid": "H45_c11_union_endian_promotion_trap",
+      "passed": true,
+      "wall_s": 43.16,
+      "track": "sys_sec_nm",
+      "title": "C11 Little-Endian Union + Struct Layout + Integer Promotion Trap",
+      "detail": "OK (32,16,a978,1,0)"
+    },
+    {
+      "pid": "H21_dpll_sat_solver",
+      "passed": false,
+      "wall_s": 156.6,
+      "track": "algo_nm",
+      "title": "DPLL SAT Solver with Unit Propagation & Pure Literal Elimination",
+      "detail": "FAIL 1/2 | test_edges_pigeonhole_and_planted_50var: UnboundLocalError: cannot access local variable 'trail_ptr' where it is not associated with a value"
+    },
+    {
+      "pid": "H22_canonical_huffman_codec",
+      "passed": false,
+      "wall_s": 140.14,
+      "track": "algo_nm",
+      "title": "Self-Contained Canonical Huffman Binary Codec with Strict Framing & Integrity",
+      "detail": "FAIL 1/2 | test_roundtrip_compression_and_corruption: ValueError: corrupted blob: no symbols but non-zero length"
+    },
+    {
+      "pid": "H23_expr_compiler_and_stack_vm",
+      "passed": false,
+      "wall_s": 131.55,
+      "track": "algo_nm",
+      "title": "Zero-Eval Expression Lexer, Parser & Evaluator (Chained Comparisons, Ternary, Short-Circuit)",
+      "detail": "FAIL 1/2 | test_precedence_short_circuit_chained_and_errors: UnboundLocalError: cannot access local variable 'pos' where it is not associated with a value"
+    },
+    {
+      "pid": "H24_persistent_segment_tree",
+      "passed": true,
+      "wall_s": 75.09,
+      "track": "algo_nm",
+      "title": "O(log N) Persistent Segment Tree (Range Sum + Range Min Across 5000 Versions)",
+      "detail": "PASS 1/1 (14ms)"
+    },
+    {
+      "pid": "H25_exact_min_edit_diff_patch",
+      "passed": true,
+      "wall_s": 86.89,
+      "track": "algo_nm",
+      "title": "Exact Minimum-Edit-Distance Line Diff, Apply & Reverse Patch Engine",
+      "detail": "PASS 2/2 (1ms)"
+    },
+    {
+      "pid": "H26_exact_sutherland_hodgman_area",
+      "passed": false,
+      "wall_s": 125.68,
+      "track": "algo_nm",
+      "title": "Exact Rational Concave-x-Convex Polygon Clipping (2*Area as Fraction)",
+      "detail": "FAIL 0/1 | test_concave_cw_ccw_and_exact_rationals: AssertionError"
+    },
+    {
+      "pid": "H27_raft_log_state_machine",
+      "passed": false,
+      "wall_s": 82.66,
+      "track": "algo_nm",
+      "title": "Raft Consensus Log Replication & Election State Machine (Figure-8 Safe)",
+      "detail": "FAIL 0/1 | test_raft_invariants_stale_rpc_and_figure8: AssertionError"
+    },
+    {
+      "pid": "H28_lsm_store_tombstones_snapshots",
+      "passed": true,
+      "wall_s": 90.16,
+      "track": "algo_nm",
+      "title": "Multi-Level LSM-Tree KV Store (Memtable Flush, Tombstone Shadowing, Compaction, Snapshots)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "H29_hungarian_min_weight_matching",
+      "passed": true,
+      "wall_s": 73.24,
+      "track": "algo_nm",
+      "title": "O(N^3) Exact Hungarian Min-Weight Bipartite Matching (Rectangular + Negative Costs)",
+      "detail": "PASS 2/2 (5ms)"
+    },
+    {
+      "pid": "H30_unix_cron_next_trigger",
+      "passed": false,
+      "wall_s": 122.18,
+      "track": "algo_nm",
+      "title": "Strict Standard UNIX 5-Field Cron Next-Run Calculator (OR-Semantics, Leap Years, Step Ranges)",
+      "detail": "FAIL 0/1 | test_cron_unix_or_leap_year_and_validation: AssertionError"
+    },
+    {
+      "pid": "H31_debug_mvcc_snapshot_isolation",
+      "passed": false,
+      "wall_s": 73.48,
+      "track": "debug_nm",
+      "title": "Fix 5 Interlocking Bugs in MVCC Snapshot-Isolation KV Store",
+      "detail": "FAIL 0/1 | test_mvcc_snapshot_isolation_and_first_committer_wins: AssertionError"
+    },
+    {
+      "pid": "H32_debug_avl_balanced_tree",
+      "passed": false,
+      "wall_s": 87.11,
+      "track": "debug_nm",
+      "title": "Fix 5 Bugs in AVL Balanced BST (Double Rotations, Delete Rebalance, Range Query)",
+      "detail": "FAIL 0/1 | test_avl_differential_fuzz_and_balance: AssertionError"
+    },
+    {
+      "pid": "H33_debug_aho_corasick",
+      "passed": false,
+      "wall_s": 72.95,
+      "track": "debug_nm",
+      "title": "Fix 5 Bugs in Aho-Corasick Multi-Pattern Automaton (Dictionary Suffix Links + Overlaps)",
+      "detail": "FAIL 0/1 | test_aho_overlaps_suffix_links_dedup_and_perf: AssertionError"
+    },
+    {
+      "pid": "H34_debug_rfc3629_utf8_stream",
+      "passed": true,
+      "wall_s": 69.11,
+      "track": "debug_nm",
+      "title": "Fix Strict RFC-3629 Streaming UTF-8 Decoder (Overlongs, Surrogates, Split Bytes)",
+      "detail": "PASS 2/2 (0ms)"
+    },
+    {
+      "pid": "H35_debug_bencode_strict_codec",
+      "passed": false,
+      "wall_s": 90.43,
+      "track": "debug_nm",
+      "title": "Fix Strict Canonical BitTorrent Bencode Encoder & Decoder",
+      "detail": "FAIL 0/1 | test_bencode_canonical_and_strict_rejections: AssertionError"
+    },
+    {
+      "pid": "H36_debug_tracing_gc_finalizers",
+      "passed": true,
+      "wall_s": 76.15,
+      "track": "debug_nm",
+      "title": "Fix Tracing Mark-and-Sweep GC (Cyclic Garbage, WeakRefs, Finalizer Resurrection)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "H37_debug_circuit_breaker_fsm",
+      "passed": true,
+      "wall_s": 80.9,
+      "track": "debug_nm",
+      "title": "Fix Half-Open Circuit Breaker FSM (Sliding Window, Probe Concurrency Cap, Cooldown)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "H38_debug_tarjan_bridges_art_points",
+      "passed": false,
+      "wall_s": 76.79,
+      "track": "debug_nm",
+      "title": "Fix Iterative Tarjan Bridges & Articulation Points (Multi-Edges, Self-Loops, N=4000)",
+      "detail": "FAIL 0/1 | test_multiedges_root_disconnected_and_deep_chain: AssertionError"
+    },
+    {
+      "pid": "H39_debug_decimal_orderbook",
+      "passed": true,
+      "wall_s": 87.57,
+      "track": "debug_nm",
+      "title": "Fix Price-Time Priority Limit Order Book (Exact Decimal, Partial Fills, Self-Trade Prevention)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "H40_debug_event_loop_scheduler",
+      "passed": false,
+      "wall_s": 52.75,
+      "track": "debug_nm",
+      "title": "Fix Deterministic Virtual-Clock Event Loop (Microtasks, FIFO Ties, Cancellation)",
+      "detail": "FAIL 0/1 | test_microtasks_fifo_ties_nested_and_cancelled_clock_stop: AssertionError"
+    },
+    {
+      "pid": "H46_sec_jwt_hs256_hardened",
+      "passed": true,
+      "wall_s": 82.92,
+      "track": "sys_sec_nm",
+      "title": "Hardened RFC-7519 HS256 JWT Signer/Verifier (Blocks alg=none, Confusion, Skew, Replay)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "H47_sec_ssrf_ip_guard",
+      "passed": true,
+      "wall_s": 110.63,
+      "track": "sys_sec_nm",
+      "title": "SSRF URL & DNS-Rebinding Guard (IPv4-Mapped IPv6, CGNAT, Hex/Int IP, Multi-A Rebind)",
+      "detail": "PASS 1/1 (1ms)"
+    },
+    {
+      "pid": "H48_sec_rfc6962_merkle_tree",
+      "passed": false,
+      "wall_s": 77.42,
+      "track": "sys_sec_nm",
+      "title": "RFC-6962 Domain-Separated Merkle Tree & Audit Proof (Second-Preimage Resistant)",
+      "detail": "FAIL 0/1 | test_rfc6962_roots_proofs_and_second_preimage_defense: AssertionError"
+    },
+    {
+      "pid": "H49_sec_rfc6238_totp_replay",
+      "passed": true,
+      "wall_s": 67.35,
+      "track": "sys_sec_nm",
+      "title": "RFC-6238 TOTP Authenticator with Constant-Time Verify, Base32 & Anti-Replay Cache",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "H50_sec_sql_ast_parameterizer",
+      "passed": true,
+      "wall_s": 74.43,
+      "track": "sys_sec_nm",
+      "title": "SQLi-Proof Schema-Allowlisted Parameterized Query Builder (Live SQLite Verified)",
+      "detail": "PASS 1/1 (0ms)"
+    }
+  ]
+}

@@ -1,0 +1,611 @@
+{
+  "dataset": "bigcode/bigcodebench-hard v0.1.4 (complete)",
+  "model": "deepseek-v4.1-flash-1017",
+  "arm": "cortheon",
+  "passed": 11,
+  "total": 30,
+  "pass_rate_pct": 36.7,
+  "avg_wall_s": 118.24,
+  "results": [
+    {
+      "pid": "BigCodeBench_13",
+      "passed": true,
+      "wall_s": 100.2,
+      "detail": "PASS (8358ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 14126,
+        "completion_tokens": 10484,
+        "reasoning_tokens": 7218,
+        "cached_tokens": 1024
+      }
+    },
+    {
+      "pid": "BigCodeBench_15",
+      "passed": false,
+      "wall_s": 147.05,
+      "detail": "FAIL: FAILED (failures=1)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": true,
+        "redteam_kills": 1
+      },
+      "stats": {
+        "calls": 17,
+        "prompt_tokens": 15564,
+        "completion_tokens": 15136,
+        "reasoning_tokens": 12030,
+        "cached_tokens": 2048
+      }
+    },
+    {
+      "pid": "BigCodeBench_19",
+      "passed": true,
+      "wall_s": 164.19,
+      "detail": "PASS (39ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_clean_rewrite",
+        "wave2": true,
+        "redteam_kills": 2
+      },
+      "stats": {
+        "calls": 29,
+        "prompt_tokens": 23348,
+        "completion_tokens": 17281,
+        "reasoning_tokens": 13720,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_147",
+      "passed": false,
+      "wall_s": 195.36,
+      "detail": "FAIL: FAILED (failures=2)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": true,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 27,
+        "prompt_tokens": 21716,
+        "completion_tokens": 21097,
+        "reasoning_tokens": 17387,
+        "cached_tokens": 2048
+      }
+    },
+    {
+      "pid": "BigCodeBench_310",
+      "passed": true,
+      "wall_s": 85.39,
+      "detail": "PASS (46ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 12,
+        "prompt_tokens": 9244,
+        "completion_tokens": 9081,
+        "reasoning_tokens": 6218,
+        "cached_tokens": 1024
+      }
+    },
+    {
+      "pid": "BigCodeBench_324",
+      "passed": false,
+      "wall_s": 90.18,
+      "detail": "FAIL: FAILED (failures=4)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 12,
+        "prompt_tokens": 6315,
+        "completion_tokens": 9168,
+        "reasoning_tokens": 7156,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_326",
+      "passed": false,
+      "wall_s": 193.59,
+      "detail": "FAIL: FAILED (errors=4)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": true,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 26,
+        "prompt_tokens": 19752,
+        "completion_tokens": 21268,
+        "reasoning_tokens": 18837,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_346",
+      "passed": false,
+      "wall_s": 114.45,
+      "detail": "FAIL: FAILED (errors=1)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 20,
+        "prompt_tokens": 16286,
+        "completion_tokens": 11544,
+        "reasoning_tokens": 8748,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_368",
+      "passed": false,
+      "wall_s": 140.52,
+      "detail": "FAIL: FAILED (errors=1)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 1
+      },
+      "stats": {
+        "calls": 19,
+        "prompt_tokens": 16319,
+        "completion_tokens": 14884,
+        "reasoning_tokens": 12689,
+        "cached_tokens": 2048
+      }
+    },
+    {
+      "pid": "BigCodeBench_454",
+      "passed": false,
+      "wall_s": 104.24,
+      "detail": "FAIL: FAILED (errors=1)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 12,
+        "prompt_tokens": 9941,
+        "completion_tokens": 11500,
+        "reasoning_tokens": 9024,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_592",
+      "passed": true,
+      "wall_s": 75.61,
+      "detail": "PASS (35ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 10763,
+        "completion_tokens": 8022,
+        "reasoning_tokens": 5826,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_594",
+      "passed": false,
+      "wall_s": 77.49,
+      "detail": "FAIL: FAILED (failures=3)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 11301,
+        "completion_tokens": 8292,
+        "reasoning_tokens": 5931,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_720",
+      "passed": false,
+      "wall_s": 81.16,
+      "detail": "FAIL: FAILED (failures=1, errors=8)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 8968,
+        "completion_tokens": 8592,
+        "reasoning_tokens": 6355,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_763",
+      "passed": true,
+      "wall_s": 105.64,
+      "detail": "PASS (127ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 12350,
+        "completion_tokens": 11121,
+        "reasoning_tokens": 7661,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_765",
+      "passed": false,
+      "wall_s": 81.96,
+      "detail": "FAIL: FAILED (failures=3)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 11048,
+        "completion_tokens": 8564,
+        "reasoning_tokens": 6936,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_771",
+      "passed": false,
+      "wall_s": 215.94,
+      "detail": "FAIL: FAILED (failures=3)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": true,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 27,
+        "prompt_tokens": 23911,
+        "completion_tokens": 24012,
+        "reasoning_tokens": 20690,
+        "cached_tokens": 5120
+      }
+    },
+    {
+      "pid": "BigCodeBench_777",
+      "passed": false,
+      "wall_s": 71.33,
+      "detail": "FAIL: FAILED (failures=4)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 1
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 4595,
+        "completion_tokens": 7690,
+        "reasoning_tokens": 6009,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_785",
+      "passed": false,
+      "wall_s": 135.65,
+      "detail": "FAIL: FAILED (failures=2)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 20,
+        "prompt_tokens": 13211,
+        "completion_tokens": 14674,
+        "reasoning_tokens": 11392,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_800",
+      "passed": true,
+      "wall_s": 157.36,
+      "detail": "PASS (50ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 2
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 15731,
+        "completion_tokens": 17715,
+        "reasoning_tokens": 14746,
+        "cached_tokens": 4096
+      }
+    },
+    {
+      "pid": "BigCodeBench_854",
+      "passed": true,
+      "wall_s": 105.76,
+      "detail": "PASS (38ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 1
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 11261,
+        "completion_tokens": 11367,
+        "reasoning_tokens": 9191,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_857",
+      "passed": false,
+      "wall_s": 85.54,
+      "detail": "FAIL: FAILED (failures=1)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 7208,
+        "completion_tokens": 9427,
+        "reasoning_tokens": 6311,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_906",
+      "passed": true,
+      "wall_s": 140.77,
+      "detail": "PASS (43ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": true,
+        "redteam_kills": 1
+      },
+      "stats": {
+        "calls": 21,
+        "prompt_tokens": 17233,
+        "completion_tokens": 14591,
+        "reasoning_tokens": 11009,
+        "cached_tokens": 3072
+      }
+    },
+    {
+      "pid": "BigCodeBench_928",
+      "passed": false,
+      "wall_s": 100.68,
+      "detail": "FAIL: FAILED (errors=5)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 10542,
+        "completion_tokens": 10602,
+        "reasoning_tokens": 9436,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_963",
+      "passed": false,
+      "wall_s": 127.07,
+      "detail": "FAIL: FAILED (failures=2)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 18,
+        "prompt_tokens": 13420,
+        "completion_tokens": 13906,
+        "reasoning_tokens": 10628,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_988",
+      "passed": true,
+      "wall_s": 85.36,
+      "detail": "PASS (40ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 12,
+        "prompt_tokens": 11582,
+        "completion_tokens": 8648,
+        "reasoning_tokens": 6756,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_990",
+      "passed": true,
+      "wall_s": 64.86,
+      "detail": "PASS (38ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9440,
+        "completion_tokens": 7089,
+        "reasoning_tokens": 5125,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_998",
+      "passed": false,
+      "wall_s": 104.48,
+      "detail": "FAIL: FAILED (failures=1)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 12997,
+        "completion_tokens": 11026,
+        "reasoning_tokens": 8497,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "BigCodeBench_999",
+      "passed": true,
+      "wall_s": 216.11,
+      "detail": "PASS (59ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": true,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 26,
+        "prompt_tokens": 26507,
+        "completion_tokens": 23991,
+        "reasoning_tokens": 20717,
+        "cached_tokens": 9216
+      }
+    },
+    {
+      "pid": "BigCodeBench_1039",
+      "passed": false,
+      "wall_s": 108.78,
+      "detail": "FAIL: FAILED (failures=3)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 17,
+        "prompt_tokens": 15906,
+        "completion_tokens": 11753,
+        "reasoning_tokens": 8567,
+        "cached_tokens": 3072
+      }
+    },
+    {
+      "pid": "BigCodeBench_1042",
+      "passed": false,
+      "wall_s": 70.38,
+      "detail": "TIMEOUT (15.0s)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "radically_simple",
+        "wave2": false,
+        "redteam_kills": 0
+      },
+      "stats": {
+        "calls": 12,
+        "prompt_tokens": 8916,
+        "completion_tokens": 7485,
+        "reasoning_tokens": 5551,
+        "cached_tokens": 0
+      }
+    }
+  ]
+}

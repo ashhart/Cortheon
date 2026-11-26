@@ -1,0 +1,581 @@
+{
+  "dataset": "MathArena/aime_2025",
+  "model": "glm-5.3-flash-tfq3",
+  "arm": "cortheon",
+  "passed": 24,
+  "total": 30,
+  "pass_rate_pct": 80.0,
+  "avg_wall_s": 175.81,
+  "results": [
+    {
+      "pid": "AIME25_01",
+      "passed": true,
+      "wall_s": 25.92,
+      "detail": "OK (70)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2096,
+        "completion_tokens": 1282,
+        "reasoning_tokens": 329,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_02",
+      "passed": true,
+      "wall_s": 82.09,
+      "detail": "OK (588)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 5001,
+        "completion_tokens": 4158,
+        "reasoning_tokens": 2219,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_03",
+      "passed": true,
+      "wall_s": 29.36,
+      "detail": "OK (16)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2511,
+        "completion_tokens": 1353,
+        "reasoning_tokens": 114,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_04",
+      "passed": true,
+      "wall_s": 34.73,
+      "detail": "OK (117)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2216,
+        "completion_tokens": 1711,
+        "reasoning_tokens": 477,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_05",
+      "passed": true,
+      "wall_s": 51.94,
+      "detail": "OK (279)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2326,
+        "completion_tokens": 2341,
+        "reasoning_tokens": 1186,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_06",
+      "passed": true,
+      "wall_s": 36.38,
+      "detail": "OK (504)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2361,
+        "completion_tokens": 1819,
+        "reasoning_tokens": 537,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_07",
+      "passed": true,
+      "wall_s": 78.19,
+      "detail": "OK (821)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2676,
+        "completion_tokens": 3223,
+        "reasoning_tokens": 1568,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_08",
+      "passed": true,
+      "wall_s": 122.09,
+      "detail": "OK (77)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 4956,
+        "completion_tokens": 6856,
+        "reasoning_tokens": 2804,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_09",
+      "passed": true,
+      "wall_s": 122.85,
+      "detail": "OK (62)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2481,
+        "completion_tokens": 6776,
+        "reasoning_tokens": 1797,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_10",
+      "passed": false,
+      "wall_s": 215.19,
+      "detail": "WRONG: got='66' expected='81'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 6980,
+        "completion_tokens": 10507,
+        "reasoning_tokens": 4689,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_11",
+      "passed": true,
+      "wall_s": 402.56,
+      "detail": "OK (259)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "pairwise_tiebreak_A",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 11,
+        "prompt_tokens": 13927,
+        "completion_tokens": 20881,
+        "reasoning_tokens": 5023,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_12",
+      "passed": true,
+      "wall_s": 280.78,
+      "detail": "OK (510)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (2 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 5296,
+        "completion_tokens": 16038,
+        "reasoning_tokens": 5344,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_13",
+      "passed": false,
+      "wall_s": 704.2,
+      "detail": "WRONG: got='322' expected='204'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (0 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 9,
+        "prompt_tokens": 5738,
+        "completion_tokens": 21801,
+        "reasoning_tokens": 6934,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_14",
+      "passed": false,
+      "wall_s": 504.59,
+      "detail": "WRONG: got='120' expected='60'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "pairwise_tiebreak_A",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 14918,
+        "completion_tokens": 25405,
+        "reasoning_tokens": 7636,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_15",
+      "passed": true,
+      "wall_s": 116.6,
+      "detail": "OK (735)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 4841,
+        "completion_tokens": 5960,
+        "reasoning_tokens": 1941,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_16",
+      "passed": true,
+      "wall_s": 50.71,
+      "detail": "OK (468)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2426,
+        "completion_tokens": 2717,
+        "reasoning_tokens": 1147,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_17",
+      "passed": true,
+      "wall_s": 72.3,
+      "detail": "OK (49)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2126,
+        "completion_tokens": 3543,
+        "reasoning_tokens": 1067,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_18",
+      "passed": true,
+      "wall_s": 112.89,
+      "detail": "OK (82)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 6149,
+        "completion_tokens": 5572,
+        "reasoning_tokens": 1667,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_19",
+      "passed": true,
+      "wall_s": 70.82,
+      "detail": "OK (106)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (5 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 5499,
+        "completion_tokens": 3413,
+        "reasoning_tokens": 747,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_20",
+      "passed": true,
+      "wall_s": 204.32,
+      "detail": "OK (336)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "pairwise_tiebreak_A",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 13790,
+        "completion_tokens": 8724,
+        "reasoning_tokens": 2163,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_21",
+      "passed": true,
+      "wall_s": 65.06,
+      "detail": "OK (293)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 5721,
+        "completion_tokens": 3135,
+        "reasoning_tokens": 1281,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_22",
+      "passed": true,
+      "wall_s": 44.04,
+      "detail": "OK (237)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2396,
+        "completion_tokens": 2379,
+        "reasoning_tokens": 569,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_23",
+      "passed": true,
+      "wall_s": 73.07,
+      "detail": "OK (610)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 3598,
+        "completion_tokens": 3238,
+        "reasoning_tokens": 1404,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_24",
+      "passed": true,
+      "wall_s": 106.16,
+      "detail": "OK (149)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 4583,
+        "completion_tokens": 5362,
+        "reasoning_tokens": 1989,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_25",
+      "passed": false,
+      "wall_s": 62.35,
+      "detail": "WRONG: got='513' expected='907'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2281,
+        "completion_tokens": 3036,
+        "reasoning_tokens": 1691,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_26",
+      "passed": true,
+      "wall_s": 201.93,
+      "detail": "OK (113)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (1 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 4108,
+        "completion_tokens": 10334,
+        "reasoning_tokens": 4153,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_27",
+      "passed": true,
+      "wall_s": 236.98,
+      "detail": "OK (19)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "pairwise_tiebreak_A",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9785,
+        "completion_tokens": 13970,
+        "reasoning_tokens": 5822,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_28",
+      "passed": true,
+      "wall_s": 638.11,
+      "detail": "OK (248)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (0 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 5281,
+        "completion_tokens": 28273,
+        "reasoning_tokens": 7305,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_29",
+      "passed": false,
+      "wall_s": 197.46,
+      "detail": "WRONG: got='159' expected='104'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (2 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 4167,
+        "completion_tokens": 10986,
+        "reasoning_tokens": 2595,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_30",
+      "passed": false,
+      "wall_s": 330.76,
+      "detail": "WRONG: got='0' expected='240'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "pairwise_tiebreak_A",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 11,
+        "prompt_tokens": 7368,
+        "completion_tokens": 17355,
+        "reasoning_tokens": 6469,
+        "cached_tokens": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "dataset": "LiveCodeBench v6 Hard (AtCoder F/G)",
+  "model": "deepseek-v4.1-flash-1017",
+  "arm": "vanilla",
+  "passed": 11,
+  "total": 20,
+  "pass_rate_pct": 55.0,
+  "avg_wall_s": 73.57,
+  "results": [
+    {
+      "pid": "abc387_f",
+      "passed": true,
+      "wall_s": 49.36,
+      "title": "Count Arrays",
+      "detail": "AC 43/43 (1756ms)"
+    },
+    {
+      "pid": "abc388_g",
+      "passed": false,
+      "wall_s": 96.22,
+      "title": "Simultaneous Kagamimochi 2",
+      "detail": "WA on case 1/42 (0/42): got='2\\n3\\n2\\n0\\n5' exp='2\\n3\\n1\\n0\\n5'"
+    },
+    {
+      "pid": "abc388_f",
+      "passed": false,
+      "wall_s": 76.59,
+      "title": "Dangerous Sugoroku",
+      "detail": "TLE on case 4/43 (3/43 passed)"
+    },
+    {
+      "pid": "abc388_e",
+      "passed": true,
+      "wall_s": 55.84,
+      "title": "Simultaneous Kagamimochi",
+      "detail": "AC 43/43 (752ms)"
+    },
+    {
+      "pid": "abc389_g",
+      "passed": false,
+      "wall_s": 46.92,
+      "title": "Odd Even Graph",
+      "detail": "WA on case 1/43 (0/43): got='0 0 0 0' exp='12 9 3 0'"
+    },
+    {
+      "pid": "abc389_f",
+      "passed": true,
+      "wall_s": 142.23,
+      "title": "Rated Range",
+      "detail": "AC 43/43 (4544ms)"
+    },
+    {
+      "pid": "abc389_e",
+      "passed": true,
+      "wall_s": 47.19,
+      "title": "Square Price",
+      "detail": "AC 42/42 (959ms)"
+    },
+    {
+      "pid": "abc390_e",
+      "passed": true,
+      "wall_s": 59.14,
+      "title": "Vitamin Balance",
+      "detail": "AC 42/42 (3228ms)"
+    },
+    {
+      "pid": "abc390_g",
+      "passed": false,
+      "wall_s": 61.32,
+      "title": "Permutation Concatenation",
+      "detail": "TLE on case 3/43 (2/43 passed)"
+    },
+    {
+      "pid": "abc390_f",
+      "passed": true,
+      "wall_s": 88.3,
+      "title": "Double Sum 3",
+      "detail": "AC 43/43 (834ms)"
+    },
+    {
+      "pid": "abc391_f",
+      "passed": false,
+      "wall_s": 36.91,
+      "title": "K",
+      "detail": "TLE on case 4/43 (3/43 passed)"
+    },
+    {
+      "pid": "abc391_e",
+      "passed": true,
+      "wall_s": 40.59,
+      "title": "Hierarchical Majority Vote",
+      "detail": "AC 42/42 (791ms)"
+    },
+    {
+      "pid": "abc391_g",
+      "passed": true,
+      "wall_s": 43.15,
+      "title": "Many LCS",
+      "detail": "AC 43/43 (2505ms)"
+    },
+    {
+      "pid": "abc392_g",
+      "passed": false,
+      "wall_s": 41.64,
+      "title": "Fine Triplets",
+      "detail": "TLE on case 4/43 (3/43 passed)"
+    },
+    {
+      "pid": "abc392_f",
+      "passed": false,
+      "wall_s": 48.11,
+      "title": "Insert",
+      "detail": "RE on case 17/42 (16/42): IndexError: list assignment index out of range"
+    },
+    {
+      "pid": "abc393_f",
+      "passed": true,
+      "wall_s": 77.52,
+      "title": "Prefix LIS Query",
+      "detail": "AC 42/42 (1314ms)"
+    },
+    {
+      "pid": "abc393_e",
+      "passed": true,
+      "wall_s": 52.85,
+      "title": "GCD of Subset",
+      "detail": "AC 43/43 (3625ms)"
+    },
+    {
+      "pid": "abc393_d",
+      "passed": true,
+      "wall_s": 32.9,
+      "title": "Swap to Gather",
+      "detail": "AC 43/43 (695ms)"
+    },
+    {
+      "pid": "abc394_f",
+      "passed": false,
+      "wall_s": 193.46,
+      "title": "Alkane",
+      "detail": "WA on case 1/43 (0/43): got='' exp='8'"
+    },
+    {
+      "pid": "abc394_g",
+      "passed": false,
+      "wall_s": 181.2,
+      "title": "Dense Buildings",
+      "detail": "SyntaxError: SyntaxError line 93: invalid decimal literal"
+    }
+  ]
+}

@@ -1,0 +1,581 @@
+{
+  "dataset": "MathArena/aime_2025",
+  "model": "qwen3.8-flash-next-tfq3",
+  "arm": "cortheon",
+  "passed": 21,
+  "total": 30,
+  "pass_rate_pct": 70.0,
+  "avg_wall_s": 80.53,
+  "results": [
+    {
+      "pid": "AIME25_01",
+      "passed": true,
+      "wall_s": 29.82,
+      "detail": "OK (70)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2377,
+        "completion_tokens": 4307,
+        "reasoning_tokens": 3176,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_02",
+      "passed": false,
+      "wall_s": 94.77,
+      "detail": "WRONG: got='1932' expected='588'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (1 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 10208,
+        "completion_tokens": 12237,
+        "reasoning_tokens": 6357,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_03",
+      "passed": true,
+      "wall_s": 35.37,
+      "detail": "OK (16)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2792,
+        "completion_tokens": 4405,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_04",
+      "passed": true,
+      "wall_s": 35.55,
+      "detail": "OK (117)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2512,
+        "completion_tokens": 4954,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_05",
+      "passed": true,
+      "wall_s": 41.38,
+      "detail": "OK (279)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2627,
+        "completion_tokens": 5433,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_06",
+      "passed": true,
+      "wall_s": 41.09,
+      "detail": "OK (504)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2642,
+        "completion_tokens": 5221,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_07",
+      "passed": true,
+      "wall_s": 35.11,
+      "detail": "OK (821)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2947,
+        "completion_tokens": 4278,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_08",
+      "passed": true,
+      "wall_s": 44.91,
+      "detail": "OK (77)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2802,
+        "completion_tokens": 5858,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_09",
+      "passed": false,
+      "wall_s": 141.96,
+      "detail": "WRONG: got='17' expected='62'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (0 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 7887,
+        "completion_tokens": 15234,
+        "reasoning_tokens": 8159,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_10",
+      "passed": false,
+      "wall_s": 148.35,
+      "detail": "WRONG: got='76' expected='81'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (0 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 10625,
+        "completion_tokens": 19148,
+        "reasoning_tokens": 8159,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_11",
+      "passed": true,
+      "wall_s": 127.62,
+      "detail": "OK (259)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (1 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 8197,
+        "completion_tokens": 18012,
+        "reasoning_tokens": 6357,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_12",
+      "passed": true,
+      "wall_s": 129.26,
+      "detail": "OK (510)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (2 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 5790,
+        "completion_tokens": 17444,
+        "reasoning_tokens": 6357,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_13",
+      "passed": false,
+      "wall_s": 115.52,
+      "detail": "WRONG: got='379' expected='204'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (1 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 5304,
+        "completion_tokens": 14980,
+        "reasoning_tokens": 6357,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_14",
+      "passed": false,
+      "wall_s": 177.73,
+      "detail": "WRONG: got='119' expected='60'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (0 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9823,
+        "completion_tokens": 23286,
+        "reasoning_tokens": 8159,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_15",
+      "passed": true,
+      "wall_s": 57.33,
+      "detail": "OK (735)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2607,
+        "completion_tokens": 6779,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_16",
+      "passed": true,
+      "wall_s": 41.32,
+      "detail": "OK (468)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2732,
+        "completion_tokens": 5518,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_17",
+      "passed": true,
+      "wall_s": 35.07,
+      "detail": "OK (49)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2402,
+        "completion_tokens": 4911,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_18",
+      "passed": true,
+      "wall_s": 40.2,
+      "detail": "OK (82)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 3632,
+        "completion_tokens": 5309,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_19",
+      "passed": true,
+      "wall_s": 72.63,
+      "detail": "OK (106)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 6703,
+        "completion_tokens": 9817,
+        "reasoning_tokens": 6357,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_20",
+      "passed": true,
+      "wall_s": 84.38,
+      "detail": "OK (336)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 5402,
+        "completion_tokens": 9604,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_21",
+      "passed": true,
+      "wall_s": 45.37,
+      "detail": "OK (293)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 6217,
+        "completion_tokens": 5909,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_22",
+      "passed": true,
+      "wall_s": 42.17,
+      "detail": "OK (237)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2687,
+        "completion_tokens": 5154,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_23",
+      "passed": true,
+      "wall_s": 55.46,
+      "detail": "OK (610)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 3902,
+        "completion_tokens": 6694,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_24",
+      "passed": true,
+      "wall_s": 42.08,
+      "detail": "OK (149)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2687,
+        "completion_tokens": 5831,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_25",
+      "passed": true,
+      "wall_s": 39.47,
+      "detail": "OK (907)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2567,
+        "completion_tokens": 5390,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_26",
+      "passed": true,
+      "wall_s": 35.16,
+      "detail": "OK (113)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 5,
+        "prompt_tokens": 2517,
+        "completion_tokens": 4601,
+        "reasoning_tokens": 3504,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_27",
+      "passed": false,
+      "wall_s": 155.94,
+      "detail": "WRONG: got='19. AIME answer 019 maybe but final exact integer 19' expected='19'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (0 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 10841,
+        "completion_tokens": 20160,
+        "reasoning_tokens": 8159,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_28",
+      "passed": false,
+      "wall_s": 171.11,
+      "detail": "WRONG: got='0' expected='248'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "fallback_extract",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 11,
+        "prompt_tokens": 7569,
+        "completion_tokens": 15029,
+        "reasoning_tokens": 8159,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_29",
+      "passed": false,
+      "wall_s": 130.39,
+      "detail": "WRONG: got='180' expected='104'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "fallback_extract",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 11,
+        "prompt_tokens": 9770,
+        "completion_tokens": 16855,
+        "reasoning_tokens": 8159,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "AIME25_30",
+      "passed": false,
+      "wall_s": 169.45,
+      "detail": "WRONG: got='188' expected='240'",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "fallback_extract",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 11,
+        "prompt_tokens": 9590,
+        "completion_tokens": 19999,
+        "reasoning_tokens": 8159,
+        "cached_tokens": 0
+      }
+    }
+  ]
+}

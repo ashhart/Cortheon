@@ -1,0 +1,411 @@
+{
+  "dataset": "gauntlet1_hard_50",
+  "model": "qwen3.8-flash-next-tfq3",
+  "arm": "vanilla",
+  "passed": 25,
+  "total": 50,
+  "pass_rate_pct": 50.0,
+  "avg_wall_s": 66.35,
+  "results": [
+    {
+      "pid": "G01_biased_coupon_collector",
+      "passed": false,
+      "wall_s": 64.87,
+      "track": "math",
+      "title": "Biased 6-Sided Die Full Collection Expected Rolls",
+      "detail": "WRONG: got='134213/1540' expected='6671/330'"
+    },
+    {
+      "pid": "G02_huge_n_linear_recurrence",
+      "passed": false,
+      "wall_s": 56.76,
+      "track": "math",
+      "title": "Non-Homogeneous Linear Recurrence at N = 10^15 (mod 10^9+7)",
+      "detail": "WRONG: got='807816968' expected='913437523'"
+    },
+    {
+      "pid": "G03_bounded_parity_compositions",
+      "passed": false,
+      "wall_s": 54.44,
+      "track": "math",
+      "title": "Bounded Integer Compositions with Parity & Inequality Constraints",
+      "detail": "WRONG: got='1512' expected='4124'"
+    },
+    {
+      "pid": "G04_portal_random_walk",
+      "passed": false,
+      "wall_s": 30.99,
+      "track": "math",
+      "title": "Absorbing Random Walk with Asymmetric Drift & Teleport",
+      "detail": "WRONG: got='259/25' expected='1460/179'"
+    },
+    {
+      "pid": "G05_divisors_totient_congruence",
+      "passed": false,
+      "wall_s": 55.22,
+      "track": "math",
+      "title": "Number Theory: Divisor Count + Totient Divisibility + Congruence",
+      "detail": "WRONG: got='10035' expected='10050'"
+    },
+    {
+      "pid": "G06_two_test_factory_bayes",
+      "passed": true,
+      "wall_s": 62.06,
+      "track": "math",
+      "title": "Multi-Factory Two-Test Conditional Bayes",
+      "detail": "OK (52/227)"
+    },
+    {
+      "pid": "G07_sprague_grundy_subtraction",
+      "passed": false,
+      "wall_s": 60.81,
+      "track": "math",
+      "title": "Sprague-Grundy Losing Positions Count for Subtraction Game {1,3,4}",
+      "detail": "WRONG: got='750' expected='742'"
+    },
+    {
+      "pid": "G08_exact_10x10_determinant",
+      "passed": false,
+      "wall_s": 53.0,
+      "track": "math",
+      "title": "Exact Integer Determinant of 10x10 GCD+Mod Structured Matrix",
+      "detail": "WRONG: got='ANSWER 27393' expected='40608000'"
+    },
+    {
+      "pid": "G09_dihedral_proper_necklaces",
+      "passed": true,
+      "wall_s": 72.97,
+      "track": "math",
+      "title": "Burnside/Dihedral Proper 3-Colored Necklaces of Length 12",
+      "detail": "OK (224)"
+    },
+    {
+      "pid": "G10_coprime_cubes_sum_huge_n",
+      "passed": false,
+      "wall_s": 49.55,
+      "track": "math",
+      "title": "Sum of k^3 Coprime to 30 up to N = 10^9 (mod 998244353)",
+      "detail": "WRONG: got='499122176' expected='839394368'"
+    },
+    {
+      "pid": "G11_cryptarithm_cross_roads",
+      "passed": false,
+      "wall_s": 54.35,
+      "track": "logic_opt",
+      "title": "Unique Cryptarithm CROSS + ROADS = DANGER",
+      "detail": "WRONG: got='ANSWER: 105928' expected='158746'"
+    },
+    {
+      "pid": "G12_truth_liar_alternator",
+      "passed": false,
+      "wall_s": 43.53,
+      "track": "logic_opt",
+      "title": "5-Person Truth-Teller / Liar / Alternator Deduction",
+      "detail": "WRONG: got='C,D' expected='C,B'"
+    },
+    {
+      "pid": "G13_asymmetric_tsptw",
+      "passed": false,
+      "wall_s": 67.52,
+      "track": "logic_opt",
+      "title": "Asymmetric TSP with Hard Arrival Time Windows (7 Nodes)",
+      "detail": "WRONG: got='44' expected='42'"
+    },
+    {
+      "pid": "G14_multidim_conflict_knapsack",
+      "passed": false,
+      "wall_s": 81.44,
+      "track": "logic_opt",
+      "title": "14-Item 2D Knapsack with Conflicts & Group-At-Most-1",
+      "detail": "WRONG: got='123' expected='124'"
+    },
+    {
+      "pid": "G15_killer_latin_square",
+      "passed": true,
+      "wall_s": 36.7,
+      "track": "logic_opt",
+      "title": "5x5 Killer-Cage Latin Square Weighted Diagonal",
+      "detail": "OK (30)"
+    },
+    {
+      "pid": "G16_constrained_assignment",
+      "passed": false,
+      "wall_s": 50.37,
+      "track": "logic_opt",
+      "title": "6x6 Constrained Min-Cost Bipartite Assignment",
+      "detail": "WRONG: got='ANSWER: 48' expected='47'"
+    },
+    {
+      "pid": "G17_circuit_stuck_at_fault",
+      "passed": true,
+      "wall_s": 58.38,
+      "track": "logic_opt",
+      "title": "Combinational Logic Circuit Stuck-At Fault Diagnosis",
+      "detail": "OK (g4=1)"
+    },
+    {
+      "pid": "G18_changeover_setup_makespan",
+      "passed": true,
+      "wall_s": 125.01,
+      "track": "logic_opt",
+      "title": "2-Machine Precedence + Type-Changeover Setup Makespan",
+      "detail": "OK (17)"
+    },
+    {
+      "pid": "G19_keys_doors_maze_bfs",
+      "passed": false,
+      "wall_s": 50.24,
+      "track": "logic_opt",
+      "title": "6x6 Grid Shortest Path with Keys (a,b,c) & Doors (A,B,C)",
+      "detail": "WRONG: got='ANSWER: 20' expected='16'"
+    },
+    {
+      "pid": "G20_two_end_minimax_game",
+      "passed": false,
+      "wall_s": 65.65,
+      "track": "logic_opt",
+      "title": "Exact Optimal Minimax Score Difference (Take 1 or 2 From Either End)",
+      "detail": "WRONG: got='-2' expected='6'"
+    },
+    {
+      "pid": "G41_python_semantics_trap",
+      "passed": true,
+      "wall_s": 21.06,
+      "track": "systems_sec",
+      "title": "Python MRO + Mutable Default + try/finally Return + Late Closure Trace",
+      "detail": "OK (DBCA,3,35,9)"
+    },
+    {
+      "pid": "G42_arx_uint32_simulation",
+      "passed": false,
+      "wall_s": 54.25,
+      "track": "systems_sec",
+      "title": "100-Round 32-Bit Unsigned ARX Mixer Exact Hex State",
+      "detail": "WRONG: got='2484b192' expected='7e2dea04'"
+    },
+    {
+      "pid": "G43_ieee754_cancellation_error",
+      "passed": true,
+      "wall_s": 57.61,
+      "track": "systems_sec",
+      "title": "IEEE-754 Binary64 Catastrophic Cancellation Drift",
+      "detail": "OK (1250)"
+    },
+    {
+      "pid": "G44_c_struct_abi_layout",
+      "passed": true,
+      "wall_s": 13.36,
+      "track": "systems_sec",
+      "title": "C11 / 64-Bit Struct Alignment, Padding & Offsetof",
+      "detail": "OK ([32, 16])"
+    },
+    {
+      "pid": "G45_sql_left_join_null_count",
+      "passed": true,
+      "wall_s": 16.71,
+      "track": "systems_sec",
+      "title": "SQL LEFT JOIN + NULL + COUNT(*) vs COUNT(col) Exact Execution",
+      "detail": "OK (73)"
+    },
+    {
+      "pid": "G46_regex_shortest_distinguishing",
+      "passed": false,
+      "wall_s": 53.13,
+      "track": "systems_sec",
+      "title": "Shortest Distinguishing String Between Two Tricky Regexes",
+      "detail": "WRONG: got='bb' expected='abab'"
+    },
+    {
+      "pid": "G21_convex_hull_twice_area",
+      "passed": true,
+      "wall_s": 62.39,
+      "track": "algo_code",
+      "title": "Exact Integer 2*Area & Strict Vertex Count of 2D Convex Hull",
+      "detail": "PASS 3/3 (4ms)"
+    },
+    {
+      "pid": "G22_interval_set_manager",
+      "passed": true,
+      "wall_s": 80.21,
+      "track": "algo_code",
+      "title": "Half-Open IntervalSet (Add/Remove/Query/TotalLength)",
+      "detail": "PASS 2/2 (0ms)"
+    },
+    {
+      "pid": "G23_thompson_nfa_regex",
+      "passed": false,
+      "wall_s": 94.92,
+      "track": "algo_code",
+      "title": "Polynomial-Time Full-String Regex Engine (No Backtracking Blowup)",
+      "detail": "FAIL 2/3 | test_semantics: TypeError: cannot unpack non-iterable NoneType object"
+    },
+    {
+      "pid": "G24_rfc6902_json_patch",
+      "passed": true,
+      "wall_s": 103.63,
+      "track": "algo_code",
+      "title": "Atomic RFC 6902 JSON Patch with Escaping & Rollback",
+      "detail": "PASS 2/2 (0ms)"
+    },
+    {
+      "pid": "G25_iterative_tarjan_scc_dag",
+      "passed": true,
+      "wall_s": 74.17,
+      "track": "algo_code",
+      "title": "Iterative Tarjan SCC + Condensation DAG Maximum Weight Path (N=5000)",
+      "detail": "PASS 2/2 (4ms)"
+    },
+    {
+      "pid": "G26_knuth_plass_wrap",
+      "passed": true,
+      "wall_s": 67.78,
+      "track": "algo_code",
+      "title": "Exact Minimum-Raggedness Word Wrap DP (Cube Penalty + Tie-Breaking)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G27_semver_dep_resolver",
+      "passed": true,
+      "wall_s": 153.93,
+      "track": "algo_code",
+      "title": "Backtracking SemVer Dependency Resolver with Diamond Conflicts",
+      "detail": "PASS 2/2 (0ms)"
+    },
+    {
+      "pid": "G28_undo_redo_snapshot_buffer",
+      "passed": true,
+      "wall_s": 64.35,
+      "track": "algo_code",
+      "title": "Transactional TextBuffer with Undo/Redo & Independent Snapshots",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G29_streaming_sliding_median",
+      "passed": false,
+      "wall_s": 86.45,
+      "track": "algo_code",
+      "title": "O(log k) Exact Rational Sliding-Window Median (Lazy Dual Heaps)",
+      "detail": "FAIL 0/1 | test_exact_fuzz_and_perf: IndexError: list assignment index out of range"
+    },
+    {
+      "pid": "G30_decaying_topk_counter",
+      "passed": true,
+      "wall_s": 62.48,
+      "track": "algo_code",
+      "title": "Sliding-Window Top-K Counter with Boundary Expiry & Lex Tie-Break",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G31_debug_token_bucket",
+      "passed": true,
+      "wall_s": 61.06,
+      "track": "debug_code",
+      "title": "Fix 5 Bugs in Exact Fraction TokenBucket Rate Limiter",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G32_debug_consistent_hash_ring",
+      "passed": true,
+      "wall_s": 71.05,
+      "track": "debug_code",
+      "title": "Fix 5 Bugs in ConsistentHashRing (Wrap-Around, Distinct Replicas, Remove)",
+      "detail": "PASS 1/1 (1ms)"
+    },
+    {
+      "pid": "G33_debug_order_stat_bst",
+      "passed": false,
+      "wall_s": 80.25,
+      "track": "debug_code",
+      "title": "Fix Order-Statistic MultiSet BST (Insert/Delete/Kth/Rank)",
+      "detail": "FAIL 0/1 | test_differential_fuzz: AssertionError"
+    },
+    {
+      "pid": "G34_debug_rfc4180_csv",
+      "passed": false,
+      "wall_s": 69.77,
+      "track": "debug_code",
+      "title": "Fix RFC-4180 CSV Parser (Escaped Quotes, Embedded Newlines, CRLF, Errors)",
+      "detail": "FAIL 1/2 | test_rfc4180_cases_and_errors: AssertionError"
+    },
+    {
+      "pid": "G35_debug_currency_arbitrage",
+      "passed": true,
+      "wall_s": 59.1,
+      "track": "debug_code",
+      "title": "Fix Exact Rational Currency Arbitrage Cycle Detector",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G36_debug_wildcard_trie",
+      "passed": true,
+      "wall_s": 73.07,
+      "track": "debug_code",
+      "title": "Fix Wildcard Trie (Prefix-Safe Delete, Accurate Prefix Count, Duplicate Insert)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G37_debug_rollback_dsu",
+      "passed": true,
+      "wall_s": 73.58,
+      "track": "debug_code",
+      "title": "Fix Rollback Union-Find (No Path Compression Corruption + Edge Counts)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G38_debug_sql_three_valued_logic",
+      "passed": true,
+      "wall_s": 133.83,
+      "track": "debug_code",
+      "title": "Fix Mini SQL Filter & Sort Engine (SQL 3-Valued NULL Logic + Precedence)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G39_debug_incremental_build_cache",
+      "passed": false,
+      "wall_s": 99.94,
+      "track": "debug_code",
+      "title": "Fix Incremental DAG Build Engine (Diamond Transitive Invalidation + Cycle Check)",
+      "detail": "FAIL 0/1 | test_diamond_invalidation_cutoff_and_cycles: AssertionError"
+    },
+    {
+      "pid": "G40_debug_http_chunked_decoder",
+      "passed": false,
+      "wall_s": 81.23,
+      "track": "debug_code",
+      "title": "Fix Streaming HTTP/1.1 Chunked Transfer-Encoding Decoder",
+      "detail": "FAIL 0/1 | test_byte_by_byte_extensions_trailers_and_errors: ValueError: missing final CRLF after last chunk"
+    },
+    {
+      "pid": "G47_sec_path_traversal_guard",
+      "passed": false,
+      "wall_s": 66.74,
+      "track": "systems_sec",
+      "title": "Harden safe_resolve() Against Path Traversal, Prefix Collision & Encoding Bypass",
+      "detail": "FAIL 0/1 | test_security_bypasses_and_legit: ValueError: path traversal"
+    },
+    {
+      "pid": "G48_sec_webhook_hmac_replay",
+      "passed": true,
+      "wall_s": 65.25,
+      "track": "systems_sec",
+      "title": "Constant-Time HMAC Webhook Verifier with Replay-Window & Key Rotation",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G49_sec_rbac_explicit_deny",
+      "passed": true,
+      "wall_s": 66.78,
+      "track": "systems_sec",
+      "title": "IAM/RBAC Policy Evaluator (Explicit DENY Precedence + Safe Wildcards)",
+      "detail": "PASS 1/1 (0ms)"
+    },
+    {
+      "pid": "G50_sec_sandboxed_template",
+      "passed": false,
+      "wall_s": 55.67,
+      "track": "systems_sec",
+      "title": "SSTI-Hardened Sandboxed Template Renderer (Blocks Dunder/Format Injection)",
+      "detail": "FAIL 0/1 | test_rendering_filters_and_ssti_defense: ValueError: invalid filter syntax"
+    }
+  ]
+}

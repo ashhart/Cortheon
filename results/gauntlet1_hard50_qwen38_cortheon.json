@@ -1,0 +1,1109 @@
+{
+  "dataset": "gauntlet1_hard_50",
+  "model": "qwen3.8-flash-next-tfq3",
+  "arm": "cortheon",
+  "passed": 50,
+  "total": 50,
+  "pass_rate_pct": 100.0,
+  "avg_wall_s": 211.14,
+  "results": [
+    {
+      "pid": "G01_biased_coupon_collector",
+      "passed": true,
+      "wall_s": 128.69,
+      "track": "math",
+      "title": "Biased 6-Sided Die Full Collection Expected Rolls",
+      "detail": "OK (6671/330)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 7317,
+        "completion_tokens": 10332,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G02_huge_n_linear_recurrence",
+      "passed": true,
+      "wall_s": 71.64,
+      "track": "math",
+      "title": "Non-Homogeneous Linear Recurrence at N = 10^15 (mod 10^9+7)",
+      "detail": "OK (913437523)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3108,
+        "completion_tokens": 6701,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G03_bounded_parity_compositions",
+      "passed": true,
+      "wall_s": 188.79,
+      "track": "math",
+      "title": "Bounded Integer Compositions with Parity & Inequality Constraints",
+      "detail": "OK (4124)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 6249,
+        "completion_tokens": 14728,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G04_portal_random_walk",
+      "passed": true,
+      "wall_s": 69.51,
+      "track": "math",
+      "title": "Absorbing Random Walk with Asymmetric Drift & Teleport",
+      "detail": "OK (1460/179)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3460,
+        "completion_tokens": 6585,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G05_divisors_totient_congruence",
+      "passed": true,
+      "wall_s": 61.41,
+      "track": "math",
+      "title": "Number Theory: Divisor Count + Totient Divisibility + Congruence",
+      "detail": "OK (10050)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 2748,
+        "completion_tokens": 5260,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G06_two_test_factory_bayes",
+      "passed": true,
+      "wall_s": 97.72,
+      "track": "math",
+      "title": "Multi-Factory Two-Test Conditional Bayes",
+      "detail": "OK (52/227)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3538,
+        "completion_tokens": 7509,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G07_sprague_grundy_subtraction",
+      "passed": true,
+      "wall_s": 69.95,
+      "track": "math",
+      "title": "Sprague-Grundy Losing Positions Count for Subtraction Game {1,3,4}",
+      "detail": "OK (742)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 2946,
+        "completion_tokens": 5517,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G08_exact_10x10_determinant",
+      "passed": true,
+      "wall_s": 76.5,
+      "track": "math",
+      "title": "Exact Integer Determinant of 10x10 GCD+Mod Structured Matrix",
+      "detail": "OK (40608000)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 2814,
+        "completion_tokens": 5741,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G09_dihedral_proper_necklaces",
+      "passed": true,
+      "wall_s": 80.41,
+      "track": "math",
+      "title": "Burnside/Dihedral Proper 3-Colored Necklaces of Length 12",
+      "detail": "OK (224)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3656,
+        "completion_tokens": 6385,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G10_coprime_cubes_sum_huge_n",
+      "passed": true,
+      "wall_s": 138.83,
+      "track": "math",
+      "title": "Sum of k^3 Coprime to 30 up to N = 10^9 (mod 998244353)",
+      "detail": "OK (839394368)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (1 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 5503,
+        "completion_tokens": 12632,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G11_cryptarithm_cross_roads",
+      "passed": true,
+      "wall_s": 198.05,
+      "track": "logic_opt",
+      "title": "Unique Cryptarithm CROSS + ROADS = DANGER",
+      "detail": "OK (158746)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (2 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 7165,
+        "completion_tokens": 13505,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G12_truth_liar_alternator",
+      "passed": true,
+      "wall_s": 73.13,
+      "track": "logic_opt",
+      "title": "5-Person Truth-Teller / Liar / Alternator Deduction",
+      "detail": "OK (C,B)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4952,
+        "completion_tokens": 6111,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G13_asymmetric_tsptw",
+      "passed": true,
+      "wall_s": 100.9,
+      "track": "logic_opt",
+      "title": "Asymmetric TSP with Hard Arrival Time Windows (7 Nodes)",
+      "detail": "OK (42)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4812,
+        "completion_tokens": 8328,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G14_multidim_conflict_knapsack",
+      "passed": true,
+      "wall_s": 103.67,
+      "track": "logic_opt",
+      "title": "14-Item 2D Knapsack with Conflicts & Group-At-Most-1",
+      "detail": "OK (124)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3990,
+        "completion_tokens": 8051,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G15_killer_latin_square",
+      "passed": true,
+      "wall_s": 87.5,
+      "track": "logic_opt",
+      "title": "5x5 Killer-Cage Latin Square Weighted Diagonal",
+      "detail": "OK (30)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4182,
+        "completion_tokens": 7342,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G16_constrained_assignment",
+      "passed": true,
+      "wall_s": 151.38,
+      "track": "logic_opt",
+      "title": "6x6 Constrained Min-Cost Bipartite Assignment",
+      "detail": "OK (47)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9027,
+        "completion_tokens": 11079,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G17_circuit_stuck_at_fault",
+      "passed": true,
+      "wall_s": 69.56,
+      "track": "logic_opt",
+      "title": "Combinational Logic Circuit Stuck-At Fault Diagnosis",
+      "detail": "OK (g4=1)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4688,
+        "completion_tokens": 6435,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G18_changeover_setup_makespan",
+      "passed": true,
+      "wall_s": 198.97,
+      "track": "logic_opt",
+      "title": "2-Machine Precedence + Type-Changeover Setup Makespan",
+      "detail": "OK (17)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9067,
+        "completion_tokens": 15524,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G19_keys_doors_maze_bfs",
+      "passed": true,
+      "wall_s": 148.41,
+      "track": "logic_opt",
+      "title": "6x6 Grid Shortest Path with Keys (a,b,c) & Doors (A,B,C)",
+      "detail": "OK (16)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 7309,
+        "completion_tokens": 12141,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G20_two_end_minimax_game",
+      "passed": true,
+      "wall_s": 88.38,
+      "track": "logic_opt",
+      "title": "Exact Optimal Minimax Score Difference (Take 1 or 2 From Either End)",
+      "detail": "OK (6)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3180,
+        "completion_tokens": 6985,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G41_python_semantics_trap",
+      "passed": true,
+      "wall_s": 69.01,
+      "track": "systems_sec",
+      "title": "Python MRO + Mutable Default + try/finally Return + Late Closure Trace",
+      "detail": "OK (DBCA,3,35,9)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3744,
+        "completion_tokens": 5011,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G42_arx_uint32_simulation",
+      "passed": true,
+      "wall_s": 60.13,
+      "track": "systems_sec",
+      "title": "100-Round 32-Bit Unsigned ARX Mixer Exact Hex State",
+      "detail": "OK (7e2dea04)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3868,
+        "completion_tokens": 4779,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G43_ieee754_cancellation_error",
+      "passed": true,
+      "wall_s": 57.53,
+      "track": "systems_sec",
+      "title": "IEEE-754 Binary64 Catastrophic Cancellation Drift",
+      "detail": "OK (1250)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3120,
+        "completion_tokens": 5542,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G44_c_struct_abi_layout",
+      "passed": true,
+      "wall_s": 54.41,
+      "track": "systems_sec",
+      "title": "C11 / 64-Bit Struct Alignment, Padding & Offsetof",
+      "detail": "OK ([32, 16])",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3226,
+        "completion_tokens": 5844,
+        "reasoning_tokens": 3566,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G45_sql_left_join_null_count",
+      "passed": true,
+      "wall_s": 53.75,
+      "track": "systems_sec",
+      "title": "SQL LEFT JOIN + NULL + COUNT(*) vs COUNT(col) Exact Execution",
+      "detail": "OK (73)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3354,
+        "completion_tokens": 6059,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G46_regex_shortest_distinguishing",
+      "passed": true,
+      "wall_s": 53.05,
+      "track": "systems_sec",
+      "title": "Shortest Distinguishing String Between Two Tricky Regexes",
+      "detail": "OK (abab)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3070,
+        "completion_tokens": 5567,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G21_convex_hull_twice_area",
+      "passed": true,
+      "wall_s": 324.28,
+      "track": "algo_code",
+      "title": "Exact Integer 2*Area & Strict Vertex Count of 2D Convex Hull",
+      "detail": "PASS 3/3 (4ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 23,
+        "prompt_tokens": 26546,
+        "completion_tokens": 22388,
+        "reasoning_tokens": 11957,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G22_interval_set_manager",
+      "passed": true,
+      "wall_s": 236.01,
+      "track": "algo_code",
+      "title": "Half-Open IntervalSet (Add/Remove/Query/TotalLength)",
+      "detail": "PASS 2/2 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 13,
+        "prompt_tokens": 17577,
+        "completion_tokens": 15712,
+        "reasoning_tokens": 6710,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G23_thompson_nfa_regex",
+      "passed": true,
+      "wall_s": 343.12,
+      "track": "algo_code",
+      "title": "Polynomial-Time Full-String Regex Engine (No Backtracking Blowup)",
+      "detail": "PASS 3/3 (1ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 2,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 34,
+        "prompt_tokens": 64855,
+        "completion_tokens": 44456,
+        "reasoning_tokens": 17376,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G24_rfc6902_json_patch",
+      "passed": true,
+      "wall_s": 264.2,
+      "track": "algo_code",
+      "title": "Atomic RFC 6902 JSON Patch with Escaping & Rollback",
+      "detail": "PASS 2/2 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 15232,
+        "completion_tokens": 23731,
+        "reasoning_tokens": 8315,
+        "cached_tokens": 1742
+      }
+    },
+    {
+      "pid": "G25_iterative_tarjan_scc_dag",
+      "passed": true,
+      "wall_s": 234.12,
+      "track": "algo_code",
+      "title": "Iterative Tarjan SCC + Condensation DAG Maximum Weight Path (N=5000)",
+      "detail": "PASS 2/2 (3ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 17,
+        "prompt_tokens": 19508,
+        "completion_tokens": 15857,
+        "reasoning_tokens": 7352,
+        "cached_tokens": 1379
+      }
+    },
+    {
+      "pid": "G26_knuth_plass_wrap",
+      "passed": true,
+      "wall_s": 362.91,
+      "track": "algo_code",
+      "title": "Exact Minimum-Raggedness Word Wrap DP (Cube Penalty + Tie-Breaking)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_alt_paradigm",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 28,
+        "prompt_tokens": 39955,
+        "completion_tokens": 26665,
+        "reasoning_tokens": 13241,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G27_semver_dep_resolver",
+      "passed": true,
+      "wall_s": 531.2,
+      "track": "algo_code",
+      "title": "Backtracking SemVer Dependency Resolver with Diamond Conflicts",
+      "detail": "PASS 2/2 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 23,
+        "prompt_tokens": 34543,
+        "completion_tokens": 37419,
+        "reasoning_tokens": 12920,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G28_undo_redo_snapshot_buffer",
+      "passed": true,
+      "wall_s": 431.53,
+      "track": "algo_code",
+      "title": "Transactional TextBuffer with Undo/Redo & Independent Snapshots",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 32,
+        "prompt_tokens": 44179,
+        "completion_tokens": 29638,
+        "reasoning_tokens": 14846,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G29_streaming_sliding_median",
+      "passed": true,
+      "wall_s": 340.71,
+      "track": "algo_code",
+      "title": "O(log k) Exact Rational Sliding-Window Median (Lazy Dual Heaps)",
+      "detail": "PASS 1/1 (23ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 20,
+        "prompt_tokens": 29050,
+        "completion_tokens": 23381,
+        "reasoning_tokens": 11315,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G30_decaying_topk_counter",
+      "passed": true,
+      "wall_s": 328.69,
+      "track": "algo_code",
+      "title": "Sliding-Window Top-K Counter with Boundary Expiry & Lex Tie-Break",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 25,
+        "prompt_tokens": 30241,
+        "completion_tokens": 20703,
+        "reasoning_tokens": 12599,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G31_debug_token_bucket",
+      "passed": true,
+      "wall_s": 271.37,
+      "track": "debug_code",
+      "title": "Fix 5 Bugs in Exact Fraction TokenBucket Rate Limiter",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 28,
+        "prompt_tokens": 32543,
+        "completion_tokens": 18580,
+        "reasoning_tokens": 12902,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G32_debug_consistent_hash_ring",
+      "passed": true,
+      "wall_s": 327.09,
+      "track": "debug_code",
+      "title": "Fix 5 Bugs in ConsistentHashRing (Wrap-Around, Distinct Replicas, Remove)",
+      "detail": "PASS 1/1 (1ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_clean_rewrite",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 25,
+        "prompt_tokens": 40594,
+        "completion_tokens": 23720,
+        "reasoning_tokens": 12599,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G33_debug_order_stat_bst",
+      "passed": true,
+      "wall_s": 251.47,
+      "track": "debug_code",
+      "title": "Fix Order-Statistic MultiSet BST (Insert/Delete/Kth/Rank)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 17,
+        "prompt_tokens": 22409,
+        "completion_tokens": 15410,
+        "reasoning_tokens": 7673,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G34_debug_rfc4180_csv",
+      "passed": true,
+      "wall_s": 301.02,
+      "track": "debug_code",
+      "title": "Fix RFC-4180 CSV Parser (Escaped Quotes, Embedded Newlines, CRLF, Errors)",
+      "detail": "PASS 2/2 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_alt_paradigm",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 20,
+        "prompt_tokens": 25873,
+        "completion_tokens": 21761,
+        "reasoning_tokens": 11957,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G35_debug_currency_arbitrage",
+      "passed": true,
+      "wall_s": 198.2,
+      "track": "debug_code",
+      "title": "Fix Exact Rational Currency Arbitrage Cycle Detector",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 15,
+        "prompt_tokens": 17403,
+        "completion_tokens": 12964,
+        "reasoning_tokens": 6710,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G36_debug_wildcard_trie",
+      "passed": true,
+      "wall_s": 355.32,
+      "track": "debug_code",
+      "title": "Fix Wildcard Trie (Prefix-Safe Delete, Accurate Prefix Count, Duplicate Insert)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "alt_algorithm",
+        "wave2": true,
+        "redteam_kills": 2,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 23,
+        "prompt_tokens": 33467,
+        "completion_tokens": 24078,
+        "reasoning_tokens": 13241,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G37_debug_rollback_dsu",
+      "passed": true,
+      "wall_s": 338.86,
+      "track": "debug_code",
+      "title": "Fix Rollback Union-Find (No Path Compression Corruption + Edge Counts)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 24,
+        "prompt_tokens": 36282,
+        "completion_tokens": 22189,
+        "reasoning_tokens": 12278,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G38_debug_sql_three_valued_logic",
+      "passed": true,
+      "wall_s": 470.43,
+      "track": "debug_code",
+      "title": "Fix Mini SQL Filter & Sort Engine (SQL 3-Valued NULL Logic + Precedence)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "alt_algorithm",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 20,
+        "prompt_tokens": 28914,
+        "completion_tokens": 39998,
+        "reasoning_tokens": 12599,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G39_debug_incremental_build_cache",
+      "passed": true,
+      "wall_s": 471.68,
+      "track": "debug_code",
+      "title": "Fix Incremental DAG Build Engine (Diamond Transitive Invalidation + Cycle Check)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 26,
+        "prompt_tokens": 44924,
+        "completion_tokens": 33789,
+        "reasoning_tokens": 13562,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G40_debug_http_chunked_decoder",
+      "passed": true,
+      "wall_s": 316.59,
+      "track": "debug_code",
+      "title": "Fix Streaming HTTP/1.1 Chunked Transfer-Encoding Decoder",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_invariant_proof",
+        "wave2": true,
+        "redteam_kills": 2,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 29,
+        "prompt_tokens": 43008,
+        "completion_tokens": 26727,
+        "reasoning_tokens": 13562,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G47_sec_path_traversal_guard",
+      "passed": true,
+      "wall_s": 175.22,
+      "track": "systems_sec",
+      "title": "Harden safe_resolve() Against Path Traversal, Prefix Collision & Encoding Bypass",
+      "detail": "PASS 1/1 (2ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 13,
+        "prompt_tokens": 12251,
+        "completion_tokens": 13785,
+        "reasoning_tokens": 6710,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G48_sec_webhook_hmac_replay",
+      "passed": true,
+      "wall_s": 373.85,
+      "track": "systems_sec",
+      "title": "Constant-Time HMAC Webhook Verifier with Replay-Window & Key Rotation",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_alt_paradigm",
+        "wave2": true,
+        "redteam_kills": 3,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 25,
+        "prompt_tokens": 39299,
+        "completion_tokens": 23088,
+        "reasoning_tokens": 12599,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G49_sec_rbac_explicit_deny",
+      "passed": true,
+      "wall_s": 397.0,
+      "track": "systems_sec",
+      "title": "IAM/RBAC Policy Evaluator (Explicit DENY Precedence + Safe Wildcards)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 27,
+        "prompt_tokens": 33555,
+        "completion_tokens": 26201,
+        "reasoning_tokens": 12920,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "G50_sec_sandboxed_template",
+      "passed": true,
+      "wall_s": 361.07,
+      "track": "systems_sec",
+      "title": "SSTI-Hardened Sandboxed Template Renderer (Blocks Dunder/Format Injection)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_invariant_proof",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 33,
+        "prompt_tokens": 49174,
+        "completion_tokens": 35639,
+        "reasoning_tokens": 15145,
+        "cached_tokens": 0
+      }
+    }
+  ]
+}

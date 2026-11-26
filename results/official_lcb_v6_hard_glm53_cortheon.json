@@ -1,0 +1,431 @@
+{
+  "dataset": "LiveCodeBench v6 Hard (AtCoder F/G)",
+  "model": "glm-5.3-flash-tfq3",
+  "arm": "cortheon",
+  "passed": 11,
+  "total": 20,
+  "pass_rate_pct": 55.0,
+  "avg_wall_s": 249.05,
+  "results": [
+    {
+      "pid": "abc387_f",
+      "passed": true,
+      "wall_s": 400.35,
+      "title": "Count Arrays",
+      "detail": "AC 43/43 (2202ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_radically_simple",
+        "wave2": true,
+        "rt_kills": 1,
+        "oracle_tests": 4
+      },
+      "stats": {
+        "calls": 21,
+        "prompt_tokens": 24043,
+        "completion_tokens": 31961,
+        "reasoning_tokens": 9657,
+        "cached_tokens": 3706
+      }
+    },
+    {
+      "pid": "abc388_g",
+      "passed": true,
+      "wall_s": 307.99,
+      "title": "Simultaneous Kagamimochi 2",
+      "detail": "AC 42/42 (2487ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "radically_simple",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 21,
+        "prompt_tokens": 36876,
+        "completion_tokens": 25489,
+        "reasoning_tokens": 8180,
+        "cached_tokens": 8104
+      }
+    },
+    {
+      "pid": "abc388_f",
+      "passed": false,
+      "wall_s": 448.78,
+      "title": "Dangerous Sugoroku",
+      "detail": "TLE on case 20/43 (19/43 passed)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "rt_kills": 1,
+        "oracle_tests": 3
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 16236,
+        "completion_tokens": 37545,
+        "reasoning_tokens": 8686,
+        "cached_tokens": 3746
+      }
+    },
+    {
+      "pid": "abc388_e",
+      "passed": true,
+      "wall_s": 46.65,
+      "title": "Simultaneous Kagamimochi",
+      "detail": "AC 43/43 (874ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "radically_simple",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 15,
+        "prompt_tokens": 15617,
+        "completion_tokens": 3355,
+        "reasoning_tokens": 1048,
+        "cached_tokens": 3066
+      }
+    },
+    {
+      "pid": "abc389_g",
+      "passed": false,
+      "wall_s": 469.33,
+      "title": "Odd Even Graph",
+      "detail": "RE on case 1/43 (0/43): IndexError: list index out of range",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_clean_rewrite",
+        "wave2": true,
+        "rt_kills": 3,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 40,
+        "prompt_tokens": 67925,
+        "completion_tokens": 40712,
+        "reasoning_tokens": 12805,
+        "cached_tokens": 22617
+      }
+    },
+    {
+      "pid": "abc389_f",
+      "passed": false,
+      "wall_s": 395.09,
+      "title": "Rated Range",
+      "detail": "WA on case 1/43 (0/43): got='8\\n8\\n8' exp='6\\n6\\n8'",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_radically_simple",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 12,
+        "prompt_tokens": 25407,
+        "completion_tokens": 34364,
+        "reasoning_tokens": 8209,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "abc389_e",
+      "passed": true,
+      "wall_s": 137.93,
+      "title": "Square Price",
+      "detail": "AC 42/42 (900ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 11,
+        "prompt_tokens": 10256,
+        "completion_tokens": 11936,
+        "reasoning_tokens": 3029,
+        "cached_tokens": 1421
+      }
+    },
+    {
+      "pid": "abc390_e",
+      "passed": true,
+      "wall_s": 37.22,
+      "title": "Vitamin Balance",
+      "detail": "AC 42/42 (4717ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "radically_simple",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 9,
+        "prompt_tokens": 9437,
+        "completion_tokens": 2903,
+        "reasoning_tokens": 1016,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "abc390_g",
+      "passed": false,
+      "wall_s": 451.42,
+      "title": "Permutation Concatenation",
+      "detail": "WA on case 1/43 (0/43): got='' exp='1332'",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_clean_rewrite",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 4
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 8583,
+        "completion_tokens": 42861,
+        "reasoning_tokens": 8209,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "abc390_f",
+      "passed": false,
+      "wall_s": 389.14,
+      "title": "Double Sum 3",
+      "detail": "WA on case 1/43 (0/43): got='8' exp='16'",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "first_principles",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9096,
+        "completion_tokens": 36402,
+        "reasoning_tokens": 8209,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "abc391_f",
+      "passed": true,
+      "wall_s": 129.0,
+      "title": "K",
+      "detail": "AC 43/43 (4332ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "first_principles",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 12232,
+        "completion_tokens": 11673,
+        "reasoning_tokens": 2332,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "abc391_e",
+      "passed": false,
+      "wall_s": 110.39,
+      "title": "Hierarchical Majority Vote",
+      "detail": "WA on case 1/42 (0/42): got='0' exp='1'",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "radically_simple",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9151,
+        "completion_tokens": 5870,
+        "reasoning_tokens": 2692,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "abc391_g",
+      "passed": true,
+      "wall_s": 69.7,
+      "title": "Many LCS",
+      "detail": "AC 43/43 (1396ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 19,
+        "prompt_tokens": 23608,
+        "completion_tokens": 5946,
+        "reasoning_tokens": 1948,
+        "cached_tokens": 5589
+      }
+    },
+    {
+      "pid": "abc392_g",
+      "passed": false,
+      "wall_s": 326.71,
+      "title": "Fine Triplets",
+      "detail": "WA on case 1/43 (0/43): got='' exp='3'",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_radically_simple",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 18,
+        "prompt_tokens": 21368,
+        "completion_tokens": 25362,
+        "reasoning_tokens": 5059,
+        "cached_tokens": 4431
+      }
+    },
+    {
+      "pid": "abc392_f",
+      "passed": false,
+      "wall_s": 60.92,
+      "title": "Insert",
+      "detail": "RE on case 17/42 (16/42): IndexError: list assignment index out of range",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "radically_simple",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 12421,
+        "completion_tokens": 4420,
+        "reasoning_tokens": 1502,
+        "cached_tokens": 3879
+      }
+    },
+    {
+      "pid": "abc393_f",
+      "passed": true,
+      "wall_s": 39.68,
+      "title": "Prefix LIS Query",
+      "detail": "AC 42/42 (886ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "first_principles",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 9,
+        "prompt_tokens": 9511,
+        "completion_tokens": 3127,
+        "reasoning_tokens": 860,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "abc393_e",
+      "passed": true,
+      "wall_s": 440.74,
+      "title": "GCD of Subset",
+      "detail": "AC 43/43 (2212ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_radically_simple",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 35,
+        "prompt_tokens": 47865,
+        "completion_tokens": 37317,
+        "reasoning_tokens": 11708,
+        "cached_tokens": 13379
+      }
+    },
+    {
+      "pid": "abc393_d",
+      "passed": true,
+      "wall_s": 53.67,
+      "title": "Swap to Gather",
+      "detail": "AC 43/43 (773ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "radically_simple",
+        "wave2": false,
+        "rt_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 14,
+        "prompt_tokens": 12422,
+        "completion_tokens": 3974,
+        "reasoning_tokens": 1172,
+        "cached_tokens": 2460
+      }
+    },
+    {
+      "pid": "abc394_f",
+      "passed": false,
+      "wall_s": 420.16,
+      "title": "Alkane",
+      "detail": "WA on case 1/43 (0/43): got='7' exp='8'",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_surgical_fix",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 18,
+        "prompt_tokens": 29076,
+        "completion_tokens": 36941,
+        "reasoning_tokens": 8885,
+        "cached_tokens": 4558
+      }
+    },
+    {
+      "pid": "abc394_g",
+      "passed": true,
+      "wall_s": 246.21,
+      "title": "Dense Buildings",
+      "detail": "AC 41/41 (865ms)",
+      "extra": {
+        "routed_mode": "code",
+        "winner": "w2_surgical_fix",
+        "wave2": true,
+        "rt_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 21,
+        "prompt_tokens": 47200,
+        "completion_tokens": 20647,
+        "reasoning_tokens": 7786,
+        "cached_tokens": 10740
+      }
+    }
+  ]
+}

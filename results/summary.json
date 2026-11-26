@@ -1,0 +1,224 @@
+{
+  "benchmarks": [
+    {
+      "file": "results/official_aime2025_deepseek_vanilla.json",
+      "dataset": "MathArena/aime_2025",
+      "model": "deepseek-v4.1-flash-1017",
+      "arm": "vanilla",
+      "passed": 20,
+      "total": 30,
+      "pass_rate_pct": 66.7,
+      "avg_wall_s": 113.69
+    },
+    {
+      "file": "results/official_aime2025_deepseek_cortheon.json",
+      "dataset": "MathArena/aime_2025",
+      "model": "deepseek-v4.1-flash-1017",
+      "arm": "cortheon",
+      "passed": 27,
+      "total": 30,
+      "pass_rate_pct": 90.0,
+      "avg_wall_s": 117.63
+    },
+    {
+      "file": "results/official_aime2025_glm53_vanilla.json",
+      "dataset": "MathArena/aime_2025",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "vanilla",
+      "passed": 15,
+      "total": 30,
+      "pass_rate_pct": 50.0,
+      "avg_wall_s": 125.47
+    },
+    {
+      "file": "results/official_aime2025_glm53_cortheon.json",
+      "dataset": "MathArena/aime_2025",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "cortheon",
+      "passed": 24,
+      "total": 30,
+      "pass_rate_pct": 80.0,
+      "avg_wall_s": 175.81
+    },
+    {
+      "file": "results/official_aime2025_qwen38_vanilla.json",
+      "dataset": "MathArena/aime_2025",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "vanilla",
+      "passed": 16,
+      "total": 30,
+      "pass_rate_pct": 53.3,
+      "avg_wall_s": 69.22
+    },
+    {
+      "file": "results/official_aime2025_qwen38_cortheon.json",
+      "dataset": "MathArena/aime_2025",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "cortheon",
+      "passed": 21,
+      "total": 30,
+      "pass_rate_pct": 70.0,
+      "avg_wall_s": 80.53
+    },
+    {
+      "file": "results/official_lcb_v6_hard_deepseek_vanilla.json",
+      "dataset": "LiveCodeBench v6 Hard (AtCoder F/G)",
+      "model": "deepseek-v4.1-flash-1017",
+      "arm": "vanilla",
+      "passed": 11,
+      "total": 20,
+      "pass_rate_pct": 55.0,
+      "avg_wall_s": 73.57
+    },
+    {
+      "file": "results/official_lcb_v6_hard_deepseek_cortheon.json",
+      "dataset": "LiveCodeBench v6 Hard (AtCoder F/G)",
+      "model": "deepseek-v4.1-flash-1017",
+      "arm": "cortheon",
+      "passed": 13,
+      "total": 20,
+      "pass_rate_pct": 65.0,
+      "avg_wall_s": 201.24
+    },
+    {
+      "file": "results/official_lcb_v6_hard_glm53_vanilla.json",
+      "dataset": "LiveCodeBench v6 Hard (AtCoder F/G)",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "vanilla",
+      "passed": 8,
+      "total": 20,
+      "pass_rate_pct": 40.0,
+      "avg_wall_s": 124.68
+    },
+    {
+      "file": "results/official_lcb_v6_hard_glm53_cortheon.json",
+      "dataset": "LiveCodeBench v6 Hard (AtCoder F/G)",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "cortheon",
+      "passed": 11,
+      "total": 20,
+      "pass_rate_pct": 55.0,
+      "avg_wall_s": 249.05
+    },
+    {
+      "file": "results/official_bcb_hard_complete_deepseek_vanilla.json",
+      "dataset": "bigcode/bigcodebench-hard v0.1.4 (complete)",
+      "model": "deepseek-v4.1-flash-1017",
+      "arm": "vanilla",
+      "passed": 10,
+      "total": 30,
+      "pass_rate_pct": 33.3,
+      "avg_wall_s": 44.42
+    },
+    {
+      "file": "results/official_bcb_hard_complete_deepseek_cortheon.json",
+      "dataset": "bigcode/bigcodebench-hard v0.1.4 (complete)",
+      "model": "deepseek-v4.1-flash-1017",
+      "arm": "cortheon",
+      "passed": 11,
+      "total": 30,
+      "pass_rate_pct": 36.7,
+      "avg_wall_s": 118.24
+    },
+    {
+      "file": "results/official_bcb_hard_instruct_qwen38_vanilla.json",
+      "dataset": "bigcode/bigcodebench-hard v0.1.4 (instruct)",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "vanilla",
+      "passed": 6,
+      "total": 30,
+      "pass_rate_pct": 20.0,
+      "avg_wall_s": 57.9
+    },
+    {
+      "file": "results/official_bcb_hard_instruct_qwen38_cortheon.json",
+      "dataset": "bigcode/bigcodebench-hard v0.1.4 (instruct)",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "cortheon",
+      "passed": 8,
+      "total": 30,
+      "pass_rate_pct": 26.7,
+      "avg_wall_s": 85.45
+    },
+    {
+      "file": "results/open_ended_10_glm53_vanilla.json",
+      "dataset": "open_ended_systems_10",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "vanilla",
+      "passed": 9,
+      "total": 10,
+      "pass_rate_pct": 90.0,
+      "avg_wall_s": 111.43
+    },
+    {
+      "file": "results/open_ended_10_glm53_cortheon.json",
+      "dataset": "open_ended_systems_10",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "cortheon",
+      "passed": 9,
+      "total": 10,
+      "pass_rate_pct": 90.0,
+      "avg_wall_s": 83.49
+    },
+    {
+      "file": "results/gauntlet1_hard50_qwen38_vanilla.json",
+      "dataset": "gauntlet1_hard_50",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "vanilla",
+      "passed": 25,
+      "total": 50,
+      "pass_rate_pct": 50.0,
+      "avg_wall_s": 66.35
+    },
+    {
+      "file": "results/gauntlet1_hard50_qwen38_cortheon.json",
+      "dataset": "gauntlet1_hard_50",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "cortheon",
+      "passed": 50,
+      "total": 50,
+      "pass_rate_pct": 100.0,
+      "avg_wall_s": 211.14
+    },
+    {
+      "file": "results/gauntlet2_nightmare50_qwen38_vanilla.json",
+      "dataset": "gauntlet2_nightmare_50",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "vanilla",
+      "passed": 19,
+      "total": 50,
+      "pass_rate_pct": 38.0,
+      "avg_wall_s": 77.27
+    },
+    {
+      "file": "results/gauntlet2_nightmare50_qwen38_cortheon.json",
+      "dataset": "gauntlet2_nightmare_50",
+      "model": "qwen3.8-flash-next-tfq3",
+      "arm": "cortheon",
+      "passed": 47,
+      "total": 50,
+      "pass_rate_pct": 94.0,
+      "avg_wall_s": 175.72
+    },
+    {
+      "file": "results/official_bcb_hard_acid10_glm53_vanilla.json",
+      "dataset": "bigcode/bigcodebench-hard v0.1.4 (complete, Acid-10)",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "vanilla",
+      "passed": 1,
+      "total": 10,
+      "pass_rate_pct": 10.0,
+      "avg_wall_s": 17.24
+    },
+    {
+      "file": "results/official_bcb_hard_acid10_glm53_cortheon.json",
+      "dataset": "bigcode/bigcodebench-hard v0.1.4 (complete, Acid-10)",
+      "model": "glm-5.3-flash-tfq3",
+      "arm": "cortheon",
+      "passed": 2,
+      "total": 10,
+      "pass_rate_pct": 20.0,
+      "avg_wall_s": 45.87
+    }
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "dataset": "LiveCodeBench v6 Hard (AtCoder F/G)",
+  "model": "glm-5.3-flash-tfq3",
+  "arm": "vanilla",
+  "passed": 8,
+  "total": 20,
+  "pass_rate_pct": 40.0,
+  "avg_wall_s": 124.68,
+  "results": [
+    {
+      "pid": "abc387_f",
+      "passed": false,
+      "wall_s": 82.4,
+      "title": "Count Arrays",
+      "detail": "RE on case 1/43 (0/43): TypeError: 'NoneType' object is not subscriptable"
+    },
+    {
+      "pid": "abc388_g",
+      "passed": true,
+      "wall_s": 94.56,
+      "title": "Simultaneous Kagamimochi 2",
+      "detail": "AC 42/42 (819ms)"
+    },
+    {
+      "pid": "abc388_f",
+      "passed": false,
+      "wall_s": 225.81,
+      "title": "Dangerous Sugoroku",
+      "detail": "SyntaxError: Empty code block"
+    },
+    {
+      "pid": "abc388_e",
+      "passed": true,
+      "wall_s": 48.32,
+      "title": "Simultaneous Kagamimochi",
+      "detail": "AC 43/43 (710ms)"
+    },
+    {
+      "pid": "abc389_g",
+      "passed": false,
+      "wall_s": 113.14,
+      "title": "Odd Even Graph",
+      "detail": "WA on case 1/43 (0/43): got='0 0 0 0' exp='12 9 3 0'"
+    },
+    {
+      "pid": "abc389_f",
+      "passed": false,
+      "wall_s": 201.38,
+      "title": "Rated Range",
+      "detail": "WA on case 1/43 (0/43): got='6\\n5\\n7' exp='6\\n6\\n8'"
+    },
+    {
+      "pid": "abc389_e",
+      "passed": false,
+      "wall_s": 58.37,
+      "title": "Square Price",
+      "detail": "WA on case 1/42 (0/42): got='4' exp='3'"
+    },
+    {
+      "pid": "abc390_e",
+      "passed": false,
+      "wall_s": 249.83,
+      "title": "Vitamin Balance",
+      "detail": "WA on case 1/42 (0/42): got='' exp='3'"
+    },
+    {
+      "pid": "abc390_g",
+      "passed": false,
+      "wall_s": 225.37,
+      "title": "Permutation Concatenation",
+      "detail": "WA on case 1/43 (0/43): got='' exp='1332'"
+    },
+    {
+      "pid": "abc390_f",
+      "passed": true,
+      "wall_s": 263.32,
+      "title": "Double Sum 3",
+      "detail": "AC 43/43 (834ms)"
+    },
+    {
+      "pid": "abc391_f",
+      "passed": true,
+      "wall_s": 171.18,
+      "title": "K",
+      "detail": "AC 43/43 (3532ms)"
+    },
+    {
+      "pid": "abc391_e",
+      "passed": true,
+      "wall_s": 61.63,
+      "title": "Hierarchical Majority Vote",
+      "detail": "AC 42/42 (787ms)"
+    },
+    {
+      "pid": "abc391_g",
+      "passed": false,
+      "wall_s": 98.93,
+      "title": "Many LCS",
+      "detail": "WA on case 1/43 (0/43): got='676 0 0' exp='576 99 1'"
+    },
+    {
+      "pid": "abc392_g",
+      "passed": false,
+      "wall_s": 83.72,
+      "title": "Fine Triplets",
+      "detail": "WA on case 1/43 (0/43): got='-1' exp='3'"
+    },
+    {
+      "pid": "abc392_f",
+      "passed": false,
+      "wall_s": 94.53,
+      "title": "Insert",
+      "detail": "RE on case 17/42 (16/42): IndexError: list assignment index out of range"
+    },
+    {
+      "pid": "abc393_f",
+      "passed": true,
+      "wall_s": 69.12,
+      "title": "Prefix LIS Query",
+      "detail": "AC 42/42 (1000ms)"
+    },
+    {
+      "pid": "abc393_e",
+      "passed": true,
+      "wall_s": 82.85,
+      "title": "GCD of Subset",
+      "detail": "AC 43/43 (13503ms)"
+    },
+    {
+      "pid": "abc393_d",
+      "passed": true,
+      "wall_s": 62.01,
+      "title": "Swap to Gather",
+      "detail": "AC 43/43 (735ms)"
+    },
+    {
+      "pid": "abc394_f",
+      "passed": false,
+      "wall_s": 60.05,
+      "title": "Alkane",
+      "detail": "WA on case 1/43 (0/43): got='2' exp='8'"
+    },
+    {
+      "pid": "abc394_g",
+      "passed": false,
+      "wall_s": 147.14,
+      "title": "Dense Buildings",
+      "detail": "RE on case 2/41 (1/41): NameError: name 'compw' is not defined"
+    }
+  ]
+}

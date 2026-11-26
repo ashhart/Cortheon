@@ -1,0 +1,191 @@
+{
+  "dataset": "bigcode/bigcodebench-hard v0.1.4 (complete)",
+  "model": "deepseek-v4.1-flash-1017",
+  "arm": "vanilla",
+  "passed": 10,
+  "total": 30,
+  "pass_rate_pct": 33.3,
+  "avg_wall_s": 44.42,
+  "results": [
+    {
+      "pid": "BigCodeBench_13",
+      "passed": false,
+      "wall_s": 45.74,
+      "detail": "FAIL: FAILED (failures=1)"
+    },
+    {
+      "pid": "BigCodeBench_15",
+      "passed": false,
+      "wall_s": 41.3,
+      "detail": "FAIL: FAILED (failures=1)"
+    },
+    {
+      "pid": "BigCodeBench_19",
+      "passed": true,
+      "wall_s": 53.19,
+      "detail": "PASS (38ms)"
+    },
+    {
+      "pid": "BigCodeBench_147",
+      "passed": false,
+      "wall_s": 53.23,
+      "detail": "FAIL: FAILED (failures=2)"
+    },
+    {
+      "pid": "BigCodeBench_310",
+      "passed": false,
+      "wall_s": 36.76,
+      "detail": "FAIL: FAILED (failures=1)"
+    },
+    {
+      "pid": "BigCodeBench_324",
+      "passed": false,
+      "wall_s": 41.52,
+      "detail": "FAIL: FAILED (failures=3)"
+    },
+    {
+      "pid": "BigCodeBench_326",
+      "passed": false,
+      "wall_s": 47.38,
+      "detail": "FAIL: FAILED (failures=3)"
+    },
+    {
+      "pid": "BigCodeBench_346",
+      "passed": false,
+      "wall_s": 45.88,
+      "detail": "FAIL: FAILED (errors=1)"
+    },
+    {
+      "pid": "BigCodeBench_368",
+      "passed": false,
+      "wall_s": 35.87,
+      "detail": "FAIL: FAILED (errors=1)"
+    },
+    {
+      "pid": "BigCodeBench_454",
+      "passed": false,
+      "wall_s": 53.58,
+      "detail": "FAIL: FAILED (failures=1)"
+    },
+    {
+      "pid": "BigCodeBench_592",
+      "passed": true,
+      "wall_s": 38.43,
+      "detail": "PASS (37ms)"
+    },
+    {
+      "pid": "BigCodeBench_594",
+      "passed": false,
+      "wall_s": 45.02,
+      "detail": "FAIL: FAILED (failures=2, errors=2)"
+    },
+    {
+      "pid": "BigCodeBench_720",
+      "passed": false,
+      "wall_s": 46.54,
+      "detail": "FAIL: FAILED (failures=1, errors=8)"
+    },
+    {
+      "pid": "BigCodeBench_763",
+      "passed": true,
+      "wall_s": 56.55,
+      "detail": "PASS (161ms)"
+    },
+    {
+      "pid": "BigCodeBench_765",
+      "passed": false,
+      "wall_s": 42.07,
+      "detail": "FAIL: FAILED (failures=3)"
+    },
+    {
+      "pid": "BigCodeBench_771",
+      "passed": false,
+      "wall_s": 42.11,
+      "detail": "FAIL: FAILED (errors=4)"
+    },
+    {
+      "pid": "BigCodeBench_777",
+      "passed": true,
+      "wall_s": 30.35,
+      "detail": "PASS (51ms)"
+    },
+    {
+      "pid": "BigCodeBench_785",
+      "passed": false,
+      "wall_s": 45.83,
+      "detail": "FAIL: FAILED (failures=2)"
+    },
+    {
+      "pid": "BigCodeBench_800",
+      "passed": true,
+      "wall_s": 34.94,
+      "detail": "PASS (52ms)"
+    },
+    {
+      "pid": "BigCodeBench_854",
+      "passed": true,
+      "wall_s": 46.49,
+      "detail": "PASS (41ms)"
+    },
+    {
+      "pid": "BigCodeBench_857",
+      "passed": false,
+      "wall_s": 46.22,
+      "detail": "FAIL: FAILED (failures=1)"
+    },
+    {
+      "pid": "BigCodeBench_906",
+      "passed": true,
+      "wall_s": 50.59,
+      "detail": "PASS (41ms)"
+    },
+    {
+      "pid": "BigCodeBench_928",
+      "passed": false,
+      "wall_s": 37.64,
+      "detail": "FAIL: FAILED (errors=5)"
+    },
+    {
+      "pid": "BigCodeBench_963",
+      "passed": false,
+      "wall_s": 60.47,
+      "detail": "FAIL: FAILED (failures=2)"
+    },
+    {
+      "pid": "BigCodeBench_988",
+      "passed": true,
+      "wall_s": 36.9,
+      "detail": "PASS (41ms)"
+    },
+    {
+      "pid": "BigCodeBench_990",
+      "passed": true,
+      "wall_s": 42.65,
+      "detail": "PASS (40ms)"
+    },
+    {
+      "pid": "BigCodeBench_998",
+      "passed": false,
+      "wall_s": 43.07,
+      "detail": "FAIL: FAILED (failures=1)"
+    },
+    {
+      "pid": "BigCodeBench_999",
+      "passed": true,
+      "wall_s": 47.64,
+      "detail": "PASS (58ms)"
+    },
+    {
+      "pid": "BigCodeBench_1039",
+      "passed": false,
+      "wall_s": 57.8,
+      "detail": "FAIL: FAILED (failures=3)"
+    },
+    {
+      "pid": "BigCodeBench_1042",
+      "passed": false,
+      "wall_s": 26.77,
+      "detail": "TIMEOUT (15.0s)"
+    }
+  ]
+}

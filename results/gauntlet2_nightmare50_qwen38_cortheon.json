@@ -1,0 +1,1111 @@
+{
+  "dataset": "gauntlet2_nightmare_50",
+  "model": "qwen3.8-flash-next-tfq3",
+  "arm": "cortheon",
+  "passed": 47,
+  "total": 50,
+  "pass_rate_pct": 94.0,
+  "avg_wall_s": 175.72,
+  "results": [
+    {
+      "pid": "H01_noncoprime_crt_huge",
+      "passed": true,
+      "wall_s": 143.07,
+      "track": "math_nm",
+      "title": "Generalized Non-Coprime CRT Smallest Solution > 10^12",
+      "detail": "OK (1000000000523)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 6863,
+        "completion_tokens": 10335,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H02_lucas_binom_10e18",
+      "passed": true,
+      "wall_s": 68.41,
+      "track": "math_nm",
+      "title": "Lucas Theorem Binomial Coefficient at N ~ 7.5*10^17 (mod 1000003)",
+      "detail": "OK (739078)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3036,
+        "completion_tokens": 5651,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H03_cond_markov_hitting_time",
+      "passed": true,
+      "wall_s": 203.47,
+      "track": "math_nm",
+      "title": "Conditional Expected Hitting Time Given Absorption at WIN (Doob h-Transform)",
+      "detail": "OK (1560/133)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 7201,
+        "completion_tokens": 14421,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H04_matrix_exp_forbidden_strings",
+      "passed": true,
+      "wall_s": 173.11,
+      "track": "math_nm",
+      "title": "Length-10^15 Constrained Strings Automaton Matrix Exp (mod 10^9+7)",
+      "detail": "OK (959237563)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 6691,
+        "completion_tokens": 15559,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H05_pell_d61_fundamental",
+      "passed": true,
+      "wall_s": 69.82,
+      "track": "math_nm",
+      "title": "Fermat's Pell Equation x^2 - 61*y^2 = 1 Minimal Positive x",
+      "detail": "OK (1766319049)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3046,
+        "completion_tokens": 6253,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H06_mobius_squarefree_10e9",
+      "passed": true,
+      "wall_s": 64.99,
+      "track": "math_nm",
+      "title": "Exact Count of Squarefree Integers in [1, 10^9] via Mobius Function",
+      "detail": "OK (607927124)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 2886,
+        "completion_tokens": 5225,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H07_cubic_roots_symmetric_poly",
+      "passed": true,
+      "wall_s": 84.62,
+      "track": "math_nm",
+      "title": "Exact Integer Symmetric Polynomial of Cubic Roots (9th Powers + Quartic Diffs)",
+      "detail": "OK (1074565)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3132,
+        "completion_tokens": 6468,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H08_seven_card_full_house_prob",
+      "passed": true,
+      "wall_s": 70.63,
+      "track": "math_nm",
+      "title": "Exact 7-Card Poker Full-House Multiplicity Probability",
+      "detail": "OK (726/27965)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3310,
+        "completion_tokens": 6500,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H09_kirchhoff_multigraph_trees",
+      "passed": true,
+      "wall_s": 81.81,
+      "track": "math_nm",
+      "title": "Kirchhoff Matrix-Tree Exact Spanning Trees on 9-Vertex Multigraph",
+      "detail": "OK (209314)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4502,
+        "completion_tokens": 5900,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H10_euclidean_floor_sum_10e12",
+      "passed": true,
+      "wall_s": 136.36,
+      "track": "math_nm",
+      "title": "Exact Euclidean Floor Sum up to N = 10^12 (mod 10^9+7)",
+      "detail": "OK (575143907)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 6445,
+        "completion_tokens": 11985,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H11_coprime_taxicab_diophantine",
+      "passed": true,
+      "wall_s": 80.19,
+      "track": "logic_nm",
+      "title": "Constrained Coprime Taxicab Diophantine Minimum Sum",
+      "detail": "OK (42)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 2922,
+        "completion_tokens": 5992,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H12_blocked_weighted_8queens",
+      "passed": true,
+      "wall_s": 77.98,
+      "track": "logic_nm",
+      "title": "Maximum-Weight 8-Queens Placement with Blocked Squares",
+      "detail": "OK (102)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4866,
+        "completion_tokens": 6487,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H13_rcpsp_capacity6_makespan",
+      "passed": true,
+      "wall_s": 182.77,
+      "track": "logic_nm",
+      "title": "Resource-Constrained Project Scheduling (RCPSP, 8 Jobs, Capacity 6)",
+      "detail": "OK (20)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 8385,
+        "completion_tokens": 11564,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H14_min_cost_max_flow_15",
+      "passed": true,
+      "wall_s": 93.29,
+      "track": "logic_nm",
+      "title": "Exact Minimum-Cost Flow (15 Units on 8-Node Directed Network)",
+      "detail": "OK (156)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4784,
+        "completion_tokens": 8265,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H15_zero_sum_4x4_mixed_value",
+      "passed": true,
+      "wall_s": 364.28,
+      "track": "logic_nm",
+      "title": "Exact Rational Minimax Value of 4x4 Zero-Sum Matrix Game (No Saddle Point)",
+      "detail": "OK (159/178)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 8,
+        "prompt_tokens": 5500,
+        "completion_tokens": 13988,
+        "reasoning_tokens": 6357,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H16_min_cost_4coloring_12v",
+      "passed": true,
+      "wall_s": 198.25,
+      "track": "logic_nm",
+      "title": "Exact Min-Cost Proper 4-Coloring of 12-Vertex Chorded Graph",
+      "detail": "OK (54)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (2 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 9159,
+        "completion_tokens": 14427,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H17_six_house_zebra_deduction",
+      "passed": true,
+      "wall_s": 88.0,
+      "track": "logic_nm",
+      "title": "6-House Unique Multi-Attribute Zebra Logic CSP",
+      "detail": "OK (Bob,Milk)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 5234,
+        "completion_tokens": 7031,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H18_min_weighted_feedback_arc_set",
+      "passed": true,
+      "wall_s": 73.97,
+      "track": "logic_nm",
+      "title": "NP-Hard Exact Minimum Weighted Feedback Arc Set (9 Vertices, 20 Edges)",
+      "detail": "OK (27)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3672,
+        "completion_tokens": 6130,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H19_weighted_4jug_dijkstra",
+      "passed": true,
+      "wall_s": 74.89,
+      "track": "logic_nm",
+      "title": "4-Jug Minimum Total Liters Poured (Dijkstra vs BFS Trap)",
+      "detail": "OK (15)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4118,
+        "completion_tokens": 5355,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H20_product_automaton_len35_mod7",
+      "passed": true,
+      "wall_s": 179.5,
+      "track": "logic_nm",
+      "title": "Length-35 Binary Strings Containing '101', Avoiding '111', Divisible by 7",
+      "detail": "OK (293513061)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (4 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 6517,
+        "completion_tokens": 13866,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H41_python_descriptor_generator_trap",
+      "passed": true,
+      "wall_s": 60.37,
+      "track": "sys_sec_nm",
+      "title": "Python Data vs Non-Data Descriptor + Generator send()/throw()/finally Trace",
+      "detail": "OK (DD,inst_y,init,mid,after,got:7|caught|fin)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4396,
+        "completion_tokens": 5010,
+        "reasoning_tokens": 3618,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H42_ieee754_ulp_subnormal_bankers",
+      "passed": true,
+      "wall_s": 68.19,
+      "track": "sys_sec_nm",
+      "title": "IEEE-754 Binary64 ULP Distance + Subnormal Bit Pattern + Bankers Rounding",
+      "detail": "OK (5174)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (1 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 3594,
+        "completion_tokens": 5412,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H43_sqlite_recursive_cte_windows",
+      "passed": true,
+      "wall_s": 70.61,
+      "track": "sys_sec_nm",
+      "title": "SQLite Recursive CTE + Window LAG/Running SUM with NULLs",
+      "detail": "OK (5667)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (2 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4080,
+        "completion_tokens": 6255,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H44_16bit_isa_carry_loop_trace",
+      "passed": true,
+      "wall_s": 73.6,
+      "track": "sys_sec_nm",
+      "title": "20-Iteration 16-Bit Register/Carry/ROR Mini-ISA Exact Hex State",
+      "detail": "OK (0696,ef93)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave1_consensus (3 PAL)",
+        "wave2": false
+      },
+      "stats": {
+        "calls": 6,
+        "prompt_tokens": 4552,
+        "completion_tokens": 5177,
+        "reasoning_tokens": 3855,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H45_c11_union_endian_promotion_trap",
+      "passed": true,
+      "wall_s": 149.77,
+      "track": "sys_sec_nm",
+      "title": "C11 Little-Endian Union + Struct Layout + Integer Promotion Trap",
+      "detail": "OK (32,16,a978,1,0)",
+      "extra": {
+        "routed_mode": "reason",
+        "routed_match": true,
+        "consensus": "wave2_verified (3 PAL)",
+        "wave2": true
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 7911,
+        "completion_tokens": 12941,
+        "reasoning_tokens": 6859,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H21_dpll_sat_solver",
+      "passed": false,
+      "wall_s": 203.59,
+      "track": "algo_nm",
+      "title": "DPLL SAT Solver with Unit Propagation & Pure Literal Elimination",
+      "detail": "FAIL 1/2 | test_edges_pigeonhole_and_planted_50var: AssertionError",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 19,
+        "prompt_tokens": 26898,
+        "completion_tokens": 28046,
+        "reasoning_tokens": 11933,
+        "cached_tokens": 3079
+      }
+    },
+    {
+      "pid": "H22_canonical_huffman_codec",
+      "passed": true,
+      "wall_s": 234.2,
+      "track": "algo_nm",
+      "title": "Self-Contained Canonical Huffman Binary Codec with Strict Framing & Integrity",
+      "detail": "PASS 2/2 (6ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 33,
+        "prompt_tokens": 38638,
+        "completion_tokens": 32537,
+        "reasoning_tokens": 17676,
+        "cached_tokens": 9741
+      }
+    },
+    {
+      "pid": "H23_expr_compiler_and_stack_vm",
+      "passed": true,
+      "wall_s": 653.54,
+      "track": "algo_nm",
+      "title": "Zero-Eval Expression Lexer, Parser & Evaluator (Chained Comparisons, Ternary, Short-Circuit)",
+      "detail": "PASS 2/2 (2ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 2,
+        "oracle_tests": 5
+      },
+      "stats": {
+        "calls": 29,
+        "prompt_tokens": 66191,
+        "completion_tokens": 43847,
+        "reasoning_tokens": 15603,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H24_persistent_segment_tree",
+      "passed": true,
+      "wall_s": 489.05,
+      "track": "algo_nm",
+      "title": "O(log N) Persistent Segment Tree (Range Sum + Range Min Across 5000 Versions)",
+      "detail": "PASS 1/1 (13ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 25,
+        "prompt_tokens": 51144,
+        "completion_tokens": 36793,
+        "reasoning_tokens": 14959,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H25_exact_min_edit_diff_patch",
+      "passed": true,
+      "wall_s": 676.81,
+      "track": "algo_nm",
+      "title": "Exact Minimum-Edit-Distance Line Diff, Apply & Reverse Patch Engine",
+      "detail": "PASS 2/2 (1ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": true,
+        "redteam_kills": 7,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 37,
+        "prompt_tokens": 60225,
+        "completion_tokens": 39920,
+        "reasoning_tokens": 18169,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H26_exact_sutherland_hodgman_area",
+      "passed": true,
+      "wall_s": 654.94,
+      "track": "algo_nm",
+      "title": "Exact Rational Concave-x-Convex Polygon Clipping (2*Area as Fraction)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_clean_rewrite",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 29,
+        "prompt_tokens": 40886,
+        "completion_tokens": 38655,
+        "reasoning_tokens": 15049,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H27_raft_log_state_machine",
+      "passed": true,
+      "wall_s": 94.35,
+      "track": "algo_nm",
+      "title": "Raft Consensus Log Replication & Election State Machine (Figure-8 Safe)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 23508,
+        "completion_tokens": 12909,
+        "reasoning_tokens": 7103,
+        "cached_tokens": 5358
+      }
+    },
+    {
+      "pid": "H28_lsm_store_tombstones_snapshots",
+      "passed": true,
+      "wall_s": 221.28,
+      "track": "algo_nm",
+      "title": "Multi-Level LSM-Tree KV Store (Memtable Flush, Tombstone Shadowing, Compaction, Snapshots)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_clean_rewrite",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 29,
+        "prompt_tokens": 46018,
+        "completion_tokens": 27522,
+        "reasoning_tokens": 12540,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H29_hungarian_min_weight_matching",
+      "passed": true,
+      "wall_s": 84.81,
+      "track": "algo_nm",
+      "title": "O(N^3) Exact Hungarian Min-Weight Bipartite Matching (Rectangular + Negative Costs)",
+      "detail": "PASS 2/2 (6ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 15,
+        "prompt_tokens": 14688,
+        "completion_tokens": 10487,
+        "reasoning_tokens": 5299,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H30_unix_cron_next_trigger",
+      "passed": false,
+      "wall_s": 111.7,
+      "track": "algo_nm",
+      "title": "Strict Standard UNIX 5-Field Cron Next-Run Calculator (OR-Semantics, Leap Years, Step Ranges)",
+      "detail": "FAIL 0/1 | test_cron_unix_or_leap_year_and_validation: AssertionError",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 6
+      },
+      "stats": {
+        "calls": 18,
+        "prompt_tokens": 17536,
+        "completion_tokens": 15651,
+        "reasoning_tokens": 8059,
+        "cached_tokens": 6040
+      }
+    },
+    {
+      "pid": "H31_debug_mvcc_snapshot_isolation",
+      "passed": true,
+      "wall_s": 102.88,
+      "track": "debug_nm",
+      "title": "Fix 5 Interlocking Bugs in MVCC Snapshot-Isolation KV Store",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 13,
+        "prompt_tokens": 15761,
+        "completion_tokens": 11845,
+        "reasoning_tokens": 5029,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H32_debug_avl_balanced_tree",
+      "passed": true,
+      "wall_s": 241.49,
+      "track": "debug_nm",
+      "title": "Fix 5 Bugs in AVL Balanced BST (Double Rotations, Delete Rebalance, Range Query)",
+      "detail": "PASS 1/1 (2ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 29,
+        "prompt_tokens": 45920,
+        "completion_tokens": 29123,
+        "reasoning_tokens": 13503,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H33_debug_aho_corasick",
+      "passed": true,
+      "wall_s": 109.32,
+      "track": "debug_nm",
+      "title": "Fix 5 Bugs in Aho-Corasick Multi-Pattern Automaton (Dictionary Suffix Links + Overlaps)",
+      "detail": "PASS 1/1 (7ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 15,
+        "prompt_tokens": 13904,
+        "completion_tokens": 12592,
+        "reasoning_tokens": 6493,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H34_debug_rfc3629_utf8_stream",
+      "passed": true,
+      "wall_s": 96.62,
+      "track": "debug_nm",
+      "title": "Fix Strict RFC-3629 Streaming UTF-8 Decoder (Overlongs, Surrogates, Split Bytes)",
+      "detail": "PASS 2/2 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 10
+      },
+      "stats": {
+        "calls": 12,
+        "prompt_tokens": 13642,
+        "completion_tokens": 11348,
+        "reasoning_tokens": 5029,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H35_debug_bencode_strict_codec",
+      "passed": true,
+      "wall_s": 189.29,
+      "track": "debug_nm",
+      "title": "Fix Strict Canonical BitTorrent Bencode Encoder & Decoder",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_invariant_proof",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 20,
+        "prompt_tokens": 32306,
+        "completion_tokens": 22005,
+        "reasoning_tokens": 9617,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H36_debug_tracing_gc_finalizers",
+      "passed": true,
+      "wall_s": 73.99,
+      "track": "debug_nm",
+      "title": "Fix Tracing Mark-and-Sweep GC (Cyclic Garbage, WeakRefs, Finalizer Resurrection)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 20764,
+        "completion_tokens": 9610,
+        "reasoning_tokens": 6141,
+        "cached_tokens": 3535
+      }
+    },
+    {
+      "pid": "H37_debug_circuit_breaker_fsm",
+      "passed": true,
+      "wall_s": 210.86,
+      "track": "debug_nm",
+      "title": "Fix Half-Open Circuit Breaker FSM (Sliding Window, Probe Concurrency Cap, Cooldown)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "first_principles",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 26,
+        "prompt_tokens": 44860,
+        "completion_tokens": 24740,
+        "reasoning_tokens": 12540,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H38_debug_tarjan_bridges_art_points",
+      "passed": true,
+      "wall_s": 171.27,
+      "track": "debug_nm",
+      "title": "Fix Iterative Tarjan Bridges & Articulation Points (Multi-Edges, Self-Loops, N=4000)",
+      "detail": "PASS 1/1 (3ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 10
+      },
+      "stats": {
+        "calls": 15,
+        "prompt_tokens": 17106,
+        "completion_tokens": 17135,
+        "reasoning_tokens": 10304,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H39_debug_decimal_orderbook",
+      "passed": true,
+      "wall_s": 254.82,
+      "track": "debug_nm",
+      "title": "Fix Price-Time Priority Limit Order Book (Exact Decimal, Partial Fills, Self-Trade Prevention)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_surgical_fix",
+        "wave2": true,
+        "redteam_kills": 5,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 33,
+        "prompt_tokens": 57879,
+        "completion_tokens": 31422,
+        "reasoning_tokens": 14145,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H40_debug_event_loop_scheduler",
+      "passed": true,
+      "wall_s": 171.25,
+      "track": "debug_nm",
+      "title": "Fix Deterministic Virtual-Clock Event Loop (Microtasks, FIFO Ties, Cancellation)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_clean_rewrite",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 9
+      },
+      "stats": {
+        "calls": 24,
+        "prompt_tokens": 35226,
+        "completion_tokens": 22567,
+        "reasoning_tokens": 11577,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H46_sec_jwt_hs256_hardened",
+      "passed": true,
+      "wall_s": 69.42,
+      "track": "sys_sec_nm",
+      "title": "Hardened RFC-7519 HS256 JWT Signer/Verifier (Blocks alg=none, Confusion, Skew, Replay)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "edge_skeptic",
+        "wave2": false,
+        "redteam_kills": 0,
+        "oracle_tests": 6
+      },
+      "stats": {
+        "calls": 10,
+        "prompt_tokens": 14730,
+        "completion_tokens": 9453,
+        "reasoning_tokens": 4217,
+        "cached_tokens": 952
+      }
+    },
+    {
+      "pid": "H47_sec_ssrf_ip_guard",
+      "passed": true,
+      "wall_s": 189.72,
+      "track": "sys_sec_nm",
+      "title": "SSRF URL & DNS-Rebinding Guard (IPv4-Mapped IPv6, CGNAT, Hex/Int IP, Multi-A Rebind)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "minimalist",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 7
+      },
+      "stats": {
+        "calls": 16,
+        "prompt_tokens": 26965,
+        "completion_tokens": 23827,
+        "reasoning_tokens": 10935,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H48_sec_rfc6962_merkle_tree",
+      "passed": false,
+      "wall_s": 164.96,
+      "track": "sys_sec_nm",
+      "title": "RFC-6962 Domain-Separated Merkle Tree & Audit Proof (Second-Preimage Resistant)",
+      "detail": "FAIL 0/1 | test_rfc6962_roots_proofs_and_second_preimage_defense: AssertionError",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_radically_simple",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 6
+      },
+      "stats": {
+        "calls": 25,
+        "prompt_tokens": 40298,
+        "completion_tokens": 23723,
+        "reasoning_tokens": 12870,
+        "cached_tokens": 19858
+      }
+    },
+    {
+      "pid": "H49_sec_rfc6238_totp_replay",
+      "passed": true,
+      "wall_s": 177.94,
+      "track": "sys_sec_nm",
+      "title": "RFC-6238 TOTP Authenticator with Constant-Time Verify, Base32 & Anti-Replay Cache",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w3_clean_rewrite",
+        "wave2": true,
+        "redteam_kills": 1,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 24,
+        "prompt_tokens": 37883,
+        "completion_tokens": 23781,
+        "reasoning_tokens": 11577,
+        "cached_tokens": 0
+      }
+    },
+    {
+      "pid": "H50_sec_sql_ast_parameterizer",
+      "passed": true,
+      "wall_s": 205.88,
+      "track": "sys_sec_nm",
+      "title": "SQLi-Proof Schema-Allowlisted Parameterized Query Builder (Live SQLite Verified)",
+      "detail": "PASS 1/1 (0ms)",
+      "extra": {
+        "routed_mode": "code",
+        "routed_match": true,
+        "winner": "w2_invariant_proof",
+        "wave2": true,
+        "redteam_kills": 0,
+        "oracle_tests": 8
+      },
+      "stats": {
+        "calls": 24,
+        "prompt_tokens": 37837,
+        "completion_tokens": 25300,
+        "reasoning_tokens": 12219,
+        "cached_tokens": 0
+      }
+    }
+  ]
+}

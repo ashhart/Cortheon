@@ -12,7 +12,9 @@ Even when the user provides **no test suite and no math answer key**, Cortheon s
 
 ## Live Measured Results (Three Frozen Local Model Families — Zero Weight Changes)
 
-Every score below was measured on **100% pure local frozen weights** running on Apple Silicon (Apple Silicon M5 Ultra & M3 Ultra, `enable_memory=False`, `force_mode=None`, zero cloud solver models) across three completely distinct model families: **`DeepSeek-V4.1-Flash-1017`**, **`GLM-5.3-Flash-TFQ3`**, and **`Qwen3.8-Flash-Next-TFQ3`**.
+> **Full Benchmark Ledger & Per-Problem Result JSONs:** See **[`BENCHMARKS.md`](BENCHMARKS.md)** and **[`results/`](results/)** ([`results/summary.json`](results/summary.json)) for the complete per-problem logs, flips/regressions, calibration tables, and exact reproduction commands across every suite.
+
+Every score below was measured on **100% pure local frozen weights** running on Apple Silicon (M5 Ultra & M3 Ultra, `enable_memory=False`, `force_mode=None`, zero cloud solver models) across three completely distinct model families: **`DeepSeek-V4.1-Flash-1017`**, **`GLM-5.3-Flash-TFQ3`**, and **`Qwen3.8-Flash-Next-TFQ3`**.
 
 ### 1. Official Untouched External Benchmarks (**8 for 8 Wins — 200 Official Runs Across 3 Model Families**)
 

@@ -1,0 +1,191 @@
+{
+  "dataset": "MathArena/aime_2025",
+  "model": "qwen3.8-flash-next-tfq3",
+  "arm": "vanilla",
+  "passed": 16,
+  "total": 30,
+  "pass_rate_pct": 53.3,
+  "avg_wall_s": 69.22,
+  "results": [
+    {
+      "pid": "AIME25_01",
+      "passed": true,
+      "wall_s": 33.11,
+      "detail": "OK (70)"
+    },
+    {
+      "pid": "AIME25_02",
+      "passed": false,
+      "wall_s": 83.45,
+      "detail": "WRONG: got='476' expected='588'"
+    },
+    {
+      "pid": "AIME25_03",
+      "passed": true,
+      "wall_s": 50.82,
+      "detail": "OK (16)"
+    },
+    {
+      "pid": "AIME25_04",
+      "passed": true,
+      "wall_s": 32.35,
+      "detail": "OK (117)"
+    },
+    {
+      "pid": "AIME25_05",
+      "passed": true,
+      "wall_s": 63.36,
+      "detail": "OK (279)"
+    },
+    {
+      "pid": "AIME25_06",
+      "passed": true,
+      "wall_s": 47.75,
+      "detail": "OK (504)"
+    },
+    {
+      "pid": "AIME25_07",
+      "passed": true,
+      "wall_s": 72.95,
+      "detail": "OK (821)"
+    },
+    {
+      "pid": "AIME25_08",
+      "passed": true,
+      "wall_s": 61.48,
+      "detail": "OK (77)"
+    },
+    {
+      "pid": "AIME25_09",
+      "passed": false,
+      "wall_s": 75.72,
+      "detail": "WRONG: got='798' expected='62'"
+    },
+    {
+      "pid": "AIME25_10",
+      "passed": false,
+      "wall_s": 67.3,
+      "detail": "WRONG: got='95' expected='81'"
+    },
+    {
+      "pid": "AIME25_11",
+      "passed": false,
+      "wall_s": 141.64,
+      "detail": "WRONG: got='53' expected='259'"
+    },
+    {
+      "pid": "AIME25_12",
+      "passed": true,
+      "wall_s": 97.47,
+      "detail": "OK (510)"
+    },
+    {
+      "pid": "AIME25_13",
+      "passed": false,
+      "wall_s": 53.58,
+      "detail": "WRONG: got='179' expected='204'"
+    },
+    {
+      "pid": "AIME25_14",
+      "passed": false,
+      "wall_s": 99.16,
+      "detail": "WRONG: got='144' expected='60'"
+    },
+    {
+      "pid": "AIME25_15",
+      "passed": false,
+      "wall_s": 81.48,
+      "detail": "WRONG: got='583' expected='735'"
+    },
+    {
+      "pid": "AIME25_16",
+      "passed": true,
+      "wall_s": 33.25,
+      "detail": "OK (468)"
+    },
+    {
+      "pid": "AIME25_17",
+      "passed": true,
+      "wall_s": 62.55,
+      "detail": "OK (49)"
+    },
+    {
+      "pid": "AIME25_18",
+      "passed": false,
+      "wall_s": 67.35,
+      "detail": "WRONG: got='80' expected='82'"
+    },
+    {
+      "pid": "AIME25_19",
+      "passed": true,
+      "wall_s": 48.98,
+      "detail": "OK (106)"
+    },
+    {
+      "pid": "AIME25_20",
+      "passed": false,
+      "wall_s": 124.57,
+      "detail": "WRONG: got='588' expected='336'"
+    },
+    {
+      "pid": "AIME25_21",
+      "passed": true,
+      "wall_s": 70.02,
+      "detail": "OK (293)"
+    },
+    {
+      "pid": "AIME25_22",
+      "passed": true,
+      "wall_s": 60.71,
+      "detail": "OK (237)"
+    },
+    {
+      "pid": "AIME25_23",
+      "passed": false,
+      "wall_s": 60.95,
+      "detail": "WRONG: got='560' expected='610'"
+    },
+    {
+      "pid": "AIME25_24",
+      "passed": true,
+      "wall_s": 63.9,
+      "detail": "OK (149)"
+    },
+    {
+      "pid": "AIME25_25",
+      "passed": true,
+      "wall_s": 70.2,
+      "detail": "OK (907)"
+    },
+    {
+      "pid": "AIME25_26",
+      "passed": true,
+      "wall_s": 62.19,
+      "detail": "OK (113)"
+    },
+    {
+      "pid": "AIME25_27",
+      "passed": false,
+      "wall_s": 59.24,
+      "detail": "WRONG: got='49' expected='19'"
+    },
+    {
+      "pid": "AIME25_28",
+      "passed": false,
+      "wall_s": 68.57,
+      "detail": "WRONG: got='0' expected='248'"
+    },
+    {
+      "pid": "AIME25_29",
+      "passed": false,
+      "wall_s": 52.71,
+      "detail": "WRONG: got='169' expected='104'"
+    },
+    {
+      "pid": "AIME25_30",
+      "passed": false,
+      "wall_s": 109.94,
+      "detail": "WRONG: got='\\\\]' expected='240'"
+    }
+  ]
+}

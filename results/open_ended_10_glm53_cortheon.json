@@ -1,0 +1,152 @@
+{
+  "dataset": "open_ended_systems_10",
+  "model": "glm-5.3-flash-tfq3",
+  "arm": "cortheon",
+  "passed": 9,
+  "total": 10,
+  "pass_rate_pct": 90.0,
+  "avg_wall_s": 83.49,
+  "results": [
+    {
+      "pid": "OE01_payment_ledger_sla",
+      "passed": true,
+      "wall_s": 106.26,
+      "score": 1.0,
+      "checks": {
+        "ingress_100MBs": true,
+        "daily_storage_8TB": true,
+        "rtt_impossibility_trap": true,
+        "idempotency_and_sharding": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE02_llm_serving_vram",
+      "passed": true,
+      "wall_s": 73.91,
+      "score": 0.75,
+      "checks": {
+        "weights_140GB": true,
+        "kv_cache_160GB": true,
+        "vram_impossibility_trap": true,
+        "serving_mitigations": false
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE03_nvme_wal_write_amp",
+      "passed": true,
+      "wall_s": 97.95,
+      "score": 1.0,
+      "checks": {
+        "raw_ingest_100MBs": true,
+        "amplified_1GBs_90TBday": true,
+        "ssd_dies_in_days_trap": true,
+        "lsm_mitigations": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE04_quorum_split_brain",
+      "passed": false,
+      "wall_s": 66.51,
+      "score": 0.667,
+      "checks": {
+        "quorum_3_of_4": true,
+        "n4_tolerates_only_1_failure_trap": false,
+        "recommend_5_nodes_3_azs": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE05_cache_thundering_herd",
+      "passed": true,
+      "wall_s": 87.01,
+      "score": 1.0,
+      "checks": {
+        "steady_miss_10k_rps": true,
+        "hotkey_spike_50k_rps_trap": true,
+        "edge_bw_4GBs": true,
+        "stampede_defenses": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE06_rate_limiter_race",
+      "passed": true,
+      "wall_s": 71.81,
+      "score": 1.0,
+      "checks": {
+        "boundary_burst_200_trap": true,
+        "toctou_race_trap": true,
+        "lua_atomic_token_sliding": true,
+        "clock_skew_and_failure_mode": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE07_jwt_refresh_security",
+      "passed": true,
+      "wall_s": 89.59,
+      "score": 1.0,
+      "checks": {
+        "alg_confusion_trap": true,
+        "refresh_family_reuse_detection_trap": true,
+        "timing_attack_constant_time": true,
+        "hashed_storage_and_concurrency": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE08_zero_downtime_shard_migration",
+      "passed": true,
+      "wall_s": 84.3,
+      "score": 1.0,
+      "checks": {
+        "per_shard_sizing": true,
+        "dual_write_race_corruption_trap": true,
+        "cdc_wal_and_monotonic_version": true,
+        "shadow_verify_and_cutover": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE09_network_shuffle_bottleneck",
+      "passed": true,
+      "wall_s": 80.76,
+      "score": 0.75,
+      "checks": {
+        "nic_12_5GBs_aggregate": true,
+        "min_time_144_to_165s_impossibility_trap": true,
+        "ram_spill_640GB": false,
+        "shuffle_optimizations": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    },
+    {
+      "pid": "OE10_stream_exactly_once_state",
+      "passed": true,
+      "wall_s": 76.79,
+      "score": 1.0,
+      "checks": {
+        "daily_events_8_64B": true,
+        "pane_1440_buckets": true,
+        "watermark_and_late_data_trap": true,
+        "end_to_end_idempotent_sink_trap": true
+      },
+      "quant_verified": true,
+      "routed_mode": "think"
+    }
+  ],
+  "avg_score": 0.9167,
+  "quant_verified_count": 10
+}

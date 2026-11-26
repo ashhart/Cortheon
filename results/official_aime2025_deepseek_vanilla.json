@@ -1,0 +1,191 @@
+{
+  "dataset": "MathArena/aime_2025",
+  "model": "deepseek-v4.1-flash-1017",
+  "arm": "vanilla",
+  "passed": 20,
+  "total": 30,
+  "pass_rate_pct": 66.7,
+  "avg_wall_s": 113.69,
+  "results": [
+    {
+      "pid": "AIME25_01",
+      "passed": true,
+      "wall_s": 11.66,
+      "detail": "OK (70)"
+    },
+    {
+      "pid": "AIME25_02",
+      "passed": false,
+      "wall_s": 36.35,
+      "detail": "WRONG: got='432' expected='588'"
+    },
+    {
+      "pid": "AIME25_03",
+      "passed": true,
+      "wall_s": 33.19,
+      "detail": "OK (16)"
+    },
+    {
+      "pid": "AIME25_04",
+      "passed": true,
+      "wall_s": 33.97,
+      "detail": "OK (117)"
+    },
+    {
+      "pid": "AIME25_05",
+      "passed": true,
+      "wall_s": 89.1,
+      "detail": "OK (279)"
+    },
+    {
+      "pid": "AIME25_06",
+      "passed": true,
+      "wall_s": 19.17,
+      "detail": "OK (504)"
+    },
+    {
+      "pid": "AIME25_07",
+      "passed": true,
+      "wall_s": 221.63,
+      "detail": "OK (821)"
+    },
+    {
+      "pid": "AIME25_08",
+      "passed": true,
+      "wall_s": 32.5,
+      "detail": "OK (77)"
+    },
+    {
+      "pid": "AIME25_09",
+      "passed": false,
+      "wall_s": 52.24,
+      "detail": "WRONG: got='48' expected='62'"
+    },
+    {
+      "pid": "AIME25_10",
+      "passed": false,
+      "wall_s": 360.0,
+      "detail": "empty (expected 81)"
+    },
+    {
+      "pid": "AIME25_11",
+      "passed": true,
+      "wall_s": 208.84,
+      "detail": "OK (259)"
+    },
+    {
+      "pid": "AIME25_12",
+      "passed": true,
+      "wall_s": 192.9,
+      "detail": "OK (510)"
+    },
+    {
+      "pid": "AIME25_13",
+      "passed": false,
+      "wall_s": 360.0,
+      "detail": "empty (expected 204)"
+    },
+    {
+      "pid": "AIME25_14",
+      "passed": false,
+      "wall_s": 250.11,
+      "detail": "WRONG: got='Sum x: 3\u221a3/14 + 313/(14\u221a937)+11/14 -13/14. Approx 0.371 +313/(14*30.61=428.5)=0.7305 +0.7857 -0.9286 =0.9586? Wait 11/14=.7857, -13/14=-.9286, plus .371=0.2281; +' expected='60'"
+    },
+    {
+      "pid": "AIME25_15",
+      "passed": false,
+      "wall_s": 28.22,
+      "detail": "WRONG: got='0' expected='735'"
+    },
+    {
+      "pid": "AIME25_16",
+      "passed": true,
+      "wall_s": 20.62,
+      "detail": "OK (468)"
+    },
+    {
+      "pid": "AIME25_17",
+      "passed": true,
+      "wall_s": 12.67,
+      "detail": "OK (49)"
+    },
+    {
+      "pid": "AIME25_18",
+      "passed": false,
+      "wall_s": 33.37,
+      "detail": "WRONG: got='90' expected='82'"
+    },
+    {
+      "pid": "AIME25_19",
+      "passed": true,
+      "wall_s": 22.37,
+      "detail": "OK (106)"
+    },
+    {
+      "pid": "AIME25_20",
+      "passed": false,
+      "wall_s": 360.0,
+      "detail": "empty (expected 336)"
+    },
+    {
+      "pid": "AIME25_21",
+      "passed": true,
+      "wall_s": 72.09,
+      "detail": "OK (293)"
+    },
+    {
+      "pid": "AIME25_22",
+      "passed": true,
+      "wall_s": 21.26,
+      "detail": "OK (237)"
+    },
+    {
+      "pid": "AIME25_23",
+      "passed": false,
+      "wall_s": 27.71,
+      "detail": "WRONG: got='900' expected='610'"
+    },
+    {
+      "pid": "AIME25_24",
+      "passed": true,
+      "wall_s": 83.38,
+      "detail": "OK (149)"
+    },
+    {
+      "pid": "AIME25_25",
+      "passed": true,
+      "wall_s": 201.9,
+      "detail": "OK (907)"
+    },
+    {
+      "pid": "AIME25_26",
+      "passed": false,
+      "wall_s": 41.28,
+      "detail": "WRONG: got='126' expected='113'"
+    },
+    {
+      "pid": "AIME25_27",
+      "passed": true,
+      "wall_s": 91.39,
+      "detail": "OK (19)"
+    },
+    {
+      "pid": "AIME25_28",
+      "passed": true,
+      "wall_s": 187.88,
+      "detail": "OK (248)"
+    },
+    {
+      "pid": "AIME25_29",
+      "passed": true,
+      "wall_s": 147.59,
+      "detail": "OK (104)"
+    },
+    {
+      "pid": "AIME25_30",
+      "passed": true,
+      "wall_s": 157.44,
+      "detail": "OK (240)"
+    }
+  ]
+}
