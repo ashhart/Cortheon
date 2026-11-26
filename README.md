@@ -33,6 +33,7 @@ Executed apples-to-apples via [`bench/run_official_eval.py`](bench/run_official_
 | **Combined Official External (200 runs)** | **All 3 Model Families** | **DeepSeek + GLM-5.3 + Qwen** | **87/200 (43.5%)** | **117/200 (58.5%)** | **+15.0 pts (+34.5% rel)** | — |
 
 - **`50 / 51 (98.0%)` Wave-1 PAL Consensus Calibration Across All 3 Model Families on AIME 2025:** `19/19 (100%)` on `DeepSeek-V4.1-Flash` + `18/18 (100%)` on `Qwen3.8-Flash-Next` + `13/14 (92.9%)` on `GLM-5.3-Flash` — fast-exiting cleanly without wasting Wave-2 compute!
+- **`7.5×` Wave-1 Early-Abort Speedup (`271s → 36s`):** Combining `low`-effort PAL slots (`tb=500`), 20s exact-math sandbox budgets, atomic straggler cancellation the instant 2 independent PAL scripts agree, and `--parallel 8` lane headroom cut a 25-digit exact rational 7-server asymmetric Markov cover-time solve (`2630600114653531854763423 / 183488738276457059168800`) from `271s` to **`36s`** (`wave1_consensus (2 PAL)`, `queued=0.000s`).
 - **Decisive Oracle-Free Algorithmic Lift (`LiveCodeBench v6 Hard`):** Across **40** hard AtCoder F/G competition problems (~43 judge tests each, zero hidden tests at solve time), Cortheon lifted `DeepSeek-V4.1` `55% → 65%` and `GLM-5.3` `40% → 55%` (**`+12.5 pts` combined**) by deterministically extracting verbatim sample I/O + synthesizing brute-force fuzzers, TLE stress tests, and zero-anchor Wave-2 rewrites.
 - **Oracle-Free Open-Ended Systems, Physics & Security ([`bench/open_ended_bench.py`](bench/open_ended_bench.py), 10 tasks on `GLM-5.3-Flash-TFQ3`):** **`10/10 (100%)`** routing accuracy (`mode=think`), **`10/10 (100%)` `quant_verified=True`** (every open-ended blueprint mechanically Python-verified vs `0/10` Vanilla), **`83.5s` avg (25% faster than Vanilla's `111.4s`)**, flipping Vanilla's `OE09` network-shuffle physics impossibility failure (`25% → 75% PASS`).
 - **Live Showdown on `DeepSeek-V4.1-Flash-1017` (`cortheon showdown`):** Vanilla `1/3` → **Cortheon `3/3 (100%)`** (Automaton Combinatorics `47.8s`, Weighted 4-Coloring `98.4s`, Exact Rational Parser `115.7s`).
@@ -75,11 +76,13 @@ Identical local weights, identical tools — comparing raw chat-history ReAct vs
    - **Native `stdin_mode` Competitive Harness:** Automatically detects CLI/stdin problems, injects verbatim immutable Sample Input/Output tests, runs isolated `run_solution()` subprocesses, and executes Zero-Anchor Wave-2/Wave-3 repairs + Helper-Aware Strict `B=2` Test Shield + Pre-Wave-3 Re-Audit.
 3. **Executable-Grounded Open-Ended Architecture (`ThinkForge`):** `B=4` parallel specialist council (`architect`, `adversarial_breaker`, `pragmatist`, `quantifier`) + parallel **Universal Executable Verifier** (writes & runs Python scripts verifying exact sizing/bandwidth/storage/VRAM/RTT physics feasibility & protocol/quorum/security invariants, with 1-shot self-repair) → Clean-Context Critique → Master Synthesis.
 4. **Autonomous Engineering (`ReplicaAgent` & `DevForge`):** Compacted `BrainState` + Pinned File Cache + Live AST Map + `B=3` Strategic Thought-Forking + Ephemeral Git Worktree Racing + Read-Only `shell=False` Lockdown + Independent Clean-Context Referee Gate.
-5. **Universal Drop-In Proxy (`cortheon proxy`):** Exposes OpenAI (`/v1/chat/completions`) and Anthropic (`/v1/messages`) with SSE streaming & keepalive heartbeats — point Claude Code, Cursor, OpenCode, or any SDK straight at `cortheon`.
+5. **Universal Drop-In Proxy (`cortheon proxy`):** Exposes OpenAI (`/v1/chat/completions`, with transparent tool-turn passthrough for **OMP**, **Pi**, **OpenCode**, and **Cursor**) and Anthropic (`/v1/messages`) with SSE streaming & keepalive heartbeats.
 
 ---
 
 ## Install & Run in 30 Seconds
+
+> **Agent Harness Quick Start (OMP, Pi, OpenCode, Claude Code, Cursor, TensorFold Native):** See **[`GETTING_STARTED.md`](GETTING_STARTED.md)** for copy-paste configs, isolated `omp --profile` setup, `Ctrl+P` Cortheon vs Raw toggling, and split-pane `tmux` live tracing.
 
 Works with **TensorFold**, **Ollama** (`http://localhost:11434/v1`), **llama.cpp** (`http://localhost:8080/v1`), **vLLM**, or **LM Studio** (`http://localhost:1234/v1`).
 
@@ -133,6 +136,8 @@ asyncio.run(main())
 
 ## Core Modules & Reproducible Benchmarks
 
+- [`GETTING_STARTED.md`](GETTING_STARTED.md) — Quick Start guide for **OMP (`oh-my-pi`)**, **Pi**, **OpenCode**, **Claude Code**, **Cursor**, and **TensorFold Native** (`--cortheon --cortheon-exec --parallel 8`)
+- [`BENCHMARKS.md`](BENCHMARKS.md) & [`results/`](results/) — Complete benchmark ledger + 23 per-problem result JSONs across 3 frozen local model families
 - [`cortheon/`](cortheon/__init__.py) — Clean public SDK & `cortheon` CLI entrypoint (`Cortheon`, `CortheonConfig`, `CortheonResult`)
 - [`flash_forge/code_forge.py`](flash_forge/code_forge.py) — `CodeForge v5` Behavioral Differential Consensus + Starter-API Fidelity + Native `stdin_mode` + Helper-Aware Strict `B=2` Shield
 - [`flash_forge/reason_forge.py`](flash_forge/reason_forge.py) — `ReasonForge` Neuro-Symbolic `B=4` Python/SymPy/Z3 Engine + Hybrid Wave-3 Analytical Consensus

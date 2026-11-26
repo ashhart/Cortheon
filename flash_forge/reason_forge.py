@@ -359,7 +359,7 @@ async def solve_reasoning(
     problem: str,
     *,
     num_wave1_streams: int = 4,
-    sandbox_timeout_s: float = 10.0,
+    sandbox_timeout_s: float = 20.0,
     deep: bool = False,
 ) -> ReasonForgeTrace:
     """Solve a hard math, logic, combinatorics, probability, or constraint problem."""
@@ -385,9 +385,10 @@ async def solve_reasoning(
         shared_user_prefix += f"\n\n{exemplar_block}"
 
     # Wave 1: Role-seeded parallel streams (B=4; skip serial warm_prefix RTT which thrashes hybrid SSM cache!)
-    # Keep PAL thinking crisp so Flash-Next models directly in Python instead of mental arithmetic!
-    think_pal = 1200 if deep else 700
-    think_ana = 2200 if deep else 1400
+    # Keep PAL thinking crisp + low effort so local models emit executable Python immediately instead of mental prose!
+    think_pal = 900 if deep else 500
+    think_ana = 1600 if deep else 900
+    pal_effort = None if deep else "low"
 
     wave1_roles = [
         ("pal_exact", "pal", skills.card("pal_exact"), 0.25, 101, think_pal),
@@ -405,19 +406,22 @@ async def solve_reasoning(
                     {"role": "user", "content": f"{shared_user_prefix}\n\nPROTOCOL ({name}):\n{card_text}"},
                 ],
                 tag=f"w1_{name}",
-                max_tokens=t_budget + 2400,
+                max_tokens=t_budget + 2000,
                 temperature=temp,
                 seed=seed,
                 enable_thinking=True,
                 thinking_budget=t_budget,
+                reasoning_effort=pal_effort,
                 loop_guard=True,
             )
         )
 
-    results = await client.batch(specs)
-
-    pal_w1_jobs: list[BranchOutcome] = []
-    for (name, kind, _, _, _, _), res in zip(wave1_roles, results):
+    # True streaming Wave-1 early-abort: run each slot + sandbox immediately on completion
+    # and cancel lagging GPU requests the instant 2 independent PAL scripts agree!
+    async def _run_w1_slot(
+        idx: int, name: str, kind: str, spec: CallSpec
+    ) -> tuple[int, BranchOutcome]:
+        res = await client.complete(spec)
         out = BranchOutcome(
             name=name,
             wave=1,
@@ -429,14 +433,73 @@ async def solve_reasoning(
         )
         if res.ok:
             if kind == "pal":
-                pal_w1_jobs.append(out)
+                await asyncio.to_thread(_execute_pal_outcome, out, sandbox_timeout_s)
             else:
                 raw_ans = extract_answer_from_prose(res.content)
                 out.raw_answer = raw_ans
                 out.norm_answer = normalize_answer(raw_ans)
-        trace.wave1_outcomes.append(out)
-    if pal_w1_jobs:
-        await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s) for o in pal_w1_jobs))
+        return idx, out
+
+    slot_tasks: list[asyncio.Task[tuple[int, BranchOutcome]]] = [
+        asyncio.create_task(_run_w1_slot(i, name, kind, spec))
+        for i, ((name, kind, _, _, _, _), spec) in enumerate(zip(wave1_roles, specs))
+    ]
+    ordered_outcomes: list[Optional[BranchOutcome]] = [None] * len(wave1_roles)
+    pal_verified_so_far: list[BranchOutcome] = []
+    early_aborted = False
+
+    pending: set[asyncio.Task[tuple[int, BranchOutcome]]] = set(slot_tasks)
+    try:
+        while pending:
+            done_set, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for done_task in done_set:
+                idx, out = done_task.result()
+                ordered_outcomes[idx] = out
+                if (
+                    out.kind == "pal"
+                    and out.norm_answer
+                    and _answer_satisfies_prompt_format(problem, out.norm_answer)
+                ):
+                    pal_verified_so_far.append(out)
+                    clusters_now = _cluster_answers(pal_verified_so_far)
+                    if clusters_now and len(clusters_now[0][1]) >= 2:
+                        top_ans = clusters_now[0][0]
+                        ana_contradicts = any(
+                            o is not None
+                            and o.kind == "analytical"
+                            and o.norm_answer
+                            and not answers_equivalent(o.norm_answer, top_ans)
+                            for o in ordered_outcomes
+                        )
+                        if not ana_contradicts or len(clusters_now[0][1]) >= 3:
+                            # 2 independent verified PAL scripts agree (with no analytical contradiction) -> cancel lagging GPU slots!
+                            early_aborted = True
+                            for lag in pending:
+                                lag.cancel()
+                            break
+            if early_aborted:
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                break
+    except BaseException:
+        for lag in pending:
+            lag.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        raise
+
+    for i, (name, kind, _, _, _, _) in enumerate(wave1_roles):
+        out_i = ordered_outcomes[i]
+        if out_i is None:
+            out_i = BranchOutcome(
+                name=name,
+                wave=1,
+                kind=kind,
+                raw_content="",
+                reasoning="",
+                error="cancelled_early_consensus",
+            )
+        trace.wave1_outcomes.append(out_i)
 
     # Evaluate Wave 1 consensus (filtering out blatantly format-invalid outputs)
     valid_pal_w1 = [
@@ -501,10 +564,11 @@ async def solve_reasoning(
             + f"\n\nGRAVEYARD (DO NOT REPEAT THESE BUGS):\n{graveyard_text}"
         )
 
+        w2_tb = 1100 if deep else 650
         w2_roles = [
-            ("falsifier_bruteforce", skills.card("falsifier_bruteforce"), 0.25, 505, 950),
-            ("falsifier_reread", skills.card("falsifier_reread"), 0.45, 606, 950),
-            ("falsifier_z3_sympy", skills.card("falsifier_z3_sympy"), 0.40, 707, 950),
+            ("falsifier_bruteforce", skills.card("falsifier_bruteforce"), 0.25, 505, w2_tb),
+            ("falsifier_reread", skills.card("falsifier_reread"), 0.45, 606, w2_tb),
+            ("falsifier_z3_sympy", skills.card("falsifier_z3_sympy"), 0.40, 707, w2_tb),
         ]
         w2_specs = [
             CallSpec(
@@ -513,11 +577,12 @@ async def solve_reasoning(
                     {"role": "user", "content": f"{dossier}\n\nPROTOCOL ({name}):\n{card_text}"},
                 ],
                 tag=f"w2_{name}",
-                max_tokens=tb + 2400,
+                max_tokens=tb + 2200,
                 temperature=temp,
                 seed=seed,
                 enable_thinking=True,
                 thinking_budget=tb,
+                reasoning_effort=pal_effort,
                 loop_guard=True,
             )
             for name, card_text, temp, seed, tb in w2_roles

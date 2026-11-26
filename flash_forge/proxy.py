@@ -22,8 +22,9 @@ import time
 import uuid
 from typing import Any, AsyncIterator, Optional
 
+import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from .code_forge import CodeForgeTrace
 from .engine import FlashForge, ForgeConfig
@@ -181,6 +182,34 @@ def create_app(
             "data": [{"id": m, "object": "model", "created": now, "owned_by": "cortheon"} for m in ids],
         }
 
+    _VIRTUAL_PREFIXES = ("cortheon", "flash-forge")
+
+    async def _passthrough_openai(body: dict[str, Any]) -> Any:
+        """Transparently forward OpenAI client-side tool-calling loops (OMP, Pi, OpenCode, Cursor) to upstream."""
+        caps = await forge_default.client.probe()
+        fwd = dict(body)
+        req_model = str(fwd.get("model", ""))
+        if not req_model or req_model.startswith(_VIRTUAL_PREFIXES):
+            fwd["model"] = caps.model_id
+        upstream_endpoint = f"{upstream_url.rstrip('/')}/chat/completions"
+        if not bool(fwd.get("stream", False)):
+            async with httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=10.0)) as client:
+                r = await client.post(upstream_endpoint, json=fwd)
+                return Response(
+                    content=r.content,
+                    status_code=r.status_code,
+                    media_type=r.headers.get("content-type", "application/json"),
+                )
+
+        async def _stream_upstream() -> AsyncIterator[bytes]:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(600.0, connect=10.0)) as client:
+                async with client.stream("POST", upstream_endpoint, json=fwd) as r:
+                    async for chunk in r.aiter_bytes():
+                        if chunk:
+                            yield chunk
+
+        return StreamingResponse(_stream_upstream(), media_type="text/event-stream")
+
     # ------------------------------------------------------------------
     # OpenAI Chat Completions API (/v1/chat/completions)
     # ------------------------------------------------------------------
@@ -188,16 +217,7 @@ def create_app(
     async def chat_completions(request: Request) -> Any:
         body = await request.json()
         if body.get("tools") or body.get("functions"):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": {
-                        "message": "Cortheon virtual synthesis models do not yet support client-side OpenAI `tools`/`functions` calling; point tool-calling loops directly at upstream or use `cortheon agent` for autonomous tool execution.",
-                        "type": "invalid_request_error",
-                        "param": "tools",
-                    }
-                },
-            )
+            return await _passthrough_openai(body)
         model_req = str(body.get("model", "cortheon"))
         messages = body.get("messages", [])
         stream = bool(body.get("stream", False))

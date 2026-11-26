@@ -73,6 +73,7 @@ Whenever Cortheon's Wave-1 executable Python/SymPy/Z3 scripts reached consensus 
 - **Frontier-Killer 16 (`bench/run_ab.py`, 3-Arm Ablation on `Qwen3.8-Flash-Next-TFQ3`):** Vanilla default `6/16 (37.5%)` · Vanilla `tb=1500` `7/16 (43.8%)` → **Cortheon `16/16 (100.0%)`**.
 - **Multi-File `DevForge` (`bench/repo_bench.py`, 6-file `ledgerflow` repo):** `2/2` (`R1` 4 interlocking bugs + `R2` 5-file atomic batch settlement feature).
 - **Live Showdown (`cortheon showdown` on `DeepSeek-V4.1-Flash-1017`):** Vanilla `1/3` → **Cortheon `3/3 (100%)`**.
+- **Wave-1 Early-Abort & Low-Effort PAL Latency Optimization (`GLM-5.3-Flash-TFQ3`):** On a 25-digit exact rational 7-server asymmetric Markov cover-time problem (`2630600114653531854763423 / 183488738276457059168800`), switching PAL slots to `reasoning_effort="low"` (`tb=500`), raising the exact-math sandbox timeout to `20s`, enabling atomic early-abort on `2/4` PAL consensus, and serving `--parallel 8` cut wall time **`7.5×`** (**`271s → 36s`**, `wave1_consensus (2 PAL)`, `queued=0.000s`, cancelling the 4th stream automatically).
 
 ---
 

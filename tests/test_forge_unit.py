@@ -561,6 +561,117 @@ def test_starter_import_preservation_guard():
     assert _should_run_executable_verifier("Write a 3-line haiku about autumn rain.") is False
 
 
+def test_reason_wave1_early_abort_cancels_stragglers(tmp_path: Path):
+    import asyncio
+    from flash_forge.client import CompletionResult
+    from flash_forge.memory import EpisodicMemory
+    from flash_forge.reason_forge import solve_reasoning
+    from flash_forge.skill_loader import SkillPack
+
+    cancelled_tags: list[str] = []
+    seen_efforts: dict[str, str | None] = {}
+
+    class _FakeClient:
+        async def complete(self, spec):
+            seen_efforts[spec.tag] = spec.reasoning_effort
+            if spec.tag in ("w1_pal_exact", "w1_pal_alt_z3"):
+                await asyncio.sleep(0.02)
+                return CompletionResult(
+                    content="```python\nassert 2 + 2 == 4\nprint('ANSWER: 208')\n```",
+                    reasoning="",
+                    finish_reason="stop",
+                    prompt_tokens=100,
+                    completion_tokens=40,
+                    reasoning_tokens=10,
+                    cached_tokens=0,
+                    latency_s=0.02,
+                    tag=spec.tag,
+                )
+            try:
+                await asyncio.sleep(10.0)
+            except asyncio.CancelledError:
+                cancelled_tags.append(spec.tag)
+                raise
+            return CompletionResult(
+                content="ANSWER: 208",
+                reasoning="",
+                finish_reason="stop",
+                prompt_tokens=100,
+                completion_tokens=40,
+                reasoning_tokens=10,
+                cached_tokens=0,
+                latency_s=10.0,
+                tag=spec.tag,
+            )
+
+    mem = EpisodicMemory(db_path=tmp_path / "mem.db")
+    skills = SkillPack()
+    trace = asyncio.run(
+        solve_reasoning(
+            _FakeClient(),  # type: ignore[arg-type]
+            skills,
+            mem,
+            "Find the number of positive integers <= 1000 divisible by 7 or 11 but not both.",
+        )
+    )
+    assert trace.final_answer == "208"
+    assert trace.verified is True
+    assert trace.wave2_triggered is False
+    assert set(cancelled_tags) == {"w1_pal_skeptic", "w1_analytical"}
+    assert seen_efforts["w1_pal_exact"] == "low"
+    assert seen_efforts["w1_pal_alt_z3"] == "low"
+
+
+def test_proxy_tool_turn_passthrough(monkeypatch):
+    import httpx
+    from fastapi.testclient import TestClient
+    from flash_forge.client import ModelCapabilities
+    from flash_forge.proxy import create_app
+
+    app = create_app(upstream_url="http://127.0.0.1:9999/v1")
+    forwarded: list[dict] = []
+
+    async def _fake_probe(self):
+        return ModelCapabilities(model_id="glm-5.3-flash-tfq3")
+
+    class _FakeResp:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+        content = b'{"id":"chatcmpl-1","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"read","arguments":"{\\"path\\":\\"README.md\\"}"}}]},"finish_reason":"tool_calls"}]}'
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def post(self, url, json=None):
+            forwarded.append({"url": url, "json": json})
+            return _FakeResp()
+
+    monkeypatch.setattr("flash_forge.client.TensorFoldClient.probe", _fake_probe)
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+
+    tc = TestClient(app)
+    r = tc.post(
+        "/v1/chat/completions",
+        json={
+            "model": "cortheon",
+            "tools": [{"type": "function", "function": {"name": "read", "parameters": {"type": "object"}}}],
+            "messages": [{"role": "user", "content": "Read README.md"}],
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["choices"][0]["finish_reason"] == "tool_calls"
+    assert forwarded[0]["url"] == "http://127.0.0.1:9999/v1/chat/completions"
+    assert forwarded[0]["json"]["model"] == "glm-5.3-flash-tfq3"
+
+
+
 
 
 
