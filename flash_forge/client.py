@@ -14,6 +14,19 @@ from typing import Any, Optional
 import httpx
 
 
+_REASONING_MODEL_ID_RE = re.compile(
+    r"(?:^|[^a-z0-9])(?:deepseek|ds\d|r1|qwq|qwen3|glm[-_]?5|o[134](?:[-_]|$)|thinking|reasoner)",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_reasoning_model(model_id: str) -> bool:
+    """Heuristic prior for reasoning models on generic OpenAI-compatible backends
+    that omit TensorFold's `/v1/models` capability metadata.
+    """
+    return bool(model_id and _REASONING_MODEL_ID_RE.search(model_id))
+
+
 @dataclass
 class ModelCapabilities:
     model_id: str
@@ -107,6 +120,11 @@ class TensorFoldClient:
         self.max_parallel = max_parallel
         self._sem = asyncio.Semaphore(max_parallel)
         self._caps: Optional[ModelCapabilities] = None
+        # Adaptive runtime flags for generic OpenAI-compatible backends (oMLX, vLLM, SGLang, llama.cpp, Ollama, LM Studio)
+        self._observed_reasoning: bool = False
+        self._reasoning_token_floor: int = 0
+        self._chat_template_kwargs_rejected: bool = False
+        self._reasoning_effort_rejected: bool = False
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -189,8 +207,20 @@ class TensorFoldClient:
             raise RuntimeError("Call await client.probe() before accessing caps")
         return self._caps
 
+    def _needs_reasoning_headroom(self) -> bool:
+        caps = self.caps
+        is_tf = getattr(self, "_is_tensorfold", True)
+        if caps.thinking_budget:
+            return False
+        if caps.supported_efforts:
+            return True
+        return (not is_tf) and (
+            getattr(self, "_observed_reasoning", False) or _looks_like_reasoning_model(caps.model_id)
+        )
+
     def _build_payload(self, spec: CallSpec) -> dict[str, Any]:
         caps = self.caps
+        is_tf = getattr(self, "_is_tensorfold", True)
         payload: dict[str, Any] = {
             "model": caps.model_id,
             "messages": spec.messages,
@@ -213,7 +243,7 @@ class TensorFoldClient:
         elif not spec.enable_thinking:
             if "none" in caps.supported_efforts:
                 payload["reasoning_effort"] = "none"
-            if getattr(self, "_is_tensorfold", False):
+            if is_tf or not getattr(self, "_chat_template_kwargs_rejected", False):
                 payload["chat_template_kwargs"] = {"enable_thinking": False}
 
         if spec.enable_thinking:
@@ -231,17 +261,29 @@ class TensorFoldClient:
                     payload["reasoning_effort"] = "medium"
                 elif "high" in caps.supported_efforts:
                     payload["reasoning_effort"] = "high"
-            # Only boost max_tokens when server lacks hard thinking_budget (e.g. soft-effort DeepSeek-V4.1);
-            # servers with thinking_budget=True (Qwen/GLM) already reserve reasoning separately.
-            if not caps.thinking_budget and caps.supported_efforts:
-                payload["max_tokens"] = max(int(payload["max_tokens"]), 6144)
+            elif (
+                not is_tf
+                and not caps.thinking_budget
+                and not getattr(self, "_reasoning_effort_rejected", False)
+                and (getattr(self, "_observed_reasoning", False) or _looks_like_reasoning_model(caps.model_id))
+            ):
+                if spec.reasoning_effort in ("low", "medium", "high"):
+                    payload["reasoning_effort"] = spec.reasoning_effort
+                elif spec.thinking_budget is not None:
+                    payload["reasoning_effort"] = "low" if spec.thinking_budget <= 1200 else "medium"
+            # Boost max_tokens when server lacks hard thinking_budget (soft-effort DeepSeek-V4.1 on TensorFold,
+            # or reasoning models behind generic OpenAI-compatible servers like oMLX/vLLM/SGLang/llama.cpp/Ollama);
+            # servers with thinking_budget=True (Qwen/GLM on TensorFold) already reserve reasoning separately.
+            if spec.max_tokens > 1 and self._needs_reasoning_headroom():
+                base_floor = max(6144, getattr(self, "_reasoning_token_floor", 0))
+                max_safe = max(int(payload["max_tokens"]), min(max(1024, caps.context_length // 2), 16384))
+                payload["max_tokens"] = max(int(payload["max_tokens"]), min(base_floor, max_safe))
 
         # Loop guard
         if spec.loop_guard and caps.loop_guard:
             payload["loop_guard"] = True
 
         # Structured outputs / guided choice (TensorFold libtfgrammar OR standard OpenAI json_schema on Ollama/vLLM/llama.cpp!)
-        is_tf = getattr(self, "_is_tensorfold", True)
         if caps.structures:
             if spec.guided_choice and is_tf:
                 payload["guided_choice"] = spec.guided_choice
@@ -258,14 +300,75 @@ class TensorFoldClient:
 
         return payload
 
+    async def _post_with_fallback(self, payload: dict[str, Any]) -> tuple[Optional[httpx.Response], Optional[str]]:
+        """POST to /chat/completions with graceful 400/422 fallback for optional grammar or thinking-control fields."""
+        try:
+            resp = await self._http.post(f"{self.base_url}/chat/completions", json=payload)
+        except Exception as exc:
+            return None, str(exc)
+
+        if resp.status_code == 200:
+            return resp, None
+
+        if resp.status_code in (400, 422):
+            cur_payload = dict(payload)
+            grammar_keys = ("response_format", "guided_choice", "grammar_budget")
+            if any(k in cur_payload for k in grammar_keys):
+                for k in grammar_keys:
+                    cur_payload.pop(k, None)
+                try:
+                    resp2 = await self._http.post(f"{self.base_url}/chat/completions", json=cur_payload)
+                except Exception as exc:
+                    return None, str(exc)
+                if resp2.status_code == 200:
+                    return resp2, None
+                resp = resp2
+
+            if resp.status_code in (400, 422):
+                had_ctk = "chat_template_kwargs" in cur_payload
+                had_effort = "reasoning_effort" in cur_payload
+                if had_ctk or had_effort:
+                    cur_payload.pop("chat_template_kwargs", None)
+                    cur_payload.pop("reasoning_effort", None)
+                    try:
+                        resp3 = await self._http.post(f"{self.base_url}/chat/completions", json=cur_payload)
+                    except Exception as exc:
+                        return None, str(exc)
+                    if resp3.status_code == 200:
+                        if had_ctk:
+                            self._chat_template_kwargs_rejected = True
+                        if had_effort:
+                            self._reasoning_effort_rejected = True
+                        return resp3, None
+                    resp = resp3
+
+        return None, f"HTTP {resp.status_code}: {resp.text[:300]}"
+
+    @staticmethod
+    def _parse_completion_json(data: dict[str, Any]) -> tuple[str, str, str, int, int, int, int]:
+        choice = data["choices"][0]
+        msg = choice.get("message") or {}
+        usage = data.get("usage") or {}
+        prompt_tok = int(usage.get("prompt_tokens") or 0)
+        comp_tok = int(usage.get("completion_tokens") or 0)
+        prompt_details = usage.get("prompt_tokens_details") or {}
+        comp_details = usage.get("completion_tokens_details") or {}
+        cached_tok = int(prompt_details.get("cached_tokens") or 0)
+        reason_tok = int(comp_details.get("reasoning_tokens") or 0)
+        content = msg.get("content") or ""
+        reasoning = msg.get("reasoning_content") or ""
+        finish_reason = str(choice.get("finish_reason") or "stop")
+        return content, reasoning, finish_reason, prompt_tok, comp_tok, cached_tok, reason_tok
+
     async def complete(self, spec: CallSpec) -> CompletionResult:
         await self.probe()
+        caps = self.caps
         payload = self._build_payload(spec)
         async with self._sem:
             t0 = time.perf_counter()
-            try:
-                resp = await self._http.post(f"{self.base_url}/chat/completions", json=payload)
-            except Exception as exc:
+            resp, err = await self._post_with_fallback(payload)
+            dt = time.perf_counter() - t0
+            if resp is None:
                 return CompletionResult(
                     content="",
                     reasoning="",
@@ -274,68 +377,108 @@ class TensorFoldClient:
                     completion_tokens=0,
                     reasoning_tokens=0,
                     cached_tokens=0,
-                    latency_s=time.perf_counter() - t0,
-                    raw_error=str(exc),
+                    latency_s=dt,
+                    raw_error=err,
                     tag=spec.tag,
                 )
-            dt = time.perf_counter() - t0
-            if resp.status_code != 200:
-                # Automatic graceful fallback if a grammar schema rejected
-                if resp.status_code == 400 and ("response_format" in payload or "guided_choice" in payload):
-                    fallback_payload = dict(payload)
-                    fallback_payload.pop("response_format", None)
-                    fallback_payload.pop("guided_choice", None)
-                    fallback_payload.pop("grammar_budget", None)
-                    resp2 = await self._http.post(f"{self.base_url}/chat/completions", json=fallback_payload)
-                    dt = time.perf_counter() - t0
-                    if resp2.status_code == 200:
-                        resp = resp2
-                    else:
-                        return CompletionResult(
-                            content="",
-                            reasoning="",
-                            finish_reason="error",
-                            prompt_tokens=0,
-                            completion_tokens=0,
-                            reasoning_tokens=0,
-                            cached_tokens=0,
-                            latency_s=dt,
-                            raw_error=f"HTTP {resp.status_code}: {resp.text[:300]}",
-                            tag=spec.tag,
-                        )
-                else:
-                    return CompletionResult(
-                        content="",
-                        reasoning="",
-                        finish_reason="error",
-                        prompt_tokens=0,
-                        completion_tokens=0,
-                        reasoning_tokens=0,
-                        cached_tokens=0,
-                        latency_s=dt,
-                        raw_error=f"HTTP {resp.status_code}: {resp.text[:300]}",
-                        tag=spec.tag,
-                    )
 
-            data = resp.json()
-            choice = data["choices"][0]
-            msg = choice.get("message", {})
-            usage = data.get("usage", {})
-            prompt_tok = int(usage.get("prompt_tokens", 0))
-            comp_tok = int(usage.get("completion_tokens", 0))
-            cached_tok = int(usage.get("prompt_tokens_details", {}).get("cached_tokens", 0))
-            reason_tok = int(usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0))
-
+            content, reasoning, finish_reason, prompt_tok, comp_tok, cached_tok, reason_tok = (
+                self._parse_completion_json(resp.json())
+            )
             self.total_calls += 1
             self.total_prompt_tokens += prompt_tok
             self.total_completion_tokens += comp_tok
             self.total_cached_tokens += cached_tok
             self.total_reasoning_tokens += reason_tok
 
+            if reason_tok > 0 or bool(reasoning):
+                self._observed_reasoning = True
+
+            # Adaptive recovery when a reasoning model behind a backend without hard thinking_budget
+            # consumes the entire max_tokens budget inside reasoning_content (leaving empty content).
+            if (
+                finish_reason == "length"
+                and not content.strip()
+                and (reason_tok > 0 or bool(reasoning))
+                and not caps.thinking_budget
+                and spec.max_tokens > 1
+            ):
+                sent_max = int(payload.get("max_tokens", spec.max_tokens))
+                retry_cap = min(16384, max(sent_max, max(1024, caps.context_length // 2)))
+                retry_payload: Optional[dict[str, Any]] = None
+                if not spec.enable_thinking:
+                    next_max = min(max(sent_max * 4, 1024), retry_cap)
+                    if next_max > sent_max:
+                        retry_payload = dict(payload)
+                        retry_payload["max_tokens"] = next_max
+                elif sent_max < 6144 and retry_cap > sent_max:
+                    next_max = min(max(sent_max * 2, 6144), retry_cap)
+                    self._reasoning_token_floor = max(self._reasoning_token_floor, next_max)
+                    retry_payload = dict(payload)
+                    retry_payload["max_tokens"] = next_max
+                elif not getattr(self, "_chat_template_kwargs_rejected", False):
+                    # Already spent >=6144 tokens thinking without emitting visible content:
+                    # run a fast enable_thinking=False commit pass seeded with the scratchpad tail.
+                    notes_tail = reasoning[-2400:].strip() if reasoning else ""
+                    commit_prompt = (
+                        "Your reasoning scratchpad reached the token limit before emitting the final answer. "
+                        "Do not continue brainstorming. Output ONLY the final requested answer/code directly now."
+                    )
+                    if notes_tail:
+                        commit_prompt += f"\n\nScratchpad excerpt:\n{notes_tail}"
+                    commit_msgs = [dict(m) for m in spec.messages]
+                    if commit_msgs and commit_msgs[-1].get("role") == "user":
+                        commit_msgs[-1]["content"] = f"{commit_msgs[-1].get('content', '')}\n\n{commit_prompt}"
+                    else:
+                        commit_msgs.append({"role": "user", "content": commit_prompt})
+                    commit_spec = CallSpec(
+                        messages=commit_msgs,
+                        tag=spec.tag,
+                        max_tokens=max(2048, min(spec.max_tokens, 4096)),
+                        temperature=min(spec.temperature, 0.3),
+                        top_p=spec.top_p,
+                        top_k=spec.top_k,
+                        min_p=spec.min_p,
+                        seed=spec.seed,
+                        enable_thinking=False,
+                        json_schema=spec.json_schema,
+                        schema_name=spec.schema_name,
+                        guided_choice=spec.guided_choice,
+                        grammar_budget=spec.grammar_budget,
+                        loop_guard=spec.loop_guard,
+                        stop=spec.stop,
+                    )
+                    retry_payload = self._build_payload(commit_spec)
+                elif retry_cap > sent_max:
+                    next_max = min(sent_max * 2, retry_cap)
+                    self._reasoning_token_floor = max(self._reasoning_token_floor, next_max)
+                    retry_payload = dict(payload)
+                    retry_payload["max_tokens"] = next_max
+
+                if retry_payload is not None:
+                    resp2, _ = await self._post_with_fallback(retry_payload)
+                    dt = time.perf_counter() - t0
+                    if resp2 is not None:
+                        c2, r2, fr2, pt2, ct2, cat2, rt2 = self._parse_completion_json(resp2.json())
+                        self.total_calls += 1
+                        self.total_prompt_tokens += pt2
+                        self.total_completion_tokens += ct2
+                        self.total_cached_tokens += cat2
+                        self.total_reasoning_tokens += rt2
+                        prompt_tok += pt2
+                        comp_tok += ct2
+                        cached_tok += cat2
+                        reason_tok += rt2
+                        if c2.strip():
+                            content = c2
+                            finish_reason = fr2
+                        if r2 and not reasoning:
+                            reasoning = r2
+
             return CompletionResult(
-                content=(msg.get("content") or ""),
-                reasoning=(msg.get("reasoning_content") or ""),
-                finish_reason=str(choice.get("finish_reason") or "stop"),
+                content=content,
+                reasoning=reasoning,
+                finish_reason=finish_reason,
                 prompt_tokens=prompt_tok,
                 completion_tokens=comp_tok,
                 reasoning_tokens=reason_tok,
