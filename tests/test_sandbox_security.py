@@ -142,6 +142,42 @@ def test_sandbox_blocks_sensitive_credential_paths_in_home(tmp_path: Path, monke
     assert "LEAKED:" not in res.stdout
 
 
+def test_sandbox_blocks_agent_harness_homes_in_home(tmp_path: Path, monkeypatch):
+    """Harness home directories hold credentials and transcripts.
+
+    Cortheon is usually driven *by* one of these harnesses, so a solver script
+    that could read them could exfiltrate the credentials the sandbox exists to
+    protect.
+    """
+    fake_home = tmp_path / "fake_home"
+    (fake_home / ".dsh").mkdir(parents=True)
+    (fake_home / ".dsh" / "credentials.json").write_text("DUMMY_DSH", encoding="utf-8")
+    (fake_home / ".claude").mkdir(parents=True)
+    (fake_home / ".claude" / ".credentials.json").write_text("DUMMY_CLAUDE", encoding="utf-8")
+    (fake_home / ".cursor").mkdir(parents=True)
+    (fake_home / ".cursor" / "mcp.json").write_text("DUMMY_CURSOR", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    code = (
+        "from pathlib import Path\n"
+        "h = Path.home()\n"
+        "targets = [h / '.dsh' / 'credentials.json', "
+        "h / '.claude' / '.credentials.json', h / '.cursor' / 'mcp.json']\n"
+        "denied = 0\n"
+        "for t in targets:\n"
+        "    try:\n"
+        "        t.read_text()\n"
+        "        print('LEAKED:', t.name)\n"
+        "    except PermissionError:\n"
+        "        denied += 1\n"
+        "print(f'DENIED={denied}')\n"
+    )
+    res = run_python(code, timeout_s=5.0)
+    assert res.ok, f"Unexpected failure: {res.stderr}"
+    assert "DENIED=3" in res.stdout
+    assert "LEAKED:" not in res.stdout
+
+
 def test_sandbox_allows_sympy_numpy_z3_fractions_and_local_writes():
     code = (
         "from fractions import Fraction\n"
