@@ -18,7 +18,14 @@ from .doctor import format_doctor_report, run_doctor
 from .duel import DUEL_PRESETS, run_duel
 from .engine import FlashForge, ForgeConfig
 from .flywheel import export_dpo_jsonl, export_sft_jsonl, format_export_summary, harvest_from_results_dir
-from .guard import format_guard_report, run_guard
+from .guard import (
+    SUPPORTED_RUNNERS,
+    format_guard_report,
+    format_guard_sarif,
+    install_git_hook,
+    run_guard,
+    uninstall_git_hook,
+)
 from .integrations import ALL_HARNESSES, MCP_HARNESSES, install_commands, install_mcp
 from .mcp_server import run_stdio_server
 from .memory import EpisodicMemory
@@ -31,7 +38,7 @@ from .skill_loader import SkillPack
 from .spec_verify import solve_spec_verify
 from .think_forge import ThinkForgeTrace
 
-_VERSION = "2.2.0"
+_VERSION = "2.3.0"
 
 _STREAMS_HELP = (
     "Parallel verification streams (2, 4, or 8): "
@@ -157,23 +164,38 @@ def main(argv: Optional[list[str]] = None) -> None:
     p_spec.add_argument("--drafter-streams", type=int, default=3)
     p_spec.add_argument("--verifier-streams", type=int, default=4, help=_STREAMS_HELP)
     p_spec.add_argument("--deep", action="store_true")
+    p_spec.add_argument("-q", "--quiet", action="store_true", help="Suppress live per-slot progress lines on stderr")
     p_spec.add_argument("--json", dest="as_json", action="store_true")
 
     p_guard = sub.add_parser(
         "guard",
-        help="Zero-false-positive proof-carrying git diff breaker (only reports bugs backed by executed failing reproducers)",
+        help="Zero-false-positive polyglot proof-carrying git diff breaker (Python/Node/TS/Go/Shell + SARIF 2.1.0)",
     )
     p_guard.add_argument("--url", default="http://127.0.0.1:8080/v1")
     p_guard.add_argument("--api-key", default=None)
     p_guard.add_argument("--model", default=None)
     p_guard.add_argument("--repo", default=".", help="Path to git repository (default: current directory)")
     p_guard.add_argument("--base-ref", default="HEAD", help="Git ref to diff against (default: HEAD)")
+    p_guard.add_argument("--runner", choices=("auto",) + tuple(SUPPORTED_RUNNERS), default="auto", help="Reproducer runtime (default: auto)")
     p_guard.add_argument("--adversaries", type=int, default=3, help="Number of clean-context adversarial breakers (default: 3)")
     p_guard.add_argument("--no-baseline", action="store_true", help="Skip baseline verification on base-ref")
     p_guard.add_argument("--auto-fix", action="store_true", help="Race surgical patches in an isolated worktree until reproducers pass")
     p_guard.add_argument("--test-cmd", default=None, help="Optional test command that --auto-fix patches must also pass")
     p_guard.add_argument("--timeout", type=float, default=15.0, help="Per-reproducer sandbox timeout in seconds")
+    p_guard.add_argument("--sarif", default=None, help="Write SARIF 2.1.0 report to path (or '-' for stdout)")
+    p_guard.add_argument("-q", "--quiet", action="store_true", help="Suppress live per-slot progress lines on stderr")
     p_guard.add_argument("--json", dest="as_json", action="store_true")
+
+    p_hooks = sub.add_parser(
+        "install-hooks",
+        help="Non-destructively install (or uninstall) a git pre-push hook running `cortheon guard`",
+    )
+    p_hooks.add_argument("--repo", default=".", help="Path to git repository (default: current directory)")
+    p_hooks.add_argument("--url", default="http://127.0.0.1:8080/v1", help="Backend URL for `cortheon guard`")
+    p_hooks.add_argument("--hook-name", default="pre-push", help="Git hook name (default: pre-push)")
+    p_hooks.add_argument("--non-blocking", action="store_true", help="Warn on proven bugs without blocking git push")
+    p_hooks.add_argument("--force", action="store_true", help="Overwrite an existing non-Cortheon hook")
+    p_hooks.add_argument("--uninstall", action="store_true", help="Remove an installed Cortheon git hook")
 
     p_mcp = sub.add_parser(
         "mcp",
@@ -212,22 +234,48 @@ def main(argv: Optional[list[str]] = None) -> None:
         print(format_export_summary(stats))
         return
 
+    if args.cmd == "install-hooks":
+        if args.uninstall:
+            removed = uninstall_git_hook(args.repo, hook_name=args.hook_name, force=args.force)
+            print(f"[Cortheon] {'Removed' if removed else 'No Cortheon'} `{args.hook_name}` hook in {args.repo}")
+        else:
+            hook_path = install_git_hook(
+                args.repo,
+                url=args.url,
+                hook_name=args.hook_name,
+                block_on_bug=not args.non_blocking,
+                force=args.force,
+            )
+            print(f"[Cortheon] Installed `{args.hook_name}` guard hook -> {hook_path}")
+        return
+
     if args.cmd == "guard":
         async def _run_guard() -> None:
+            _, on_event = make_progress_callback(quiet=args.quiet or args.as_json or args.sarif == "-")
             async with TensorFoldClient(base_url=args.url, api_key=args.api_key, model=args.model) as client:
                 report = await run_guard(
                     client,
                     args.repo,
                     base_ref=args.base_ref,
+                    runner=args.runner,
                     num_adversaries=args.adversaries,
                     verify_baseline=not args.no_baseline,
                     auto_fix=args.auto_fix,
                     test_cmd=args.test_cmd,
                     timeout_s=args.timeout,
+                    on_event=on_event,
                 )
+            if args.sarif:
+                sarif_json = json.dumps(format_guard_sarif(report), indent=2) + "\n"
+                if args.sarif == "-":
+                    print(sarif_json, end="")
+                else:
+                    Path(args.sarif).write_text(sarif_json, encoding="utf-8")
+                    if not args.as_json:
+                        print(f"[Cortheon Guard] Wrote SARIF 2.1.0 report -> {args.sarif}", file=sys.stderr)
             if args.as_json:
                 print(json.dumps(report.to_dict(), indent=2))
-            else:
+            elif args.sarif != "-":
                 print(format_guard_report(report))
             if not report.clean:
                 sys.exit(1)
@@ -241,6 +289,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             prompt = Path(prompt[1:]).read_text(encoding="utf-8")
 
         async def _run_spec() -> None:
+            _, on_event = make_progress_callback(quiet=args.quiet or args.as_json)
             skills = SkillPack.load()
             mem = EpisodicMemory(enabled=False)
             async with (
@@ -256,6 +305,7 @@ def main(argv: Optional[list[str]] = None) -> None:
                     drafter_streams=args.drafter_streams,
                     verifier_streams=args.verifier_streams,
                     deep=args.deep,
+                    on_event=on_event,
                 )
             if args.as_json:
                 out = {
@@ -319,6 +369,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         return
 
     if args.cmd == "proxy":
+        cockpit_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
         app = create_app(
             upstream_url=args.upstream,
             referee_url=args.referee_url,
@@ -326,6 +377,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             auto_rescue=not args.no_auto_rescue,
             record_flywheel=args.record_flywheel,
             flywheel_path=Path(args.flywheel_path) if args.flywheel_path else None,
+            cockpit_url=f"http://{cockpit_host}:{args.port}/ui",
         )
         uvicorn.run(app, host=args.host, port=args.port)
         return

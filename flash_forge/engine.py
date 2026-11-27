@@ -397,6 +397,8 @@ class FlashForge:
                     f"Winner `{trace.winner_name}` passed checks after Red-Team/Wave-2 repair.",
                 )
             flywheel_recorded = self._maybe_record_flywheel(prompt, trace)
+            if flywheel_recorded:
+                _emit({"engine": "code", "event": "flywheel_recorded", "domain": "code"})
             formatted = f"```python\n{trace.winner_code}\n```"
             return ForgeResult(
                 mode="code",
@@ -419,11 +421,13 @@ class FlashForge:
                 num_streams=self.config.num_streams,
                 deep=self.config.deep,
             )
+            wall_s = time.perf_counter() - t0
+            _emit({"engine": "think", "event": "done", "elapsed_s": round(wall_s, 2), "verified": bool(ttrace.quant_verified), "summary": "council synthesis complete"})
             return ForgeResult(
                 mode="think",
                 answer=ttrace.final_answer,
                 raw_trace=ttrace,
-                wall_s=time.perf_counter() - t0,
+                wall_s=wall_s,
                 token_stats=self.client.stats_dict(),
             )
 
@@ -436,6 +440,7 @@ class FlashForge:
             num_wave1_streams=self.config.num_streams,
             sandbox_timeout_s=self.config.sandbox_timeout_s,
             deep=self.config.deep,
+            on_event=on_event,
         )
         lesson = None
         if learn and rtrace.recovered_from_disagreement and rtrace.graveyard:
@@ -446,6 +451,8 @@ class FlashForge:
                 f"Resolved to `{rtrace.final_answer}` via {rtrace.consensus_type}.",
             )
         flywheel_recorded = self._maybe_record_flywheel(prompt, rtrace)
+        if flywheel_recorded:
+            _emit({"engine": "reason", "event": "flywheel_recorded", "domain": "math"})
         return ForgeResult(
             mode="reason",
             answer=rtrace.final_answer,

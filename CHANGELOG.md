@@ -5,6 +5,13 @@ All notable changes to Cortheon are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-11-27
+
+### Added
+- **Live Web Cockpit (`/ui`) & Real-Time SSE Event Bus (`flash_forge/cockpit.py`):** Mounted directly onto `cortheon proxy` (`http://127.0.0.1:18652/ui`) — zero external CDNs, dark terminal-scientific UI streaming live parallel slot races, early-aborts, death-spiral rescues, SpecVerify savings, proven diff bugs, recent runs, and 1-click PII-scrubbed DPO JSONL export (`/v1/cortheon/flywheel/export`).
+- **Polyglot `cortheon guard`, SARIF 2.1.0 & Git Hook Installer (`cortheon install-hooks`):** Auto-detects Python, Node.js/TypeScript, Go, and Shell diffs and executes adversarial reproducers inside the OS sandbox (`macos-seatbelt` / `linux-bwrap`), exports GitHub Code Scanning SARIF 2.1.0 (`--sarif`) for native PR inline diff annotations, and non-destructively installs/uninstalls `.git/hooks/pre-push` guard hooks.
+- **Universal Live `on_event` Streaming:** Added fault-isolated per-slot `on_event` callbacks across `ReasonForge`, `SpecVerify`, `CodeForge v7`, and `cortheon guard`, powering both terminal progress (`flash_forge/progress.py`), OpenAI proxy SSE comment heartbeats, and the Live Web Cockpit.
+
 ## [2.2.0] - 2026-11-27
 
 ### Added

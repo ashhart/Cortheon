@@ -27,8 +27,10 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from .cockpit import CockpitBus, create_cockpit_router
 from .code_forge import CodeForgeTrace
 from .engine import FlashForge, ForgeConfig
+from .progress import format_sse_comment
 from .reason_forge import ReasonForgeTrace
 from .rescue import detect_death_spiral, inject_rescue_note, run_clean_context_rescue
 from .sandbox import sandbox_backend
@@ -135,6 +137,7 @@ def format_proxy_startup_banner(
     num_streams: int = 4,
     auto_rescue: bool = True,
     record_flywheel: bool = False,
+    cockpit_url: Optional[str] = None,
     sandbox: Optional[str] = None,
 ) -> str:
     """Format the startup runtime summary banner for `cortheon proxy`."""
@@ -145,11 +148,13 @@ def format_proxy_startup_banner(
     upstream_line = f"{upstream_url} (model={upstream_model})" if upstream_model else upstream_url
     lines = [
         bar,
-        "  Cortheon Universal Proxy v2.2.0",
+        "  Cortheon Universal Proxy v2.3.0",
         f"  Upstream    : {upstream_line}",
     ]
     if referee_url:
         lines.append(f"  Referee     : {referee_url}")
+    if cockpit_url:
+        lines.append(f"  Live Cockpit: {cockpit_url}")
     lines.extend(
         [
             f"  Streams     : {_streams_profile_label(num_streams)}",
@@ -170,9 +175,32 @@ def create_app(
     auto_rescue: bool = True,
     record_flywheel: bool = False,
     flywheel_path: Optional[Any] = None,
+    cockpit_url: Optional[str] = None,
 ) -> FastAPI:
     forge_default: Optional[FlashForge] = None
     forge_deep: Optional[FlashForge] = None
+    cockpit_bus = CockpitBus(version="2.3.0")
+
+    def _record_solve_to_cockpit(run_id: str, result: Any) -> None:
+        try:
+            aborted = 0
+            if isinstance(result.raw_trace, CodeForgeTrace):
+                aborted = int(getattr(result.raw_trace, "early_aborted_slots", 0))
+            tok = int(result.token_stats.get("prompt_tokens", 0)) + int(result.token_stats.get("completion_tokens", 0))
+            cockpit_bus.record_run(
+                {
+                    "id": run_id,
+                    "mode": result.mode,
+                    "wall_s": round(float(result.wall_s), 2),
+                    "verified": bool(result.verified),
+                    "calls": int(result.token_stats.get("calls", 0)),
+                    "tokens": tok,
+                    "aborted_slots": aborted,
+                    "summary": str(result.answer or "")[:120],
+                }
+            )
+        except Exception:
+            pass
 
     def _ensure_engines() -> tuple[FlashForge, FlashForge]:
         nonlocal forge_default, forge_deep
@@ -220,6 +248,7 @@ def create_app(
                 num_streams=num_streams,
                 auto_rescue=auto_rescue,
                 record_flywheel=record_flywheel,
+                cockpit_url=cockpit_url or "/ui",
             ),
             flush=True,
         )
@@ -231,7 +260,9 @@ def create_app(
             forge_default = None
             forge_deep = None
 
-    app = FastAPI(title="Cortheon Universal Proxy", version="2.2.0", lifespan=lifespan)
+    app = FastAPI(title="Cortheon Universal Proxy", version="2.3.0", lifespan=lifespan)
+    app.state.cockpit_bus = cockpit_bus
+    app.include_router(create_cockpit_router(cockpit_bus, flywheel_path=flywheel_path))
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -239,7 +270,7 @@ def create_app(
         caps = await default_engine.client.probe()
         return {
             "status": "ok",
-            "version": "2.2.0",
+            "version": "2.3.0",
             "upstream": upstream_url,
             "upstream_model": caps.model_id,
             "referee_url": referee_url,
@@ -248,6 +279,7 @@ def create_app(
             "streams": num_streams,
             "auto_rescue": auto_rescue,
             "record_flywheel": record_flywheel,
+            "cockpit_url": cockpit_url or "/ui",
         }
 
     @app.get("/v1/models")
@@ -288,6 +320,13 @@ def create_app(
                     note = await run_clean_context_rescue(default_engine.client, spiral)
                     if note:
                         fwd["messages"] = inject_rescue_note(fwd["messages"], note)
+                        cockpit_bus.publish(
+                            {
+                                "engine": "rescue",
+                                "event": "rescue_triggered",
+                                "summary": f"B=3 death-spiral rescue injected ({spiral.consecutive_failures} consecutive failures)",
+                            }
+                        )
                 except Exception:
                     pass
         req_model = str(fwd.get("model", ""))
@@ -332,7 +371,8 @@ def create_app(
         created = int(time.time())
 
         if not stream:
-            result = await engine.solve(prompt, force_mode=force_mode)  # type: ignore[arg-type]
+            result = await engine.solve(prompt, force_mode=force_mode, on_event=cockpit_bus.publish)  # type: ignore[arg-type]
+            _record_solve_to_cockpit(cid, result)
             reply_text, meta = _format_reply_and_meta(result)
             usage = {
                 "prompt_tokens": result.token_stats.get("prompt_tokens", 0),
@@ -359,21 +399,37 @@ def create_app(
             )
 
         async def _sse() -> AsyncIterator[str]:
-            solve_task = asyncio.create_task(engine.solve(prompt, force_mode=force_mode))  # type: ignore[arg-type]
+            live_q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=64)
+
+            def _on_ev(ev: dict[str, Any]) -> None:
+                cockpit_bus.publish(ev)
+                try:
+                    live_q.put_nowait(ev)
+                except asyncio.QueueFull:
+                    pass
+
+            solve_task = asyncio.create_task(engine.solve(prompt, force_mode=force_mode, on_event=_on_ev))  # type: ignore[arg-type]
             try:
                 while not solve_task.done():
                     if await request.is_disconnected():
                         solve_task.cancel()
                         return
-                    # Emit immediate SSE keepalive comment so clients never time out waiting for multi-wave synthesis
-                    yield ": keepalive\n\n"
-                    done, _ = await asyncio.wait({solve_task}, timeout=4.0)
+                    emitted = False
+                    while not live_q.empty():
+                        yield format_sse_comment(live_q.get_nowait())
+                        emitted = True
+                    if not emitted:
+                        yield ": keepalive\n\n"
+                    done, _ = await asyncio.wait({solve_task}, timeout=2.0)
                     if done:
                         break
+                while not live_q.empty():
+                    yield format_sse_comment(live_q.get_nowait())
                 result = await solve_task
             except asyncio.CancelledError:
                 solve_task.cancel()
                 return
+            _record_solve_to_cockpit(cid, result)
             reply_text, meta = _format_reply_and_meta(result)
             usage = {
                 "prompt_tokens": result.token_stats.get("prompt_tokens", 0),
@@ -436,7 +492,8 @@ def create_app(
         mid = f"msg_ff_{uuid.uuid4().hex[:16]}"
 
         if not stream:
-            result = await engine.solve(prompt, force_mode=force_mode)  # type: ignore[arg-type]
+            result = await engine.solve(prompt, force_mode=force_mode, on_event=cockpit_bus.publish)  # type: ignore[arg-type]
+            _record_solve_to_cockpit(mid, result)
             reply_text, meta = _format_reply_and_meta(result)
             in_tok = result.token_stats.get("prompt_tokens", 0)
             out_tok = result.token_stats.get("completion_tokens", 0)
@@ -463,7 +520,7 @@ def create_app(
                     "usage": {"input_tokens": 0, "output_tokens": 0},
                 },
             }) + "\n\n"
-            solve_task = asyncio.create_task(engine.solve(prompt, force_mode=force_mode))  # type: ignore[arg-type]
+            solve_task = asyncio.create_task(engine.solve(prompt, force_mode=force_mode, on_event=cockpit_bus.publish))  # type: ignore[arg-type]
             try:
                 while not solve_task.done():
                     if await request.is_disconnected():
@@ -477,6 +534,7 @@ def create_app(
             except asyncio.CancelledError:
                 solve_task.cancel()
                 return
+            _record_solve_to_cockpit(mid, result)
             reply_text, meta = _format_reply_and_meta(result)
             out_tok = result.token_stats.get("completion_tokens", 0)
             yield "event: content_block_start\ndata: " + json.dumps({

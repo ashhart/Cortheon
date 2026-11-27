@@ -1,14 +1,15 @@
 """Cortheon — Unified Consensus & Verification Runtime for Frozen Local Models."""
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 from flash_forge.client import CompletionResult, ModelCapabilities, TensorFoldClient
+from flash_forge.cockpit import CockpitBus, create_cockpit_router
 from flash_forge.code_forge import CodeCandidate, CodeForgeTrace
 from flash_forge.dev_agent import DevForgeResult, run_dev_forge
 from flash_forge.engine import FlashForge as Cortheon
 from flash_forge.engine import ForgeConfig as CortheonConfig
 from flash_forge.engine import ForgeResult as CortheonResult
-from flash_forge.guard import GuardReport, ProvenBug, run_guard
+from flash_forge.guard import GuardReport, ProvenBug, format_guard_sarif, install_git_hook, run_guard
 from flash_forge.integrations import install_commands, install_mcp
 from flash_forge.proxy import create_app
 from flash_forge.reason_forge import ReasonForgeTrace
@@ -25,6 +26,8 @@ __all__ = [
     "TensorFoldClient",
     "ModelCapabilities",
     "CompletionResult",
+    "CockpitBus",
+    "create_cockpit_router",
     "CodeCandidate",
     "CodeForgeTrace",
     "ReasonForgeTrace",
@@ -34,6 +37,8 @@ __all__ = [
     "GuardReport",
     "ProvenBug",
     "run_guard",
+    "format_guard_sarif",
+    "install_git_hook",
     "install_commands",
     "install_mcp",
     "DevForgeResult",

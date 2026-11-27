@@ -20,8 +20,8 @@ uv venv .venv && uv pip install --python .venv/bin/python -e .
 .venv/bin/cortheon install-commands --harness all
 .venv/bin/cortheon install-mcp --harness all --url http://127.0.0.1:8080/v1
 
-# 4. Start the universal proxy (or serve TensorFold natively with --cortheon --cortheon-exec --parallel 8)
-.venv/bin/cortheon proxy --upstream http://127.0.0.1:8080/v1 --port 18652 --streams 4
+# 4. Start the universal proxy + Live Web Cockpit at http://127.0.0.1:18652/ui
+.venv/bin/cortheon proxy --upstream http://127.0.0.1:8080/v1 --port 18652 --streams 4 --record-flywheel
 ```
 
 ### Then use `/cortheon` inside your coding harness
@@ -105,9 +105,9 @@ These internal suites were authored during development to stress-test failure mo
 ### Core (Proven & Production-Ready)
 1. **Neuro-Symbolic Exact-Answer Solver (`ReasonForge`):** `B=2|4|8` parallel Python / SymPy / Z3 scripts with streaming Wave-1 early-abort (cancels lagging GPU slots the instant 2 independent scripts agree), arbitrary-precision rational equivalence, and conditional Wave-2 falsification.
 2. **OS-Sandboxed Execution (`flash_forge/sandbox.py`):** macOS `sandbox-exec` / Linux `bwrap` enabled by default — blocks network sockets, outside-tempdir writes, and sensitive credential reads (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.omp`, `~/.pi`, `~/.config`), plus POSIX rlimits and hard timeouts. See [`SECURITY.md`](SECURITY.md).
-3. **Zero-False-Positive Proof-Carrying Diff Breaker (`cortheon guard`):** Spawns clean-context adversaries in isolated ephemeral `git worktree`s inside the OS sandbox and **bans prose code reviews** — a bug is *only* reported if backed by an executed failing Python reproducer (optionally verified passing on `HEAD` and auto-fixed with `--auto-fix`).
+3. **Polyglot Proof-Carrying Diff Breaker (`cortheon guard`, `--sarif`, `cortheon install-hooks`):** Spawns clean-context adversaries in isolated ephemeral `git worktree`s inside the OS sandbox across **Python, Node/TS, Go, and Shell** — **bans prose code reviews** (only alerts on executed failing reproducers, verified against `HEAD`, with `--auto-fix`, GitHub PR **SARIF 2.1.0** annotations, and non-destructive `pre-push` git hooks).
 4. **Native Zero-Dependency MCP Server (`cortheon mcp`) & One-Command Installer (`cortheon install-mcp`):** Stdio JSON-RPC 2.0 MCP server exposing `cortheon_verify`, `cortheon_guard`, `cortheon_spec_verify`, and `cortheon_doctor`, auto-registered non-destructively into Claude Code, Cursor, OpenCode, Codex, and Windsurf via `cortheon install-mcp --harness all`.
-5. **Universal Drop-In Proxy (`cortheon proxy`), Diagnostics (`cortheon doctor`) & Live Progress (`flash_forge/progress.py`):** OpenAI + Anthropic proxy with transparent tool-turn passthrough, **Automatic Death-Spiral Rescue** (`B=3` graveyard backtracking after `>=2` consecutive failing tool/test runs), live per-slot streaming progress, 2-second sandbox/backend/throughput diagnostics (`cortheon doctor`), `--record-flywheel` auto-harvesting, and `--streams 2|4|8` cost/latency dial.
+5. **Universal Drop-In Proxy + Live Web Cockpit (`http://127.0.0.1:18652/ui`) & `cortheon doctor`:** OpenAI + Anthropic proxy with transparent tool-turn passthrough, **Automatic Death-Spiral Rescue** (`B=3` graveyard backtracking), a zero-CDN real-time SSE Web Cockpit streaming every slot race, early-abort, rescue, and 1-click DPO export, plus 2-second live diagnostics (`cortheon doctor`) and `--streams 2|4|8` cost/latency dial.
 6. **All-Harness `/cortheon` Installer (`cortheon install-commands --harness all`):** Native `/cortheon` slash command & tool across **OMP**, **Pi**, **OpenCode**, **Claude Code**, **Cursor**, and **Codex**.
 
 ### Frontier Research Engines (New in v2.1–v2.2 — Offline Unit-Tested, Live Benchmarks Ongoing)
