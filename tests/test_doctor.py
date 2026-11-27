@@ -8,6 +8,7 @@ import os
 import sys
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -603,7 +604,7 @@ def test_doctor_cli_json_and_help_flags(monkeypatch, capsys, tmp_path: Path):
     for subcmd, expected_snippets in (
         ("doctor", ["--url", "--api-key", "--model", "--skip-live", "--json"]),
         ("proxy", ["--streams", "2=fast sanity check ~2-3 calls", "4=balanced default ~4-7 calls", "8=max diversity"]),
-        ("solve", ["--streams", "2=fast sanity check ~2-3 calls", "4=balanced default ~4-7 calls", "8=max diversity"]),
+        ("solve", ["--model", "--streams", "2=fast sanity check ~2-3 calls", "4=balanced default ~4-7 calls", "8=max diversity"]),
     ):
         with pytest.raises(SystemExit) as exc_info:
             cli_main([subcmd, "--help"])
@@ -755,3 +756,63 @@ def test_always_on_reasoning_model_fast_route_recovery():
     assert live_check.status == "pass"
     assert live_check.details["thinking_starvation_failures"] == 0
     assert live_check.details["adaptive_recovery_triggered"] is True
+
+
+def test_solve_forwards_model_override_to_forge_config(monkeypatch):
+    """`solve --model` must reach ForgeConfig.
+
+    Without the flag, ``TensorFoldClient.probe()`` falls back to ``data[0]`` from
+    ``/v1/models``, which on a multi-model backend (LM Studio, vLLM) is an
+    arbitrary entry -- in practice an embedding or OCR model -- and every stream
+    then talks to the wrong model with no error at all.
+    """
+    captured = {}
+
+    class _StubForge:
+        def __init__(self, cfg):
+            captured["cfg"] = cfg
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+        async def solve(self, prompt, force_mode=None, on_event=None):
+            return SimpleNamespace(
+                mode="fast",
+                wall_s=0.0,
+                token_stats={},
+                raw_trace=None,
+                answer="2",
+                flywheel_recorded=False,
+                lesson_learned=None,
+            )
+
+    monkeypatch.setattr("flash_forge.cli.FlashForge", _StubForge)
+    cli_main(["solve", "what is 1+1", "--model", "my-model"])
+    assert captured["cfg"].model == "my-model"
+
+
+def test_solve_without_model_flag_leaves_it_unset(monkeypatch):
+    captured = {}
+
+    class _StubForge:
+        def __init__(self, cfg):
+            captured["cfg"] = cfg
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+        async def solve(self, prompt, force_mode=None, on_event=None):
+            return SimpleNamespace(
+                mode="fast", wall_s=0.0, token_stats={}, raw_trace=None,
+                answer="2", flywheel_recorded=False, lesson_learned=None,
+            )
+
+    monkeypatch.setattr("flash_forge.cli.FlashForge", _StubForge)
+    cli_main(["solve", "what is 1+1"])
+    assert captured["cfg"].model is None
