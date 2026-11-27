@@ -77,29 +77,31 @@ Whenever Cortheon's Wave-1 executable Python/SymPy/Z3 scripts reached consensus 
 
 ---
 
-## Reproducing Every Benchmark
+## Reproducing Every Benchmark From a Fresh Clone
 
-Point any command below at your own local OpenAI-compatible server (`TensorFold`, `Ollama`, `llama.cpp`, `vLLM`, or `LM Studio`):
+Fetch official datasets cleanly into `bench/datasets/` (no extra dependencies beyond `httpx`), run `bench/stats.py` to recompute every Wilson 95% CI and exact McNemar p-value directly from `results/`, or run the 5-arm compute-matched AIME 2025 ablation on your own server:
 
 ```sh
-# 1. Official MathArena/aime_2025 (30/30)
+# 0. Download official datasets into bench/datasets/ + recompute exact paired statistics
+python -m bench.fetch_datasets --dataset all
+python -m bench.stats --dir results
+
+# 1. Compute-matched 5-arm AIME 2025 ablation (vanilla_b1 vs maj4_prose vs pal_b1 vs cortheon_w1 vs cortheon_full)
+python -m bench.run_aime_ablation --url http://127.0.0.1:8080/v1 --dataset bench/datasets/aime_2025.json --out bench/results/aime25_ablation.json
+
+# 2. Official MathArena/aime_2025 (30/30)
 python -m bench.run_official_eval --dataset aime2025 --url http://127.0.0.1:8080/v1 --arm vanilla --out bench/results/aime25_vanilla.json
 python -m bench.run_official_eval --dataset aime2025 --url http://127.0.0.1:8080/v1 --arm forge   --out bench/results/aime25_cortheon.json
 
-# 2. Official LiveCodeBench v6 Hard (20/20 AtCoder F/G)
+# 3. Official LiveCodeBench v6 Hard (20/20 AtCoder F/G)
 python -m bench.run_livecodebench --url http://127.0.0.1:8080/v1 --arm vanilla --limit 20 --out bench/results/lcb_vanilla.json
 python -m bench.run_livecodebench --url http://127.0.0.1:8080/v1 --arm forge   --limit 20 --out bench/results/lcb_cortheon.json
 
-# 3. Official bigcode/bigcodebench-hard v0.1.4 (complete_prompt)
+# 4. Official bigcode/bigcodebench-hard v0.1.4 (complete_prompt)
 python -m bench.run_official_eval --dataset bigcodebench_hard_complete --url http://127.0.0.1:8080/v1 --arm vanilla --out bench/results/bcb_vanilla.json
 python -m bench.run_official_eval --dataset bigcodebench_hard_complete --url http://127.0.0.1:8080/v1 --arm forge   --out bench/results/bcb_cortheon.json
 
-# 4. Oracle-Free Open-Ended Systems, Physics & Security (10 tasks)
-python -m bench.open_ended_bench --url http://127.0.0.1:8080/v1 --arm vanilla  --out bench/results/oe_vanilla.json
-python -m bench.open_ended_bench --url http://127.0.0.1:8080/v1 --arm cortheon --out bench/results/oe_cortheon.json
-
-# 5. 100-Task Frontier Gauntlets + Autonomous Proving Ground + 60s Live Showdown
-python -m bench.run_gauntlet50 --url http://127.0.0.1:8080/v1 --arm forge --out bench/results/g1.json
-python -m bench.run_gauntlet2  --url http://127.0.0.1:8080/v1 --arm forge --out bench/results/g2.json
+# 5. Live side-by-side split-screen duel
+cortheon duel --url http://127.0.0.1:8080/v1 --preset ring
 cortheon showdown --url http://127.0.0.1:8080/v1
 ```
