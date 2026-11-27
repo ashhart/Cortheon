@@ -573,8 +573,17 @@ def test_exact_stats_delta_with_preexisting_counters(tmp_path: Path):
 
 
 def test_ablation_three_arms_end_to_end_and_summary(tmp_path: Path):
-    """Run all 3 ablation arms end-to-end with mocked clients + real OS sandbox on real AIME 2025 items."""
-    dataset_path = Path(__file__).resolve().parent.parent / "bench" / "datasets" / "aime_2025.json"
+    """Run all 3 ablation arms end-to-end with mocked clients + real OS sandbox on a synthetic AIME fixture."""
+    dataset_path = tmp_path / "aime_2025.json"
+    dataset_path.write_text(
+        json.dumps(
+            [
+                {"problem_idx": 0, "problem": "Find the sum of all integers from 1 to 10.", "answer": 55},
+                {"problem_idx": 1, "problem": "Find 12 * 13.", "answer": 156},
+            ]
+        ),
+        encoding="utf-8",
+    )
     items = load_aime2025(dataset_path, start=0, end=2)
     assert len(items) == 2
 
