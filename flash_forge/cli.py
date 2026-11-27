@@ -12,6 +12,7 @@ import uvicorn
 
 from .code_forge import CodeForgeTrace
 from .dev_agent import run_dev_forge
+from .duel import DUEL_PRESETS, run_duel
 from .engine import FlashForge, ForgeConfig
 from .integrations import ALL_HARNESSES, install_commands
 from .memory import EpisodicMemory
@@ -40,12 +41,20 @@ def main() -> None:
     p_proxy.add_argument("--referee-url", default=None)
     p_proxy.add_argument("--host", default="127.0.0.1")
     p_proxy.add_argument("--port", type=int, default=18652)
-    p_proxy.add_argument("--streams", type=int, default=4)
+    p_proxy.add_argument("--streams", type=int, default=4, help="Parallel verification streams (2, 4, or 8)")
+    p_proxy.add_argument("--no-auto-rescue", action="store_true", help="Disable automatic B=3 death-spiral rescue on tool-calling loops")
 
     p_show = sub.add_parser("showdown", help="Run a live 60-second Vanilla vs Cortheon knockout on your local model")
     p_show.add_argument("--url", default="http://127.0.0.1:8080/v1")
     p_show.add_argument("--referee-url", default=None)
     p_show.add_argument("--streams", type=int, default=4)
+
+    p_duel = sub.add_parser("duel", help="Live side-by-side split-screen race: Vanilla (B=1) vs Cortheon v2 (B=4 early-abort)")
+    p_duel.add_argument("--url", default="http://127.0.0.1:8080/v1")
+    p_duel.add_argument("--preset", choices=list(DUEL_PRESETS.keys()), default="ring")
+    p_duel.add_argument("--prompt", default=None, help="Custom prompt instead of a built-in preset")
+    p_duel.add_argument("--expected", default="", help="Optional exact expected answer for custom prompt")
+    p_duel.add_argument("--streams", type=int, default=4, help="Parallel verification streams (2, 4, or 8)")
 
     p_repo = sub.add_parser("repo-fix", help="Patch a repository file verified in ephemeral git worktrees")
     p_repo.add_argument("--repo", required=True)
@@ -101,12 +110,29 @@ def main() -> None:
         return
 
     if args.cmd == "proxy":
-        app = create_app(upstream_url=args.upstream, referee_url=args.referee_url, num_streams=args.streams)
+        app = create_app(
+            upstream_url=args.upstream,
+            referee_url=args.referee_url,
+            num_streams=args.streams,
+            auto_rescue=not args.no_auto_rescue,
+        )
         uvicorn.run(app, host=args.host, port=args.port)
         return
 
     if args.cmd == "showdown":
         asyncio.run(run_showdown(args.url, referee_url=args.referee_url, streams=args.streams))
+        return
+
+    if args.cmd == "duel":
+        asyncio.run(
+            run_duel(
+                args.url,
+                preset=args.preset,
+                custom_prompt=args.prompt,
+                expected=args.expected,
+                streams=args.streams,
+            )
+        )
         return
 
     if args.cmd == "memory":

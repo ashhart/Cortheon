@@ -159,13 +159,74 @@ for _name, _fn in _funcs:
     _results.append(_row)
     print("__FF_TEST_ROW__:" + json.dumps(_row), flush=True)
 
+def _rich_fingerprint(_v, _depth=0):
+    if _depth > 3:
+        return repr(_v)[:120]
+    _t = type(_v)
+    _mod = getattr(_t, "__module__", "") or ""
+    _tn = _t.__name__
+    if _mod.startswith("pandas") and _tn == "DataFrame":
+        try:
+            _cols = [str(c) for c in _v.columns]
+            _rows = [[round(x, 6) if isinstance(x, float) else x for x in r] for r in _v.head(5).values.tolist()]
+            return f"DataFrame(shape={_v.shape},cols={_cols},head={_rows})"
+        except Exception:
+            pass
+    if _mod.startswith("pandas") and _tn == "Series":
+        try:
+            return f"Series(len={len(_v)},name={_v.name!r},head={_v.head(5).tolist()!r})"
+        except Exception:
+            pass
+    if _mod.startswith("numpy") and _tn == "ndarray":
+        try:
+            return f"ndarray(shape={_v.shape},dtype={_v.dtype},head={_v.ravel()[:8].tolist()!r})"
+        except Exception:
+            pass
+    if _mod.startswith("matplotlib") and hasattr(_v, "get_title") and hasattr(_v, "get_xlabel"):
+        try:
+            return (
+                f"Axes(title={_v.get_title()!r},xlabel={_v.get_xlabel()!r},"
+                f"ylabel={_v.get_ylabel()!r},lines={len(getattr(_v, 'lines', []))},"
+                f"patches={len(getattr(_v, 'patches', []))},collections={len(getattr(_v, 'collections', []))})"
+            )
+        except Exception:
+            pass
+    if _mod.startswith("matplotlib") and hasattr(_v, "axes") and _tn == "Figure":
+        try:
+            return f"Figure(axes={[_rich_fingerprint(a, _depth + 1) for a in _v.axes[:4]]})"
+        except Exception:
+            pass
+    if isinstance(_v, tuple):
+        return "(" + ", ".join(_rich_fingerprint(x, _depth + 1) for x in _v[:8]) + ")"
+    if isinstance(_v, list):
+        return "[" + ", ".join(_rich_fingerprint(x, _depth + 1) for x in _v[:12]) + "]"
+    import re as _re_fp
+    return _re_fp.sub(r" at 0x[0-9a-fA-F]+", " at <ADDR>", repr(_v))[:300]
+
 _diff_out = {}
 if "diff_probe" in globals() and callable(globals()["diff_probe"]):
+    import os as _os_dp
+    def _fs_snap():
+        _s = {}
+        for _fn in _os_dp.listdir("."):
+            if _fn in ("solution.py", "_run.py", "__pycache__") or _fn.startswith(".sb"):
+                continue
+            try:
+                _st = _os_dp.stat(_fn)
+                _s[_fn] = (_st.st_size, _st.st_mtime_ns)
+            except OSError:
+                pass
+        return _s
+    _before_files = _fs_snap()
     try:
         _raw_dp = globals()["diff_probe"]()
         if isinstance(_raw_dp, dict):
             for _dk, _dv in list(_raw_dp.items())[:24]:
-                _diff_out[str(_dk)] = repr(_dv)[:300]
+                _diff_out[str(_dk)] = _rich_fingerprint(_dv)[:300]
+        _after_files = _fs_snap()
+        _changed = sorted(_fn for _fn, _meta in _after_files.items() if _before_files.get(_fn) != _meta)
+        if _changed:
+            _diff_out["__created_files__"] = repr([f"{_fn}:{_after_files[_fn][0] > 0}" for _fn in _changed[:8]])
     except BaseException as _de:
         _diff_out["__probe_exc__"] = f"{type(_de).__name__}: {str(_de)[:150]}"
 
@@ -227,13 +288,74 @@ for _name, _fn in _funcs:
     _results.append(_row)
     print("__FF_TEST_ROW__:" + json.dumps(_row), flush=True)
 
+def _rich_fingerprint(_v, _depth=0):
+    if _depth > 3:
+        return repr(_v)[:120]
+    _t = type(_v)
+    _mod = getattr(_t, "__module__", "") or ""
+    _tn = _t.__name__
+    if _mod.startswith("pandas") and _tn == "DataFrame":
+        try:
+            _cols = [str(c) for c in _v.columns]
+            _rows = [[round(x, 6) if isinstance(x, float) else x for x in r] for r in _v.head(5).values.tolist()]
+            return f"DataFrame(shape={_v.shape},cols={_cols},head={_rows})"
+        except Exception:
+            pass
+    if _mod.startswith("pandas") and _tn == "Series":
+        try:
+            return f"Series(len={len(_v)},name={_v.name!r},head={_v.head(5).tolist()!r})"
+        except Exception:
+            pass
+    if _mod.startswith("numpy") and _tn == "ndarray":
+        try:
+            return f"ndarray(shape={_v.shape},dtype={_v.dtype},head={_v.ravel()[:8].tolist()!r})"
+        except Exception:
+            pass
+    if _mod.startswith("matplotlib") and hasattr(_v, "get_title") and hasattr(_v, "get_xlabel"):
+        try:
+            return (
+                f"Axes(title={_v.get_title()!r},xlabel={_v.get_xlabel()!r},"
+                f"ylabel={_v.get_ylabel()!r},lines={len(getattr(_v, 'lines', []))},"
+                f"patches={len(getattr(_v, 'patches', []))},collections={len(getattr(_v, 'collections', []))})"
+            )
+        except Exception:
+            pass
+    if _mod.startswith("matplotlib") and hasattr(_v, "axes") and _tn == "Figure":
+        try:
+            return f"Figure(axes={[_rich_fingerprint(a, _depth + 1) for a in _v.axes[:4]]})"
+        except Exception:
+            pass
+    if isinstance(_v, tuple):
+        return "(" + ", ".join(_rich_fingerprint(x, _depth + 1) for x in _v[:8]) + ")"
+    if isinstance(_v, list):
+        return "[" + ", ".join(_rich_fingerprint(x, _depth + 1) for x in _v[:12]) + "]"
+    import re as _re_fp
+    return _re_fp.sub(r" at 0x[0-9a-fA-F]+", " at <ADDR>", repr(_v))[:300]
+
 _diff_out = {}
 if "diff_probe" in globals() and callable(globals()["diff_probe"]):
+    import os as _os_dp
+    def _fs_snap():
+        _s = {}
+        for _fn in _os_dp.listdir("."):
+            if _fn in ("solution.py", "_run.py", "__pycache__") or _fn.startswith(".sb"):
+                continue
+            try:
+                _st = _os_dp.stat(_fn)
+                _s[_fn] = (_st.st_size, _st.st_mtime_ns)
+            except OSError:
+                pass
+        return _s
+    _before_files = _fs_snap()
     try:
         _raw_dp = globals()["diff_probe"]()
         if isinstance(_raw_dp, dict):
             for _dk, _dv in list(_raw_dp.items())[:24]:
-                _diff_out[str(_dk)] = repr(_dv)[:300]
+                _diff_out[str(_dk)] = _rich_fingerprint(_dv)[:300]
+        _after_files = _fs_snap()
+        _changed = sorted(_fn for _fn, _meta in _after_files.items() if _before_files.get(_fn) != _meta)
+        if _changed:
+            _diff_out["__created_files__"] = repr([f"{_fn}:{_after_files[_fn][0] > 0}" for _fn in _changed[:8]])
     except BaseException as _de:
         _diff_out["__probe_exc__"] = f"{type(_de).__name__}: {str(_de)[:150]}"
 
@@ -450,8 +572,8 @@ def _run_modular_suite(
 
 
 _TMPDIR_NORM_RE = re.compile(
-    r"(?:/private)?/var/folders/[^'\",\s/]+/[^'\",\s/]+/T/(?:tmp[A-Za-z0-9_]+|ff_exec_[A-Za-z0-9_]+)|"
-    r"/tmp/(?:tmp[A-Za-z0-9_]+|ff_exec_[A-Za-z0-9_]+)"
+    r"(?:/private)?/var/folders/[^'\",\s/]+/[^'\",\s/]+/T/(?:tmp[A-Za-z0-9_]+|ff_exec_[A-Za-z0-9_]+)(?:/tmp[A-Za-z0-9_]+)*|"
+    r"(?:/private)?/tmp/(?:tmp[A-Za-z0-9_]+|ff_exec_[A-Za-z0-9_]+)(?:/tmp[A-Za-z0-9_]+)*"
 )
 
 
@@ -459,6 +581,81 @@ def _norm_diff_val(val: str) -> str:
     """Normalize ephemeral temp-dir prefixes so identical relative-to-tempdir behavior matches,
     while relative ('dir/a.zip') vs absolute ('<TMPDIR>/dir/a.zip') STILL cleanly diverges!"""
     return _TMPDIR_NORM_RE.sub("<TMPDIR>", val.strip())
+
+
+def generate_ast_mutants(solution_code: str, max_mutants: int = 3) -> list[tuple[str, str]]:
+    """Generate up to `max_mutants` deterministic, syntactically valid single-operator AST mutants
+    to measure whether a synthesized test suite actually catches real logic bugs (mutation testing)."""
+    try:
+        tree = ast.parse(solution_code)
+    except SyntaxError:
+        return []
+
+    mutants: list[tuple[str, str]] = []
+    cmp_flip = {
+        ast.Lt: ast.Gt,
+        ast.LtE: ast.Gt,
+        ast.Gt: ast.Lt,
+        ast.GtE: ast.Lt,
+        ast.Eq: ast.NotEq,
+        ast.NotEq: ast.Eq,
+    }
+    bin_flip = {
+        ast.Add: ast.Sub,
+        ast.Sub: ast.Add,
+        ast.Mult: ast.FloorDiv,
+    }
+
+    # Collect mutation sites deterministically
+    sites: list[tuple[str, int, int]] = []
+    for idx, node in enumerate(ast.walk(tree)):
+        if isinstance(node, ast.Compare) and node.ops and type(node.ops[0]) in cmp_flip:
+            sites.append(("cmp", idx, 0))
+        elif isinstance(node, ast.BinOp) and type(node.op) in bin_flip:
+            sites.append(("binop", idx, 0))
+        elif isinstance(node, ast.Return) and node.value is not None and not isinstance(node.value, ast.Constant):
+            sites.append(("ret_none", idx, 0))
+
+    for kind, target_idx, _ in sites:
+        if len(mutants) >= max_mutants:
+            break
+        cloned = ast.parse(solution_code)
+        for idx, node in enumerate(ast.walk(cloned)):
+            if idx != target_idx:
+                continue
+            if kind == "cmp" and isinstance(node, ast.Compare) and node.ops and type(node.ops[0]) in cmp_flip:
+                node.ops[0] = cmp_flip[type(node.ops[0])]()
+            elif kind == "binop" and isinstance(node, ast.BinOp) and type(node.op) in bin_flip:
+                node.op = bin_flip[type(node.op)]()
+            elif kind == "ret_none" and isinstance(node, ast.Return):
+                node.value = ast.Constant(value=None)
+            try:
+                src = ast.unparse(cloned)
+                if src != solution_code and check_syntax(src) is None:
+                    mutants.append((f"{kind}@{target_idx}", src))
+            except Exception:
+                pass
+            break
+    return mutants
+
+
+def evaluate_oracle_mutation_score(
+    solution_code: str,
+    test_code: str,
+    *,
+    max_mutants: int = 3,
+    timeout_s: float = 5.0,
+) -> tuple[int, int]:
+    """Return `(killed_mutants, total_mutants)` showing how strongly `test_code` discriminates bugs."""
+    mutants = generate_ast_mutants(solution_code, max_mutants=max_mutants)
+    if not mutants:
+        return 0, 0
+    killed = 0
+    for _, m_code in mutants:
+        rows, _, fatal = _run_modular_suite(m_code, test_code, timeout_s=timeout_s)
+        if fatal is not None or any(not r.get("ok") for r in rows):
+            killed += 1
+    return killed, len(mutants)
 
 
 def _extract_diff_probe_source(test_code: str) -> str:

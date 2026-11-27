@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from .code_forge import CodeForgeTrace
 from .engine import FlashForge, ForgeConfig
 from .reason_forge import ReasonForgeTrace
+from .rescue import detect_death_spiral, inject_rescue_note, run_clean_context_rescue
 from .think_forge import ThinkForgeTrace
 
 
@@ -119,6 +120,7 @@ def create_app(
     referee_url: Optional[str] = None,
     upstream_model: Optional[str] = None,
     num_streams: int = 4,
+    auto_rescue: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="Cortheon Universal Proxy", version="2.0.0")
     forge_default = FlashForge(
@@ -183,11 +185,27 @@ def create_app(
         }
 
     _VIRTUAL_PREFIXES = ("cortheon", "flash-forge")
+    _rescued_fingerprints: set[str] = set()
 
     async def _passthrough_openai(body: dict[str, Any]) -> Any:
-        """Transparently forward OpenAI client-side tool-calling loops (OMP, Pi, OpenCode, Cursor) to upstream."""
+        """Transparently forward OpenAI client-side tool-calling loops (OMP, Pi, OpenCode, Cursor) to upstream.
+        When `auto_rescue` is enabled and >= 2 consecutive failing tool outputs appear in the active turn,
+        runs a fast clean-context B=3 Graveyard Backtracking diagnosis and injects it into the system prompt.
+        """
         caps = await forge_default.client.probe()
         fwd = dict(body)
+        if auto_rescue and isinstance(fwd.get("messages"), list):
+            spiral = detect_death_spiral(fwd["messages"])
+            if spiral is not None and spiral.fingerprint not in _rescued_fingerprints:
+                _rescued_fingerprints.add(spiral.fingerprint)
+                if len(_rescued_fingerprints) > 256:
+                    _rescued_fingerprints.clear()
+                try:
+                    note = await run_clean_context_rescue(forge_default.client, spiral)
+                    if note:
+                        fwd["messages"] = inject_rescue_note(fwd["messages"], note)
+                except Exception:
+                    pass
         req_model = str(fwd.get("model", ""))
         if not req_model or req_model.startswith(_VIRTUAL_PREFIXES):
             fwd["model"] = caps.model_id
