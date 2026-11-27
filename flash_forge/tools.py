@@ -203,7 +203,7 @@ class AgentToolbelt:
                 cwd=str(self.root),
                 capture_output=True,
                 text=True,
-                timeout=8,
+                timeout=25,
             )
             if proc.returncode != 0:
                 err = proc.stderr.replace(str(tmp_path), self._rel(target)).strip()
