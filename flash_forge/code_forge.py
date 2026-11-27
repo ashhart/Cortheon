@@ -99,6 +99,8 @@ class CodeForgeTrace:
     lessons_used: int = 0
     recovered_by_redteam_or_wave2: bool = False
     verified: bool = False
+    unanimous_fastpath: bool = False
+    pairwise_tiebreak_skipped: int = 0
 
 
 _FUTURE_IMPORT_RE = re.compile(r"^[ \t]*from\s+__future__\s+import\s+[^\n]+$", re.MULTILINE)
@@ -686,6 +688,23 @@ def _is_total_probe_crasher(c: CodeCandidate) -> bool:
     )
 
 
+def _has_identical_behavioral_fingerprint(a: CodeCandidate, b: CodeCandidate, min_cases: int = 2) -> bool:
+    """True when two tied candidates have identical non-error behavioral fingerprints over >= min_cases diff_probe keys."""
+    if not a.diff_outputs or not b.diff_outputs:
+        return False
+    if "__probe_exc__" in a.diff_outputs or "__probe_exc__" in b.diff_outputs:
+        return False
+    if _is_total_probe_crasher(a) or _is_total_probe_crasher(b):
+        return False
+    if len(a.diff_outputs) < min_cases or len(b.diff_outputs) < min_cases:
+        return False
+    if a.diff_outputs == b.diff_outputs:
+        return True
+    if a.diff_outputs.keys() != b.diff_outputs.keys():
+        return False
+    return all(_norm_diff_val(a.diff_outputs[k]) == _norm_diff_val(b.diff_outputs[k]) for k in a.diff_outputs)
+
+
 def _analyze_behavioral_consensus(
     candidates: list[CodeCandidate],
 ) -> tuple[int, list[tuple[str, dict[str, tuple[str, str]]]]]:
@@ -948,6 +967,18 @@ def _normalize_modular_tests(test_code: str) -> str:
         return ""
     if _extract_test_functions(test_code):
         return test_code
+    # Preserve top-level `def diff_probe():` when no top-level asserts exist (e.g. stdin_mode with pinned samples)
+    if _extract_diff_probe_source(test_code):
+        try:
+            tree = ast.parse(test_code)
+            has_top_exec = any(
+                not isinstance(node, (ast.Import, ast.ImportFrom, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Assign, ast.AnnAssign))
+                for node in tree.body
+            )
+            if not has_top_exec:
+                return test_code
+        except SyntaxError:
+            pass
     indented = "\n".join("    " + ln if ln.strip() else "" for ln in test_code.splitlines())
     return f"def test_oracle_suite():\n{indented}\n"
 
@@ -1458,16 +1489,30 @@ async def solve_code(
     ranked_w1 = sorted(trace.wave1_candidates, key=_rank_key, reverse=True)
     best_w1 = ranked_w1[0]
 
-    # Fast-Path Unanimous Behavioral Consensus Check + Executable Raises-Coverage + B=2 Spec-Clause Audit:
-    # Only fast-exit when >=2 candidates pass all tests, agree on >=3 diff_probe cases,
-    # oracle tests cover every explicit Raises: exception, AND B=2 adversarial auditors BOTH pass!
+    # Fast-Path Unanimous Sample + Behavioral Consensus Exit (CodeForge v6.1):
+    # - On `stdin_mode` (competitive/CLI I/O specs): when >=2 independent Wave-1 candidates pass all
+    #   pinned sample + generated tests (>=2 total) with >=2 diff cases OR >=2 pinned samples and
+    #   ZERO behavioral divergences, fast-exit directly (skipping prose spec audit, red-team, & Wave 2).
+    # - On non-stdin library/API specs: require >=3 tests, >=3 diff cases, Raises coverage, AND 2/2
+    #   adversarial spec-compliance auditors PASS to guard subtle return-type / exception semantics.
     perfect_clean_w1 = [c for c in ranked_w1 if c.perfect and c.diff_counterexample_losses == 0]
     req_excs = _extract_required_exceptions(prob_clean)
     missing_exc_checks = sorted(exc for exc in req_excs if exc not in oracle_code)
     unanimous_behavioral_fastpath = False
     spec_audit_violation = ""
     if (
-        not external_test_code
+        stdin_mode
+        and not external_test_code
+        and not deep
+        and len(perfect_clean_w1) >= 2
+        and best_w1.tests_total >= 2
+        and (n_diff_cases >= 2 or len(pinned_sample_names) >= 2)
+        and not diff_divergences
+    ):
+        unanimous_behavioral_fastpath = True
+    elif (
+        not stdin_mode
+        and not external_test_code
         and not deep
         and len(perfect_clean_w1) >= 2
         and best_w1.tests_total >= 3
@@ -1484,6 +1529,8 @@ async def solve_code(
             for pc in perfect_clean_w1:
                 pc.diff_counterexample_losses += 1
                 pc.failure_details["spec_audit"] = violation
+
+    trace.unanimous_fastpath = unanimous_behavioral_fastpath
 
     # ------------------------------------------------------------------
     # STAGE 2: Targeted Clean-Context Adversarial Red-Team (skipped on external pass OR unanimous behavioral consensus!)
@@ -1885,6 +1932,9 @@ async def solve_code(
         unique_tied.sort(key=lambda c: (-round(c.starter_api_score, 3), len(c.code), c.runtime_ms))
         champ = unique_tied[0]
         for challenger in unique_tied[1:3]:
+            if _has_identical_behavioral_fingerprint(champ, challenger, min_cases=2):
+                trace.pairwise_tiebreak_skipped += 1
+                continue
             p_ab = (
                 f"PROBLEM:\n{prob_clean}\n\n"
                 f"CANDIDATE A (`{champ.name}`, {len(champ.code)} chars, {champ.runtime_ms:.1f}ms):\n```python\n{champ.code[:7500]}\n```\n\n"
