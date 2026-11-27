@@ -32,6 +32,17 @@ Per-problem token-, call-, and latency-logged ablation across all 30 official AI
 - `cortheon_w1` matches `Maj@8` (`19/30`) at **0.49× tokens** (`6,547` vs `13,314`) and **1.74× faster wall time** (`63.4s` vs `110.0s`), while outperforming same-token `Maj@4` (`6,504` tok) by `+10.0` points.
 - `Maj@8` still suffers correlated prose collapses (`7/8` wrong on `AIME25_27`/`29`, `6/8` on `AIME25_14`, `5/8` on `AIME25_18`), whereas default `cortheon_full` reaches `24/30` at `~1.03×` `Maj@8` tokens (`+7/−2` over `Maj@8`, catching `AIME25_18` and `AIME25_27`).
 
+### 1b. Live 30/30 `SpecVerify` Ablation on Official `MathArena/aime_2025` (`inkling-2-mini` → `glm-5.3-flash-tfq3`)
+
+First end-to-end live Speculative Execution-Verification run pairing a ~10× smaller local drafter (`inkling-2-mini`, 18.8 GiB BF16) with `glm-5.3-flash-tfq3` as the big verifier across all 30 official AIME 2025 problems ([`results/official_aime2025_spec_verify_inkling_glm53.json`](results/official_aime2025_spec_verify_inkling_glm53.json)):
+
+| Arm | Accuracy `k/30` `[95% Wilson CI]` | Drafter Accept *(Precision)* | Avg Big Calls *(vs `Maj@8` / `cortheon_full`)* | Avg Big Tok *(vs `Maj@8` / `cortheon_full`)* | Avg Drafter Tok | Avg Wall |
+|---|---:|---:|---:|---:|---:|---:|
+| **`spec_verify`** | **`20/30` (`66.7%`)** `[48.8, 80.8]` | **`9/30 (30.0%)`** *(`9/9 = 100.0%`)* | **`4.57`** *(`−42.9%` / `−26.7%`)* | **`11,879`** *(`−10.8%` / `−17.5%`)* | `6,243` | `253.4s` *(`110.0s` on accept)* |
+
+- **Zero-FP mechanical gate:** All `9/9` problems accepted by the smaller drafter (`AIME25_01`, `03`, `04`, `06`, `08`, `16`, `17`, `22`, `26`) matched ground truth with `0` big-model calls/tokens (`100.0%` precision); `21/30` escalated cleanly (`11/21` solved).
+- **Honest speed note:** Because `inkling-2-mini` ran BF16 looped weights at ~10 tok/s (vs `glm-5.3-flash-tfq3`'s ~48 tok/s), wall-clock latency was slower than direct big-model execution (`253.4s` vs `147.9s`), even while big-model calls dropped `26.7%` vs `cortheon_full` (`effort=low`) and `42.9%` vs `Maj@8`. Pairing `SpecVerify` with a quantized 50–100+ tok/s drafter (or a metered cloud verifier) yields both cost and wall-clock reductions.
+
 ---
 
 ## 2. Compute-Matched 4-Arm `CodeForge v7` Ablation on Official `LiveCodeBench v6 Hard` (32/32 Paired ABC Hard, `GLM-5.3-Flash-TFQ3`)
