@@ -15,7 +15,6 @@ dependencies = [
     "numpy>=1.26",
     "fastapi>=0.115",
     "uvicorn>=0.30",
-    "pytest>=8.0",
 ]
 
 [project.optional-dependencies]
@@ -30,3 +29,6 @@ include = ["cortheon*", "flash_forge*"]
 
 [tool.setuptools.package-data]
 flash_forge = ["_skill/*.md", "_skill/*.json", "_skill/cards/*.md", "_integrations/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

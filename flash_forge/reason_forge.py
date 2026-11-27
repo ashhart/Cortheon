@@ -73,7 +73,7 @@ _ANSWER_BARE_RE = re.compile(r"^\s*(?:FINAL[_\s]*)?ANSWER\s+([^\s].+?)\s*$")
 _BOXED_RE = re.compile(r"\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}")
 _FRAC_RE = re.compile(r"\\(?:d|t)?frac\{([^{}]+)\}\{([^{}]+)\}")
 _DIAG_NOISE_RE = re.compile(
-    r"^(?:debug|check|assert|verif|done|ok|pass(?:ed)?|fail(?:ed)?|solution:?|result:?|note:?|warning:?)\b",
+    r"^(?:debug|check|assert|verif[a-z]*|done|ok|pass(?:ed)?|fail(?:ed)?|solution:?|result:?|note:?|warning:?)\b",
     re.IGNORECASE,
 )
 
@@ -146,19 +146,39 @@ def extract_answer_from_prose(text: str) -> str:
     return ""
 
 
+_SQRT_N_RE = re.compile(r"\\sqrt\[([^{}\[\]]+)\]\{([^{}]+)\}")
+_SQRT_RE = re.compile(r"\\sqrt\{([^{}]+)\}")
+
+
 def _clean_latex(s: str) -> str:
     s = s.strip()
     s = s.strip("$").strip()
     s = s.rstrip(".")
+    # Unwrap outer \boxed{...} if present
+    for _ in range(2):
+        m_box = _BOXED_RE.fullmatch(s)
+        if not m_box:
+            break
+        s = m_box.group(1).strip()
     # Replace \frac{a}{b} -> (a)/(b)
     for _ in range(4):
         new_s = _FRAC_RE.sub(r"(\1)/(\2)", s)
         if new_s == s:
             break
         s = new_s
+    # Replace \sqrt[n]{x} and \sqrt{x}
+    for _ in range(4):
+        new_s = _SQRT_N_RE.sub(r"((\2)**(1/(\1)))", s)
+        new_s = _SQRT_RE.sub(r"sqrt(\1)", new_s)
+        if new_s == s:
+            break
+        s = new_s
     s = s.replace("\\cdot", "*").replace("\\times", "*").replace("\\left", "").replace("\\right", "")
+    s = s.replace("\\pi", "pi")
     s = s.replace("\\,", "").replace("\\ ", "").replace("%", "")
     s = re.sub(r"\\text\{([^{}]*)\}", r"\1", s)
+    # Handle implicit multiplication like 2\sqrt{2} -> 2*sqrt(2), 3\pi -> 3*pi
+    s = re.sub(r"(\d)\s*(sqrt\(|pi\b)", r"\1*\2", s)
     s = s.strip()
     return s
 
@@ -167,7 +187,7 @@ def normalize_answer(raw: str) -> str:
     """Canonicalize exact math/logic answers so equivalent forms cluster together."""
     if not raw:
         return ""
-    s = _clean_latex(raw)
+    s = _clean_latex(_strip_md_wrappers(raw))
     # Strip trailing period/backticks/quotes
     s = s.strip("`\"' ").rstrip(".")
     if not s:
@@ -177,6 +197,12 @@ def normalize_answer(raw: str) -> str:
     m_frac = re.fullmatch(r"Fraction\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)", s)
     if m_frac:
         f = Fraction(int(m_frac.group(1)), int(m_frac.group(2)))
+        return str(f.numerator) if f.denominator == 1 else f"{f.numerator}/{f.denominator}"
+
+    # Handle parenthesized exact rational (a)/(b) from LaTeX \frac{a}{b} (even for 100+ digit rationals)
+    m_pfrac = re.fullmatch(r"\(\s*(-?\d+)\s*\)\s*/\s*\(\s*(-?\d+)\s*\)", s)
+    if m_pfrac:
+        f = Fraction(int(m_pfrac.group(1)), int(m_pfrac.group(2)))
         return str(f.numerator) if f.denominator == 1 else f"{f.numerator}/{f.denominator}"
 
     # Strip trailing commentary after a leading exact integer/fraction (e.g. "19. AIME answer 019..." -> "19")
@@ -210,12 +236,14 @@ def normalize_answer(raw: str) -> str:
         if isinstance(lit, int):
             return str(lit)
         if isinstance(lit, float) and math.isfinite(lit):
-            if abs(lit - round(lit)) < 1e-12:
+            if lit == 0.0:
+                return "0"
+            if abs(lit) >= 1e-9 and abs(lit - round(lit)) < 1e-12 * max(1.0, abs(lit)):
                 return str(int(round(lit)))
             # Check exact IEEE-754 float-printed fraction match (e.g. 0.5833333333333334 -> 7/12)
             # Tight 1e-12 guard prevents truncated decimals like 0.3333333333 from falsely snapping to 1/3
             approx_f = Fraction(lit).limit_denominator(10000)
-            if abs(float(approx_f) - lit) < 1e-12:
+            if approx_f != 0 and abs(float(approx_f) - lit) < 1e-12 * max(1.0, abs(lit)):
                 return str(approx_f.numerator) if approx_f.denominator == 1 else f"{approx_f.numerator}/{approx_f.denominator}"
             return f"{lit:.10g}"
         if isinstance(lit, (list, tuple)):
@@ -237,7 +265,9 @@ def normalize_answer(raw: str) -> str:
                 return str(int(p)) if int(q) == 1 else f"{int(p)}/{int(q)}"
             if simp.is_Float:
                 val = float(simp)
-                if abs(val - round(val)) < 1e-12:
+                if val == 0.0:
+                    return "0"
+                if abs(val) >= 1e-9 and abs(val - round(val)) < 1e-12 * max(1.0, abs(val)):
                     return str(int(round(val)))
                 return f"{val:.10g}"
             return str(simp)
@@ -248,20 +278,47 @@ def normalize_answer(raw: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+_EXACT_RAT_RE = re.compile(r"^-?\d+(?:\s*/\s*-?\d+)?$")
+
+
+def _prep_equiv_expr(s: str) -> str:
+    t = _clean_latex(s) if ("\\" in s or "$" in s) else s.strip()
+    m_pfrac = re.fullmatch(r"\(\s*(-?\d+)\s*\)\s*/\s*\(\s*(-?\d+)\s*\)", t)
+    if m_pfrac:
+        return f"{int(m_pfrac.group(1))}/{int(m_pfrac.group(2))}"
+    if re.fullmatch(r"-?\d+", t):
+        return str(int(t))
+    return t.replace("^", "**")
+
+
 def _answers_equivalent(a: str, b: str) -> bool:
     if not a or not b:
         return False
-    if a.lower() == b.lower():
+    pa = _prep_equiv_expr(a)
+    pb = _prep_equiv_expr(b)
+    if not pa or not pb:
+        return False
+    if pa.lower() == pb.lower():
         return True
+    # Arbitrary-precision exact rational / integer check: NEVER degrade to float64!
+    if _EXACT_RAT_RE.match(pa) and _EXACT_RAT_RE.match(pb):
+        try:
+            return Fraction(pa.replace(" ", "")) == Fraction(pb.replace(" ", ""))
+        except ZeroDivisionError:
+            return False
     try:
-        ea = sp.sympify(a.replace("^", "**"))
-        eb = sp.sympify(b.replace("^", "**"))
+        ea = sp.sympify(pa)
+        eb = sp.sympify(pb)
         diff = sp.simplify(ea - eb)
         if diff == 0:
             return True
+        # Two exact integers/rationals must agree identically (never via lossy float fallback)
+        if ea.is_Rational and eb.is_Rational:
+            return False
         if ea.is_number and eb.is_number:
             fa, fb = complex(ea.evalf()), complex(eb.evalf())
-            if abs(fa - fb) < 1e-12 * max(1.0, abs(fa), abs(fb)):
+            scale = max(abs(fa), abs(fb))
+            if scale > 0.0 and abs(fa - fb) < 1e-12 * scale:
                 return True
     except Exception:
         pass
@@ -269,7 +326,7 @@ def _answers_equivalent(a: str, b: str) -> bool:
 
 
 def _cluster_answers(outcomes: list[BranchOutcome]) -> list[tuple[str, list[BranchOutcome]]]:
-    """Group outcomes by mathematical/string equivalence."""
+    """Group outcomes by mathematical/string equivalence, sorted by majority & branch weight."""
     clusters: list[tuple[str, list[BranchOutcome]]] = []
     for o in outcomes:
         if not o.norm_answer:
@@ -279,12 +336,16 @@ def _cluster_answers(outcomes: list[BranchOutcome]) -> list[tuple[str, list[Bran
             if _answers_equivalent(rep, o.norm_answer):
                 members.append(o)
                 # Prefer cleaner rational/integer representation over decimal
-                if "/" in o.norm_answer and "." in rep:
+                if ("/" in o.norm_answer or re.fullmatch(r"-?\d+", o.norm_answer)) and "." in rep:
                     clusters[i] = (o.norm_answer, members)
                 placed = True
                 break
         if not placed:
             clusters.append((o.norm_answer, [o]))
+    clusters.sort(
+        key=lambda item: (len(item[1]), sum(_branch_weight(m) for m in item[1])),
+        reverse=True,
+    )
     return clusters
 
 
@@ -361,6 +422,7 @@ async def solve_reasoning(
     num_wave1_streams: int = 4,
     sandbox_timeout_s: float = 20.0,
     deep: bool = False,
+    enable_wave2: bool = True,
 ) -> ReasonForgeTrace:
     """Solve a hard math, logic, combinatorics, probability, or constraint problem."""
     t0 = time.perf_counter()
@@ -385,10 +447,11 @@ async def solve_reasoning(
         shared_user_prefix += f"\n\n{exemplar_block}"
 
     # Wave 1: Role-seeded parallel streams (B=4; skip serial warm_prefix RTT which thrashes hybrid SSM cache!)
-    # Keep PAL thinking crisp + low effort so local models emit executable Python immediately instead of mental prose!
-    think_pal = 900 if deep else 500
-    think_ana = 1600 if deep else 900
-    pal_effort = None if deep else "low"
+    # Keep PAL thinking crisp (tb=700) without forcing low-effort truncation on hard Olympiad math;
+    # Wave-1 streaming early-abort handles the latency win cleanly once 2 independent PALs agree!
+    think_pal = 1200 if deep else 700
+    think_ana = 2000 if deep else 1300
+    pal_effort = None
 
     wave1_roles = [
         ("pal_exact", "pal", skills.card("pal_exact"), 0.25, 101, think_pal),
@@ -468,7 +531,7 @@ async def solve_reasoning(
                             o is not None
                             and o.kind == "analytical"
                             and o.norm_answer
-                            and not answers_equivalent(o.norm_answer, top_ans)
+                            and not _answers_equivalent(o.norm_answer, top_ans)
                             for o in ordered_outcomes
                         )
                         if not ana_contradicts or len(clusters_now[0][1]) >= 3:
@@ -542,7 +605,7 @@ async def solve_reasoning(
             trace.graveyard.append(f"[{o.name}] FAILED: {o.error[:240]}")
 
     # Wave 2: Clean-Context Disagreement Falsifier + Hard Reset (B=3 parallel)
-    if need_wave2:
+    if need_wave2 and enable_wave2:
         trace.wave2_triggered = True
         conflict_lines: list[str] = []
         for rep, members in all_clusters:
@@ -803,6 +866,8 @@ async def solve_reasoning(
     else:
         if trace.wave2_triggered:
             trace.consensus_type = f"wave2_verified ({winner_pals} PAL)"
+        elif need_wave2 and not enable_wave2:
+            trace.consensus_type = f"wave1_only ({winner_pals} PAL)"
         else:
             trace.consensus_type = f"wave1_consensus ({winner_pals} PAL)"
 

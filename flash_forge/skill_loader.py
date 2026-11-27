@@ -13,9 +13,7 @@ from pathlib import Path
 from typing import Any
 
 
-_REPO_SKILL_DIR = Path(__file__).resolve().parent.parent / "skill"
-_PKG_SKILL_DIR = Path(__file__).resolve().parent / "_skill"
-SKILL_DIR = _REPO_SKILL_DIR if (_REPO_SKILL_DIR / "cards").is_dir() else _PKG_SKILL_DIR
+SKILL_DIR = Path(__file__).resolve().parent / "_skill"
 CARDS_DIR = SKILL_DIR / "cards"
 EXEMPLARS_PATH = SKILL_DIR / "exemplars.json"
 
