@@ -13,13 +13,15 @@ dependencies = [
     "sympy>=1.13",
     "z3-solver>=4.13",
     "numpy>=1.26",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
-# Only the proxy and the Live Cockpit need the web stack; the CLI, the solvers,
-# and the stdio MCP server import it lazily.
+# The CLI, solvers, and stdio MCP server import FastAPI/uvicorn lazily so minimal
+# installs without the web stack still run `cortheon mcp` and `cortheon solve`.
 proxy = ["fastapi>=0.115", "uvicorn>=0.30"]
-test = ["pytest>=8.0", "fastapi>=0.115", "uvicorn>=0.30"]
+test = ["pytest>=8.0"]
 
 [project.scripts]
 cortheon = "cortheon.cli:main"

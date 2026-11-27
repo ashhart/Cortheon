@@ -20,10 +20,13 @@ import argparse
 import asyncio
 import importlib
 import inspect
+import io
 import json
 import os
+import select
 import sys
 import time
+import uuid
 from dataclasses import asdict, is_dataclass
 from typing import Any, Awaitable, BinaryIO, Callable, Optional
 
@@ -32,6 +35,7 @@ from .doctor import DoctorReport, format_doctor_report, run_doctor
 from .engine import FlashForge, ForgeConfig
 from .guard import GuardReport, format_guard_report, run_guard
 from .memory import EpisodicMemory
+from .sandbox import kill_active_sandbox_children, sandbox_scope
 from .skill_loader import SkillPack
 
 DEFAULT_UPSTREAM_URL = "http://127.0.0.1:8080/v1"
@@ -196,6 +200,107 @@ def _jsonrpc_error(req_id: Any, code: int, message: str, data: Any = None) -> di
     return {"jsonrpc": "2.0", "id": req_id, "error": err}
 
 
+def _jsonrpc_progress_notification(
+    progress_token: str | int,
+    progress: int | float,
+    message: Optional[str] = None,
+    total: Optional[int | float] = None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "progressToken": progress_token,
+        "progress": progress,
+    }
+    if total is not None:
+        params["total"] = total
+    if message:
+        params["message"] = message
+    return {
+        "jsonrpc": "2.0",
+        "method": "notifications/progress",
+        "params": params,
+    }
+
+
+def _extract_progress_token(params: dict[str, Any]) -> Optional[str | int]:
+    meta = params.get("_meta")
+    if not isinstance(meta, dict):
+        return None
+    token = meta.get("progressToken")
+    if isinstance(token, bool):
+        return None
+    if isinstance(token, int):
+        return token
+    if isinstance(token, str) and token:
+        return token
+    return None
+
+
+def _req_key(req_id: Any) -> tuple[type, Any]:
+    return (type(req_id), req_id)
+
+
+def _accepts_kwarg(fn: Callable[..., Any], kwarg: str) -> bool:
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return False
+    for p in sig.parameters.values():
+        if p.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+        if p.name == kwarg and p.kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        ):
+            return True
+    return False
+
+
+def _format_progress_message(event: dict[str, Any]) -> str:
+    ev = str(event.get("event") or "progress")
+    engine = str(event.get("engine") or "cortheon")
+    if ev == "start":
+        streams = event.get("streams")
+        mode = event.get("mode") or engine
+        if streams is not None:
+            return f"Starting {mode} ({streams} parallel streams)"
+        return f"Starting {mode}"
+    if ev == "slot_done":
+        slot = event.get("slot") or event.get("name") or "stream"
+        status = event.get("status") or ("ok" if event.get("ok") else "done")
+        lat = event.get("latency_s")
+        lat_str = f" in {float(lat):.1f}s" if isinstance(lat, (int, float)) else ""
+        return f"Slot {slot} finished ({status}{lat_str})"
+    if ev == "early_abort":
+        cnt = event.get("consensus_count") or event.get("passing")
+        cancelled = event.get("cancelled")
+        parts = [f"Early-abort consensus reached"]
+        if cnt is not None:
+            parts.append(f"({cnt} agreeing)")
+        if cancelled:
+            parts.append(f"— cancelled {cancelled} lagging slot(s)")
+        return " ".join(parts)
+    if ev == "wave2_start":
+        reason = str(event.get("reason") or "disagreement").strip()
+        return f"Escalating to Wave 2 verification ({reason[:120]})"
+    if ev == "drafter_accepted":
+        cnt = event.get("consensus_count")
+        suffix = f" ({cnt} scripts, 0 verifier calls)" if cnt is not None else " (0 verifier calls)"
+        return f"Drafter consensus accepted{suffix}"
+    if ev == "escalated":
+        reason = str(event.get("reason") or "no drafter consensus").strip()
+        return f"Drafter escalated to big verifier ({reason[:120]})"
+    if ev == "bug_proven":
+        title = str(event.get("title") or "regression").strip()
+        file_ref = event.get("file")
+        where = f" in {file_ref}" if file_ref else ""
+        return f"Proven bug{where}: {title[:120]}"
+    if ev == "done":
+        wall = event.get("wall_s")
+        wall_str = f" in {float(wall):.1f}s" if isinstance(wall, (int, float)) else ""
+        return f"{engine} complete{wall_str}"
+    return f"{engine}: {ev}"
+
+
 def _is_strict_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
@@ -214,6 +319,7 @@ async def _default_spec_verify(
     verifier_url: str,
     drafter_streams: int = 3,
     api_key: Optional[str] = None,
+    on_event: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> dict[str, Any]:
     """Delegate to ``flash_forge.spec_verify`` if available, else run two-tier drafter->verifier."""
     try:
@@ -232,14 +338,17 @@ async def _default_spec_verify(
         skills = SkillPack()
         memory = EpisodicMemory()
         try:
-            trace = await solve_fn(
-                drafter_client=drafter,
-                verifier_client=verifier,
-                skills=skills,
-                memory=memory,
-                problem=prompt,
-                drafter_streams=drafter_streams,
-            )
+            solve_kwargs: dict[str, Any] = {
+                "drafter_client": drafter,
+                "verifier_client": verifier,
+                "skills": skills,
+                "memory": memory,
+                "problem": prompt,
+                "drafter_streams": drafter_streams,
+            }
+            if on_event is not None and _accepts_kwarg(solve_fn, "on_event"):
+                solve_kwargs["on_event"] = on_event
+            trace = await solve_fn(**solve_kwargs)
             verified = bool(
                 trace.accepted_by_drafter
                 or (trace.verifier_trace is not None and getattr(trace.verifier_trace, "verified", False))
@@ -401,6 +510,7 @@ class MCPServer:
         guard_fn: Optional[Callable[..., Awaitable[GuardReport]]] = None,
         doctor_fn: Optional[Callable[..., Awaitable[DoctorReport]]] = None,
         spec_verify_fn: Optional[Callable[..., Awaitable[dict[str, Any]]]] = None,
+        notify_fn: Optional[Callable[[dict[str, Any]], Any]] = None,
     ) -> None:
         self._explicit_url = default_url.rstrip("/") if default_url else None
         self.api_key = api_key
@@ -409,7 +519,118 @@ class MCPServer:
         self._guard_fn = guard_fn
         self._doctor_fn = doctor_fn
         self._spec_verify_fn = spec_verify_fn
+        self._notify_fn = notify_fn
         self.initialized = False
+        self._in_flight: dict[tuple[type, Any], tuple[asyncio.Task[Any], str]] = {}
+        self._cancelled_keys: set[tuple[type, Any]] = set()
+
+    def register_in_flight(self, req_id: Any, task: asyncio.Task[Any], scope_id: str) -> None:
+        self._in_flight[_req_key(req_id)] = (task, scope_id)
+
+    def unregister_in_flight(self, req_id: Any) -> None:
+        key = _req_key(req_id)
+        self._in_flight.pop(key, None)
+        self._cancelled_keys.discard(key)
+
+    def is_cancelled(self, req_id: Any) -> bool:
+        return _req_key(req_id) in self._cancelled_keys
+
+    def cancel_request(self, request_id: Any, reason: Optional[str] = None) -> bool:
+        """Cancel an in-flight tool call by JSON-RPC requestId and kill its sandbox children."""
+        del reason  # reserved for optional diagnostics
+        if request_id is None:
+            return False
+        key = _req_key(request_id)
+        entry = self._in_flight.get(key)
+        if entry is None:
+            return False
+        self._cancelled_keys.add(key)
+        task, scope_id = entry
+        kill_active_sandbox_children(scope=scope_id)
+        if not task.done():
+            task.cancel()
+        return True
+
+    def cancel_all_in_flight(self) -> int:
+        """Cancel all in-flight tool tasks and kill their scoped sandboxed children."""
+        entries = list(self._in_flight.items())
+        cancelled = 0
+        for key, (task, scope_id) in entries:
+            self._cancelled_keys.add(key)
+            kill_active_sandbox_children(scope=scope_id)
+            if not task.done():
+                task.cancel()
+                cancelled += 1
+        return cancelled
+
+    def _make_progress_callback(
+        self,
+        progress_token: Optional[str | int],
+        notify: Optional[Callable[[dict[str, Any]], Any]],
+    ) -> tuple[
+        Optional[Callable[[dict[str, Any]], None]],
+        Callable[[str], None],
+        Callable[[], Awaitable[None]],
+        Callable[[], None],
+    ]:
+        """Build a thread-safe ``on_event`` callback that emits MCP ``notifications/progress``.
+
+        Returns ``(on_event, emit_message, flush_pending, mute)``.
+        """
+        async def _noop_flush() -> None:
+            return None
+
+        if progress_token is None or notify is None:
+            return None, (lambda _msg: None), _noop_flush, (lambda: None)
+
+        loop = asyncio.get_running_loop()
+        step_counter = [0]
+        muted = [False]
+        bg_tasks: set[asyncio.Task[Any]] = set()
+
+        def _dispatch_payload(payload: dict[str, Any]) -> None:
+            if muted[0]:
+                return
+            try:
+                res = notify(payload)
+                if inspect.isawaitable(res):
+                    t = loop.create_task(res)
+                    bg_tasks.add(t)
+                    t.add_done_callback(bg_tasks.discard)
+            except Exception:
+                pass
+
+        def _emit_message(message: str) -> None:
+            if muted[0]:
+                return
+            step = step_counter[0]
+            step_counter[0] += 1
+            payload = _jsonrpc_progress_notification(progress_token, step, message=message)
+            try:
+                if asyncio.get_running_loop() is loop:
+                    _dispatch_payload(payload)
+                    return
+            except RuntimeError:
+                pass
+            try:
+                loop.call_soon_threadsafe(_dispatch_payload, payload)
+            except RuntimeError:
+                pass
+
+        def _on_event(event: dict[str, Any]) -> None:
+            if not isinstance(event, dict):
+                return
+            _emit_message(_format_progress_message(event))
+
+        async def _flush() -> None:
+            while bg_tasks:
+                batch = list(bg_tasks)
+                await asyncio.gather(*batch, return_exceptions=True)
+
+        def _mute() -> None:
+            muted[0] = True
+
+        return _on_event, _emit_message, _flush, _mute
 
     @property
     def default_url(self) -> str:
@@ -419,7 +640,12 @@ class MCPServer:
         raw = override or self._explicit_url or os.environ.get("CORTHEON_URL") or DEFAULT_UPSTREAM_URL
         return str(raw).strip().rstrip("/")
 
-    async def handle_request(self, msg: dict[str, Any]) -> Optional[dict[str, Any]]:
+    async def handle_request(
+        self,
+        msg: dict[str, Any],
+        *,
+        notify: Optional[Callable[[dict[str, Any]], Any]] = None,
+    ) -> Optional[dict[str, Any]]:
         """Process a single decoded JSON-RPC 2.0 message and return a response dict (or None for notifications)."""
         if not isinstance(msg, dict):
             return _jsonrpc_error(None, ERR_INVALID_REQUEST, "Invalid Request: expected JSON object")
@@ -440,6 +666,10 @@ class MCPServer:
         # Notifications (no id or notifications/*) produce no response per JSON-RPC 2.0 / MCP spec
         if method == "notifications/initialized":
             self.initialized = True
+            return None
+        if method == "notifications/cancelled":
+            if isinstance(params, dict):
+                self.cancel_request(params.get("requestId"), reason=params.get("reason"))
             return None
         if method.startswith("notifications/") and not has_id:
             return None
@@ -479,7 +709,7 @@ class MCPServer:
         if method == "tools/call":
             if not isinstance(params, dict):
                 return _jsonrpc_error(req_id, ERR_INVALID_PARAMS, "Invalid params: expected object")
-            return await self._handle_tools_call(req_id, params, has_id=has_id)
+            return await self._handle_tools_call(req_id, params, has_id=has_id, notify=notify)
 
         if not has_id:
             return None
@@ -491,6 +721,7 @@ class MCPServer:
         params: dict[str, Any],
         *,
         has_id: bool,
+        notify: Optional[Callable[[dict[str, Any]], Any]] = None,
     ) -> Optional[dict[str, Any]]:
         tool_name = params.get("name")
         if not isinstance(tool_name, str) or not tool_name:
@@ -510,9 +741,18 @@ class MCPServer:
         except ValueError as exc:
             return _jsonrpc_error(req_id, ERR_INVALID_PARAMS, str(exc))
 
+        eff_notify = notify if notify is not None else self._notify_fn
+        progress_token = _extract_progress_token(params)
+        on_event, emit_msg, flush_progress, mute_progress = self._make_progress_callback(
+            progress_token, eff_notify
+        )
+        if progress_token is not None and eff_notify is not None:
+            emit_msg(f"Starting {tool_name}")
+
         try:
-            payload = await self._dispatch_tool(tool_name, validated)
-            if not has_id:
+            payload = await self._dispatch_tool(tool_name, validated, on_event=on_event)
+            await flush_progress()
+            if not has_id or (has_id and self.is_cancelled(req_id)):
                 return None
             return _jsonrpc_result(
                 req_id,
@@ -526,8 +766,12 @@ class MCPServer:
                     "isError": False,
                 },
             )
+        except asyncio.CancelledError:
+            mute_progress()
+            raise
         except Exception as exc:
-            if not has_id:
+            await flush_progress()
+            if not has_id or (has_id and self.is_cancelled(req_id)):
                 return None
             return _jsonrpc_result(
                 req_id,
@@ -623,10 +867,19 @@ class MCPServer:
 
         raise ValueError(f"Unknown tool: {tool_name}")
 
-    async def _dispatch_tool(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def _dispatch_tool(
+        self,
+        tool_name: str,
+        args: dict[str, Any],
+        *,
+        on_event: Optional[Callable[[dict[str, Any]], None]] = None,
+    ) -> dict[str, Any]:
         if tool_name == "cortheon_verify":
             if self._verify_fn is not None:
-                return await self._verify_fn(**args)
+                call_args = dict(args)
+                if on_event is not None and _accepts_kwarg(self._verify_fn, "on_event"):
+                    call_args["on_event"] = on_event
+                return await self._verify_fn(**call_args)
             cfg = ForgeConfig(
                 base_url=args["url"],
                 model=self.model,
@@ -635,7 +888,7 @@ class MCPServer:
             )
             force_mode = None if args["mode"] in (None, "auto") else args["mode"]
             async with FlashForge(cfg) as ff:
-                res = await ff.solve(args["prompt"], force_mode=force_mode)
+                res = await ff.solve(args["prompt"], force_mode=force_mode, on_event=on_event)
             return {
                 "mode": res.mode,
                 "answer": res.answer,
@@ -648,7 +901,10 @@ class MCPServer:
 
         if tool_name == "cortheon_guard":
             if self._guard_fn is not None:
-                report = await self._guard_fn(**args)
+                call_args = dict(args)
+                if on_event is not None and _accepts_kwarg(self._guard_fn, "on_event"):
+                    call_args["on_event"] = on_event
+                report = await self._guard_fn(**call_args)
             else:
                 client = TensorFoldClient(
                     base_url=args["url"],
@@ -663,6 +919,7 @@ class MCPServer:
                         base_ref=args["base_ref"],
                         num_adversaries=args["num_adversaries"],
                         auto_fix=args["auto_fix"],
+                        on_event=on_event,
                     )
                 finally:
                     await client.close()
@@ -672,7 +929,10 @@ class MCPServer:
 
         if tool_name == "cortheon_doctor":
             if self._doctor_fn is not None:
-                report = await self._doctor_fn(**args)
+                call_args = dict(args)
+                if on_event is not None and _accepts_kwarg(self._doctor_fn, "on_event"):
+                    call_args["on_event"] = on_event
+                report = await self._doctor_fn(**call_args)
             else:
                 report = await run_doctor(
                     url=args["url"],
@@ -686,13 +946,17 @@ class MCPServer:
 
         if tool_name == "cortheon_spec_verify":
             if self._spec_verify_fn is not None:
-                return await self._spec_verify_fn(**args)
+                call_args = dict(args)
+                if on_event is not None and _accepts_kwarg(self._spec_verify_fn, "on_event"):
+                    call_args["on_event"] = on_event
+                return await self._spec_verify_fn(**call_args)
             return await _default_spec_verify(
                 prompt=args["prompt"],
                 drafter_url=args["drafter_url"],
                 verifier_url=args["verifier_url"],
                 drafter_streams=args["drafter_streams"],
                 api_key=self.api_key,
+                on_event=on_event,
             )
 
         raise ValueError(f"Unknown tool: {tool_name}")
@@ -772,47 +1036,156 @@ def write_stdio_message(stream: BinaryIO, payload: dict[str, Any], framing: str 
     stream.flush()
 
 
+def _is_output_pipe_closed(stream: BinaryIO) -> bool:
+    """Detect whether the peer closed the read end of a pipe stdout without writing bytes."""
+    if getattr(stream, "closed", False):
+        return True
+    try:
+        fd = stream.fileno()
+    except (AttributeError, io.UnsupportedOperation, OSError, ValueError):
+        return False
+    if not hasattr(select, "poll"):
+        return False
+    try:
+        poller = select.poll()
+        poller.register(fd, select.POLLERR | select.POLLHUP)
+        events = poller.poll(0)
+        return any(ev & (select.POLLERR | select.POLLHUP | select.POLLNVAL) for _, ev in events)
+    except OSError:
+        return False
+
+
 async def serve_stdio(
     server: MCPServer,
     *,
     stdin: Optional[BinaryIO] = None,
     stdout: Optional[BinaryIO] = None,
 ) -> None:
-    """Async loop serving JSON-RPC 2.0 MCP messages over binary stdio streams."""
+    """Async loop serving JSON-RPC 2.0 MCP messages over binary stdio streams.
+
+    Runs ``tools/call`` requests as concurrent tracked tasks so the stdin loop stays
+    responsive to ``notifications/cancelled`` and emits live ``notifications/progress``
+    updates without interleaving frames on stdout.
+    """
     in_stream = stdin if stdin is not None else sys.stdin.buffer
     out_stream = stdout if stdout is not None else sys.stdout.buffer
 
-    while True:
-        raw_bytes, framing = await asyncio.to_thread(read_stdio_message, in_stream)
-        if raw_bytes is None:
-            break
+    write_lock = asyncio.Lock()
+    active_tasks: set[asyncio.Task[None]] = set()
+    pipe_broken = [False]
 
-        try:
-            msg = json.loads(raw_bytes.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            err_resp = _jsonrpc_error(None, ERR_PARSE, f"Parse error: {exc}")
-            write_stdio_message(out_stream, err_resp, framing=framing)
-            continue
+    async def _write_payload(payload: dict[str, Any], framing: str) -> None:
+        if pipe_broken[0]:
+            return
+        async with write_lock:
+            if pipe_broken[0]:
+                return
+            try:
+                write_stdio_message(out_stream, payload, framing=framing)
+            except (BrokenPipeError, OSError, ValueError):
+                pipe_broken[0] = True
+                server.cancel_all_in_flight()
 
-        if isinstance(msg, list):
-            # Support JSON-RPC 2.0 batch requests cleanly
-            responses: list[dict[str, Any]] = []
-            for item in msg:
-                resp = await server.handle_request(item)
-                if resp is not None:
-                    responses.append(resp)
-            if responses:
-                body = json.dumps(responses, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    async def _write_batch(responses: list[dict[str, Any]], framing: str) -> None:
+        if pipe_broken[0] or not responses:
+            return
+        body = json.dumps(responses, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        async with write_lock:
+            if pipe_broken[0]:
+                return
+            try:
                 if framing == "content-length":
                     out_stream.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii") + body)
                 else:
                     out_stream.write(body + b"\n")
                 out_stream.flush()
-            continue
+            except (BrokenPipeError, OSError, ValueError):
+                pipe_broken[0] = True
+                server.cancel_all_in_flight()
 
-        resp = await server.handle_request(msg)
-        if resp is not None:
-            write_stdio_message(out_stream, resp, framing=framing)
+    def _spawn_tools_call(msg: dict[str, Any], framing: str) -> None:
+        has_id = "id" in msg
+        req_id = msg.get("id")
+        params = msg.get("params")
+        scope_id = f"mcp-{uuid.uuid4().hex}"
+
+        async def _notify_for_framing(payload: dict[str, Any]) -> None:
+            await _write_payload(payload, framing)
+
+        async def _runner() -> None:
+            with sandbox_scope(scope_id):
+                try:
+                    if params is None:
+                        eff_params: Any = {}
+                    else:
+                        eff_params = params
+                    if not isinstance(eff_params, dict):
+                        resp = _jsonrpc_error(req_id, ERR_INVALID_PARAMS, "Invalid params: expected object")
+                    else:
+                        resp = await server._handle_tools_call(
+                            req_id,
+                            eff_params,
+                            has_id=has_id,
+                            notify=_notify_for_framing,
+                        )
+                    if resp is not None and not (has_id and server.is_cancelled(req_id)):
+                        await _write_payload(resp, framing)
+                except asyncio.CancelledError:
+                    kill_active_sandbox_children(scope=scope_id)
+                finally:
+                    if has_id:
+                        server.unregister_in_flight(req_id)
+
+        task = asyncio.create_task(_runner())
+        if has_id:
+            server.register_in_flight(req_id, task, scope_id)
+        active_tasks.add(task)
+        task.add_done_callback(active_tasks.discard)
+
+    try:
+        while not pipe_broken[0]:
+            raw_bytes, framing = await asyncio.to_thread(read_stdio_message, in_stream)
+            if raw_bytes is None:
+                break
+
+            try:
+                msg = json.loads(raw_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                err_resp = _jsonrpc_error(None, ERR_PARSE, f"Parse error: {exc}")
+                await _write_payload(err_resp, framing)
+                continue
+
+            if isinstance(msg, list):
+                # Support JSON-RPC 2.0 batch requests cleanly
+                async def _notify_batch(payload: dict[str, Any]) -> None:
+                    await _write_payload(payload, framing)
+
+                responses: list[dict[str, Any]] = []
+                for item in msg:
+                    resp = await server.handle_request(item, notify=_notify_batch)
+                    if resp is not None:
+                        responses.append(resp)
+                await _write_batch(responses, framing)
+                continue
+
+            if isinstance(msg, dict) and msg.get("method") == "tools/call":
+                _spawn_tools_call(msg, framing)
+                continue
+
+            resp = await server.handle_request(msg)
+            if resp is not None:
+                await _write_payload(resp, framing)
+
+        # Drain in-flight tasks on stdin EOF unless the client closed stdout (dead pipe).
+        while active_tasks:
+            if pipe_broken[0] or _is_output_pipe_closed(out_stream):
+                server.cancel_all_in_flight()
+                break
+            await asyncio.wait(list(active_tasks), timeout=0.1)
+    finally:
+        if active_tasks:
+            server.cancel_all_in_flight()
+            await asyncio.gather(*list(active_tasks), return_exceptions=True)
 
 
 def run_stdio_server(

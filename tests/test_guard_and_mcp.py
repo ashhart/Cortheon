@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -845,4 +846,211 @@ def test_mcp_stdio_real_subprocess_handshake():
     finally:
         if proc.poll() is None:
             proc.kill()
+
+
+def test_mcp_progress_notifications_from_meta_progress_token():
+    """Supplying `_meta.progressToken` streams live `notifications/progress` before the final reply."""
+
+    async def _fake_verify(*, prompt: str, mode=None, streams: int = 4, url: str = "", on_event=None):
+        assert on_event is not None
+        on_event({"engine": "reason", "event": "start", "mode": "reason", "streams": streams})
+        on_event({"engine": "reason", "event": "slot_done", "slot": "pal_exact", "status": "ok", "latency_s": 1.2})
+        on_event({"engine": "reason", "event": "early_abort", "consensus_count": 2, "cancelled": 2})
+        on_event({"engine": "reason", "event": "done", "wall_s": 2.4})
+        return {"mode": "reason", "answer": "42", "verified": True}
+
+    server = MCPServer(verify_fn=_fake_verify)
+
+    # 1. With _meta.progressToken -> progress notifications emitted in order before result
+    req_with_tok = {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "cortheon_verify",
+            "arguments": {"prompt": "6 * 7", "streams": 4},
+            "_meta": {"progressToken": "tok-verify-10"},
+        },
+    }
+    in_buf = io.BytesIO((json.dumps(req_with_tok) + "\n").encode("utf-8"))
+    out_buf = io.BytesIO()
+    run_stdio_server(server=server, stdin=in_buf, stdout=out_buf)
+
+    msgs = [json.loads(ln.decode("utf-8")) for ln in out_buf.getvalue().splitlines() if ln.strip()]
+    progress_msgs = [m for m in msgs if m.get("method") == "notifications/progress"]
+    result_msgs = [m for m in msgs if m.get("id") == 10]
+    assert len(result_msgs) == 1
+    assert msgs[-1]["id"] == 10  # final response arrives AFTER all progress notifications
+    assert len(progress_msgs) >= 4
+    steps = [m["params"]["progress"] for m in progress_msgs]
+    assert steps == sorted(steps) and len(set(steps)) == len(steps)  # strictly increasing
+    assert all(m["params"]["progressToken"] == "tok-verify-10" for m in progress_msgs)
+    joined_notes = " | ".join(m["params"].get("message", "") for m in progress_msgs)
+    assert "pal_exact" in joined_notes
+    assert "Early-abort" in joined_notes
+
+    # 2. Without _meta.progressToken -> zero progress notifications emitted
+    async def _fake_verify_plain(*, prompt: str, mode=None, streams: int = 4, url: str = "", on_event=None):
+        assert on_event is None
+        return {"mode": "reason", "answer": "42", "verified": True}
+
+    plain_server = MCPServer(verify_fn=_fake_verify_plain)
+    req_no_tok = {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {"name": "cortheon_verify", "arguments": {"prompt": "6 * 7"}},
+    }
+    in_buf2 = io.BytesIO((json.dumps(req_no_tok) + "\n").encode("utf-8"))
+    out_buf2 = io.BytesIO()
+    run_stdio_server(server=plain_server, stdin=in_buf2, stdout=out_buf2)
+    msgs2 = [json.loads(ln.decode("utf-8")) for ln in out_buf2.getvalue().splitlines() if ln.strip()]
+    assert len(msgs2) == 1 and msgs2[0]["id"] == 11
+
+
+def test_mcp_notifications_cancelled_kills_inflight_sandbox_child():
+    """`notifications/cancelled` aborts an in-flight `tools/call`, kills its sandboxed child,
+    suppresses any late response for that requestId, and keeps the server alive."""
+    from flash_forge.mcp_server import serve_stdio
+    from flash_forge.sandbox import run_python
+
+    started = asyncio.Event()
+    cancelled_seen = [False]
+    sandbox_elapsed = [999.0]
+
+    async def _slow_sandbox_verify(*, prompt: str, mode=None, streams: int = 4, url: str = "", on_event=None):
+        started.set()
+        t0 = time.perf_counter()
+        try:
+            # Spawn a real OS-sandboxed Python child that would sleep for 25s if not killed!
+            await asyncio.to_thread(run_python, "import time\ntime.sleep(25)\nprint('DONE')", 25.0)
+            return {"answer": "too_late"}
+        except asyncio.CancelledError:
+            cancelled_seen[0] = True
+            sandbox_elapsed[0] = time.perf_counter() - t0
+            raise
+
+    async def _run_scenario():
+        in_r_fd, in_w_fd = os.pipe()
+        in_r = os.fdopen(in_r_fd, "rb", buffering=0)
+        in_w = os.fdopen(in_w_fd, "wb", buffering=0)
+        out_buf = io.BytesIO()
+
+        server = MCPServer(verify_fn=_slow_sandbox_verify)
+        srv_task = asyncio.create_task(serve_stdio(server, stdin=in_r, stdout=out_buf))
+        try:
+            in_w.write(
+                (
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 42,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "cortheon_verify",
+                                "arguments": {"prompt": "slow verification"},
+                                "_meta": {"progressToken": "tok-42"},
+                            },
+                        }
+                    )
+                    + "\n"
+                ).encode("utf-8")
+            )
+            await asyncio.wait_for(started.wait(), timeout=5.0)
+            await asyncio.sleep(0.25)  # give sandbox subprocess time to spawn
+
+            t_cancel = time.perf_counter()
+            in_w.write(
+                (
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "method": "notifications/cancelled",
+                            "params": {"requestId": 42, "reason": "client timeout"},
+                        }
+                    )
+                    + "\n"
+                    + json.dumps({"jsonrpc": "2.0", "id": 43, "method": "ping"})
+                    + "\n"
+                ).encode("utf-8")
+            )
+            in_w.close()
+            await asyncio.wait_for(srv_task, timeout=5.0)
+            cancel_dt = time.perf_counter() - t_cancel
+            return out_buf.getvalue(), cancel_dt
+        finally:
+            if not in_w.closed:
+                in_w.close()
+            if not srv_task.done():
+                srv_task.cancel()
+                await asyncio.gather(srv_task, return_exceptions=True)
+            in_r.close()
+
+    raw_out, cancel_dt = asyncio.run(_run_scenario())
+    assert cancelled_seen[0] is True
+    assert cancel_dt < 4.0, f"Cancellation took too long ({cancel_dt:.2f}s) — sandbox child may not have been killed!"
+    msgs = [json.loads(ln.decode("utf-8")) for ln in raw_out.splitlines() if ln.strip()]
+    # Cancelled request 42 MUST NOT emit a response; ping 43 MUST still succeed!
+    assert not any(m.get("id") == 42 for m in msgs)
+    assert any(m == {"jsonrpc": "2.0", "id": 43, "result": {}} for m in msgs)
+
+
+def test_mcp_closed_stdout_pipe_cancels_inflight_call():
+    """If the client disconnects and closes stdout while a tool call runs, stop burning compute."""
+    from flash_forge.mcp_server import serve_stdio
+
+    started = asyncio.Event()
+    cancelled_seen = [False]
+
+    async def _long_verify(*, prompt: str, mode=None, streams: int = 4, url: str = "", on_event=None):
+        started.set()
+        try:
+            await asyncio.sleep(20.0)
+            return {"answer": "should_not_finish"}
+        except asyncio.CancelledError:
+            cancelled_seen[0] = True
+            raise
+
+    async def _run_scenario():
+        in_r_fd, in_w_fd = os.pipe()
+        out_r_fd, out_w_fd = os.pipe()
+        in_r = os.fdopen(in_r_fd, "rb", buffering=0)
+        in_w = os.fdopen(in_w_fd, "wb", buffering=0)
+        out_r = os.fdopen(out_r_fd, "rb", buffering=0)
+        out_w = os.fdopen(out_w_fd, "wb", buffering=0)
+
+        server = MCPServer(verify_fn=_long_verify)
+        srv_task = asyncio.create_task(serve_stdio(server, stdin=in_r, stdout=out_w))
+        try:
+            in_w.write(
+                (
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 77,
+                            "method": "tools/call",
+                            "params": {"name": "cortheon_verify", "arguments": {"prompt": "long"}},
+                        }
+                    )
+                    + "\n"
+                ).encode("utf-8")
+            )
+            await asyncio.wait_for(started.wait(), timeout=5.0)
+            # Simulate client abruptly closing both stdout reader and stdin writer
+            out_r.close()
+            in_w.close()
+            await asyncio.wait_for(srv_task, timeout=4.0)
+        finally:
+            for f in (in_w, out_r, out_w, in_r):
+                try:
+                    if not f.closed:
+                        f.close()
+                except OSError:
+                    pass
+            if not srv_task.done():
+                srv_task.cancel()
+                await asyncio.gather(srv_task, return_exceptions=True)
+
+    asyncio.run(_run_scenario())
+    assert cancelled_seen[0] is True
 

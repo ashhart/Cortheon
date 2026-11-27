@@ -22,6 +22,8 @@ Gives frozen local models deterministic mechanical grounding:
 from __future__ import annotations
 
 import ast
+import contextlib
+import contextvars
 import math
 import os
 import re
@@ -30,10 +32,11 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Iterator, Optional
 
 try:
     import pwd
@@ -48,6 +51,60 @@ except ImportError:  # pragma: no cover - non-POSIX
 
 PYTHON_BIN = sys.executable
 _SEATBELT_BIN = "/usr/bin/sandbox-exec"
+
+# Scoped registry of live sandbox child processes so request cancellation (e.g. MCP
+# `notifications/cancelled`) can immediately SIGKILL orphaned sandbox process groups
+# belonging to the cancelled task without disturbing concurrent requests.
+_SANDBOX_SCOPE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "cortheon_sandbox_scope", default=None
+)
+_ACTIVE_PROCS_LOCK = threading.Lock()
+_ACTIVE_PROCS: dict[int, tuple[subprocess.Popen[Any], Optional[str]]] = {}
+
+
+@contextlib.contextmanager
+def sandbox_scope(scope_id: Optional[str]) -> Iterator[None]:
+    """Tag sandbox subprocesses spawned within this context for targeted cancellation."""
+    token = _SANDBOX_SCOPE.set(scope_id)
+    try:
+        yield
+    finally:
+        _SANDBOX_SCOPE.reset(token)
+
+
+def register_sandbox_proc(proc: subprocess.Popen[Any], scope: Optional[str] = None) -> None:
+    eff_scope = scope if scope is not None else _SANDBOX_SCOPE.get()
+    with _ACTIVE_PROCS_LOCK:
+        _ACTIVE_PROCS[proc.pid] = (proc, eff_scope)
+
+
+def unregister_sandbox_proc(proc: subprocess.Popen[Any]) -> None:
+    with _ACTIVE_PROCS_LOCK:
+        _ACTIVE_PROCS.pop(proc.pid, None)
+
+
+def kill_active_sandbox_children(scope: Optional[str] = None) -> int:
+    """Immediately kill active sandbox process groups matching ``scope`` (or all if ``scope is None``)."""
+    with _ACTIVE_PROCS_LOCK:
+        targets = [
+            proc
+            for proc, proc_scope in _ACTIVE_PROCS.values()
+            if scope is None or proc_scope == scope
+        ]
+    killed = 0
+    for proc in targets:
+        if proc.poll() is not None:
+            continue
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+            killed += 1
+        except OSError:
+            try:
+                proc.kill()
+                killed += 1
+            except OSError:
+                pass
+    return killed
 _UNSAFE_NO_SANDBOX_ENV = "CORTHEON_UNSAFE_NO_SANDBOX"
 _MAX_FILE_SIZE_BYTES = 64 * 1024 * 1024  # 64 MiB
 
@@ -338,6 +395,7 @@ def run_python(
             start_new_session=True,
             preexec_fn=preexec_fn,
         )
+        register_sandbox_proc(proc)
         try:
             stdout, stderr = proc.communicate(timeout=timeout_s)
             dt = time.perf_counter() - t0
@@ -368,6 +426,8 @@ def run_python(
                 elapsed_s=dt,
                 timed_out=True,
             )
+        finally:
+            unregister_sandbox_proc(proc)
 
 
 def run_solution_against_tests(
