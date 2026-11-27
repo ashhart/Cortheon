@@ -41,7 +41,9 @@ def wilson_ci(k: int, n: int, confidence: float = 0.95) -> tuple[float, float]:
     denom = 1.0 + z2 / n
     center = (p + z2 / (2.0 * n)) / denom
     half = (z * math.sqrt((p * (1.0 - p) / n) + (z2 / (4.0 * n * n)))) / denom
-    return (max(0.0, center - half), min(1.0, center + half))
+    lo = 0.0 if k == 0 else max(0.0, center - half)
+    hi = 1.0 if k == n else min(1.0, center + half)
+    return (lo, hi)
 
 
 def mcnemar_exact_p(n01: int, n10: int) -> float:
