@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-import uvicorn
 
 from .client import TensorFoldClient
 from .code_forge import CodeForgeTrace
@@ -30,7 +29,6 @@ from .integrations import ALL_HARNESSES, MCP_HARNESSES, install_commands, instal
 from .mcp_server import run_stdio_server
 from .memory import EpisodicMemory
 from .progress import make_progress_callback
-from .proxy import create_app
 from .reason_forge import ReasonForgeTrace
 from .replica_agent import ReplicaAgent, ReplicaConfig
 from .showdown import run_showdown
@@ -370,6 +368,14 @@ def main(argv: Optional[list[str]] = None) -> None:
         return
 
     if args.cmd == "proxy":
+        try:
+            import uvicorn
+
+            from .proxy import create_app
+        except ImportError as exc:  # pragma: no cover - depends on install extras
+            raise SystemExit(
+                "cortheon proxy needs the proxy extra: pip install 'cortheon[proxy]'"
+            ) from exc
         cockpit_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
         app = create_app(
             upstream_url=args.upstream,
