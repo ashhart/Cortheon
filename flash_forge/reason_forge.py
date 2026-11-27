@@ -24,7 +24,7 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import sympy as sp
 
@@ -413,6 +413,64 @@ def _execute_pal_outcome(outcome: BranchOutcome, timeout_s: float = 10.0) -> Non
     outcome.verified_constraints = _has_executable_assert(code)
 
 
+def _emit(
+    on_event: Optional[Callable[[dict[str, Any]], None]],
+    payload: dict[str, Any],
+) -> None:
+    """Invoke an optional live event callback, swallowing any UI/pipe failure."""
+    if on_event is None:
+        return
+    try:
+        on_event(payload)
+    except Exception:
+        pass
+
+
+def _slot_done_payload(
+    *,
+    engine: str,
+    slot: int,
+    out: BranchOutcome,
+    problem: str,
+    elapsed_s: float,
+    tokens: int,
+    wave: int = 1,
+) -> dict[str, Any]:
+    fmt_ok = bool(out.norm_answer and _answer_satisfies_prompt_format(problem, out.norm_answer))
+    if out.kind == "pal":
+        ok_flag = bool(out.exec_result and out.exec_result.ok and not out.error and fmt_ok)
+        if ok_flag:
+            summary = "PAL verified"
+        elif out.error:
+            summary = out.error.splitlines()[0][:80]
+        elif out.norm_answer and not fmt_ok:
+            summary = "format gate rejected"
+        else:
+            summary = "PAL failed"
+    else:
+        ok_flag = bool(not out.error and fmt_ok)
+        if ok_flag:
+            summary = "analytical"
+        elif out.error:
+            summary = out.error.splitlines()[0][:80]
+        elif out.norm_answer and not fmt_ok:
+            summary = "format gate rejected"
+        else:
+            summary = "no answer extracted"
+    return {
+        "engine": engine,
+        "event": "slot_done",
+        "wave": wave,
+        "slot": slot,
+        "role": out.name,
+        "ok": ok_flag,
+        "elapsed_s": round(max(0.0, float(elapsed_s)), 2),
+        "tokens": int(tokens),
+        "answer": out.norm_answer or "",
+        "summary": summary,
+    }
+
+
 async def solve_reasoning(
     client: TensorFoldClient,
     skills: SkillPack,
@@ -423,6 +481,7 @@ async def solve_reasoning(
     sandbox_timeout_s: float = 20.0,
     deep: bool = False,
     enable_wave2: bool = True,
+    on_event: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> ReasonForgeTrace:
     """Solve a hard math, logic, combinatorics, probability, or constraint problem."""
     t0 = time.perf_counter()
@@ -479,51 +538,82 @@ async def solve_reasoning(
             )
         )
 
-    # True streaming Wave-1 early-abort: run each slot + sandbox immediately on completion
-    # and cancel lagging GPU requests the instant 2 independent PAL scripts agree!
-    async def _run_w1_slot(
-        idx: int, name: str, kind: str, spec: CallSpec
-    ) -> tuple[int, BranchOutcome]:
-        res = await client.complete(spec)
-        out = BranchOutcome(
-            name=name,
-            wave=1,
-            kind=kind,
-            raw_content=res.content,
-            reasoning=res.reasoning,
-            latency_s=res.latency_s,
-            error=res.raw_error or "",
-        )
-        if res.ok:
-            if kind == "pal":
-                await asyncio.to_thread(_execute_pal_outcome, out, sandbox_timeout_s)
-            else:
-                raw_ans = extract_answer_from_prose(res.content)
-                out.raw_answer = raw_ans
-                out.norm_answer = normalize_answer(raw_ans)
-        return idx, out
+    _emit(
+        on_event,
+        {
+            "engine": "reason",
+            "event": "start",
+            "mode": "reason",
+            "streams": len(specs),
+        },
+    )
 
-    slot_tasks: list[asyncio.Task[tuple[int, BranchOutcome]]] = [
-        asyncio.create_task(_run_w1_slot(i, name, kind, spec))
-        for i, ((name, kind, _, _, _, _), spec) in enumerate(zip(wave1_roles, specs))
-    ]
     ordered_outcomes: list[Optional[BranchOutcome]] = [None] * len(wave1_roles)
-    pal_verified_so_far: list[BranchOutcome] = []
-    early_aborted = False
+    if callable(getattr(client, "complete", None)):
+        # True streaming Wave-1 early-abort: run each slot + sandbox immediately on completion
+        # and cancel lagging GPU requests the instant 2 independent PAL scripts agree!
+        async def _run_w1_slot(
+            idx: int, name: str, kind: str, spec: CallSpec
+        ) -> tuple[int, BranchOutcome, int, float]:
+            slot_t0 = time.perf_counter()
+            res = await client.complete(spec)
+            tok = int(getattr(res, "completion_tokens", 0) or 0)
+            out = BranchOutcome(
+                name=name,
+                wave=1,
+                kind=kind,
+                raw_content=res.content,
+                reasoning=res.reasoning,
+                latency_s=res.latency_s,
+                error=res.raw_error or "",
+            )
+            if res.ok:
+                if kind == "pal":
+                    await asyncio.to_thread(_execute_pal_outcome, out, sandbox_timeout_s)
+                else:
+                    raw_ans = extract_answer_from_prose(res.content)
+                    out.raw_answer = raw_ans
+                    out.norm_answer = normalize_answer(raw_ans)
+            slot_elapsed = max(time.perf_counter() - slot_t0, float(out.latency_s or 0.0))
+            return idx, out, tok, slot_elapsed
 
-    pending: set[asyncio.Task[tuple[int, BranchOutcome]]] = set(slot_tasks)
-    try:
-        while pending:
-            done_set, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-            for done_task in done_set:
-                idx, out = done_task.result()
-                ordered_outcomes[idx] = out
-                if (
-                    out.kind == "pal"
-                    and out.norm_answer
-                    and _answer_satisfies_prompt_format(problem, out.norm_answer)
-                ):
-                    pal_verified_so_far.append(out)
+        slot_tasks: list[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = [
+            asyncio.create_task(_run_w1_slot(i, name, kind, spec))
+            for i, ((name, kind, _, _, _, _), spec) in enumerate(zip(wave1_roles, specs))
+        ]
+        pal_verified_so_far: list[BranchOutcome] = []
+        early_aborted = False
+
+        pending: set[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = set(slot_tasks)
+        try:
+            while pending:
+                done_set, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                completed_batch: list[tuple[int, BranchOutcome, int, float]] = [
+                    done_task.result() for done_task in done_set
+                ]
+                completed_batch.sort(key=lambda item: item[0])
+                for idx, out, tok, slot_elapsed in completed_batch:
+                    ordered_outcomes[idx] = out
+                    _emit(
+                        on_event,
+                        _slot_done_payload(
+                            engine="reason",
+                            slot=idx + 1,
+                            out=out,
+                            problem=problem,
+                            elapsed_s=slot_elapsed,
+                            tokens=tok,
+                            wave=1,
+                        ),
+                    )
+                    if (
+                        out.kind == "pal"
+                        and out.norm_answer
+                        and _answer_satisfies_prompt_format(problem, out.norm_answer)
+                    ):
+                        pal_verified_so_far.append(out)
+
+                if pending and pal_verified_so_far:
                     clusters_now = _cluster_answers(pal_verified_so_far)
                     if clusters_now and len(clusters_now[0][1]) >= 2:
                         top_ans = clusters_now[0][0]
@@ -537,19 +627,75 @@ async def solve_reasoning(
                         if not ana_contradicts or len(clusters_now[0][1]) >= 3:
                             # 2 independent verified PAL scripts agree (with no analytical contradiction) -> cancel lagging GPU slots!
                             early_aborted = True
+                            n_cancelled = len(pending)
                             for lag in pending:
                                 lag.cancel()
+                            _emit(
+                                on_event,
+                                {
+                                    "engine": "reason",
+                                    "event": "early_abort",
+                                    "cancelled": n_cancelled,
+                                    "elapsed_s": round(time.perf_counter() - t0, 2),
+                                    "consensus_answer": top_ans,
+                                    "reason": f"{len(clusters_now[0][1])}/{len(specs)} PAL consensus",
+                                },
+                            )
                             break
-            if early_aborted:
-                if pending:
-                    await asyncio.gather(*pending, return_exceptions=True)
-                break
-    except BaseException:
-        for lag in pending:
-            lag.cancel()
-        if pending:
-            await asyncio.gather(*pending, return_exceptions=True)
-        raise
+            if early_aborted and pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+        except BaseException:
+            for lag in pending:
+                lag.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            raise
+    else:
+        # Batch fallback path for custom clients implementing only `.batch()`
+        w1_t0 = time.perf_counter()
+        w1_results = await client.batch(specs) if specs else []
+        pal_w1_jobs: list[BranchOutcome] = []
+        w1_tokens: list[int] = []
+        for idx, ((name, kind, _, _, _, _), res) in enumerate(zip(wave1_roles, w1_results)):
+            tok = int(getattr(res, "completion_tokens", 0) or 0)
+            w1_tokens.append(tok)
+            out = BranchOutcome(
+                name=name,
+                wave=1,
+                kind=kind,
+                raw_content=res.content,
+                reasoning=res.reasoning,
+                latency_s=res.latency_s,
+                error=res.raw_error or "",
+            )
+            if res.ok:
+                if kind == "pal":
+                    pal_w1_jobs.append(out)
+                else:
+                    raw_ans = extract_answer_from_prose(res.content)
+                    out.raw_answer = raw_ans
+                    out.norm_answer = normalize_answer(raw_ans)
+            ordered_outcomes[idx] = out
+        if pal_w1_jobs:
+            await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s) for o in pal_w1_jobs))
+        w1_elapsed = time.perf_counter() - w1_t0
+        for idx, out in enumerate(ordered_outcomes):
+            if out is None:
+                continue
+            exec_s = float(out.exec_result.elapsed_s) if out.exec_result else 0.0
+            slot_elapsed = (float(out.latency_s or 0.0) + exec_s) or w1_elapsed
+            _emit(
+                on_event,
+                _slot_done_payload(
+                    engine="reason",
+                    slot=idx + 1,
+                    out=out,
+                    problem=problem,
+                    elapsed_s=slot_elapsed,
+                    tokens=w1_tokens[idx] if idx < len(w1_tokens) else 0,
+                    wave=1,
+                ),
+            )
 
     for i, (name, kind, _, _, _, _) in enumerate(wave1_roles):
         out_i = ordered_outcomes[i]
@@ -650,8 +796,19 @@ async def solve_reasoning(
             )
             for name, card_text, temp, seed, tb in w2_roles
         ]
+        _emit(
+            on_event,
+            {
+                "engine": "reason",
+                "event": "wave2_start",
+                "reason": trace.wave2_reason,
+                "streams": len(w2_specs),
+            },
+        )
+        w2_t0 = time.perf_counter()
         w2_results = await client.batch(w2_specs)
         pal_w2_jobs: list[BranchOutcome] = []
+        w2_batch_outcomes: list[BranchOutcome] = []
         for (name, _, _, _, _), res in zip(w2_roles, w2_results):
             out = BranchOutcome(
                 name=name,
@@ -664,12 +821,28 @@ async def solve_reasoning(
             )
             if res.ok:
                 pal_w2_jobs.append(out)
+            w2_batch_outcomes.append(out)
             trace.wave2_outcomes.append(out)
         if pal_w2_jobs:
             await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s + 4.0) for o in pal_w2_jobs))
-        for out in trace.wave2_outcomes:
+        w2_elapsed = time.perf_counter() - w2_t0
+        for w2_idx, (out, res) in enumerate(zip(w2_batch_outcomes, w2_results), start=1):
             if out.error:
                 trace.graveyard.append(f"[{out.name}] FAILED: {out.error[:240]}")
+            exec_s = float(out.exec_result.elapsed_s) if out.exec_result else 0.0
+            slot_elapsed = (float(out.latency_s or 0.0) + exec_s) or w2_elapsed
+            _emit(
+                on_event,
+                _slot_done_payload(
+                    engine="reason",
+                    slot=w2_idx,
+                    out=out,
+                    problem=problem,
+                    elapsed_s=slot_elapsed,
+                    tokens=int(getattr(res, "completion_tokens", 0) or 0),
+                    wave=2,
+                ),
+            )
 
         # Conditional Wave-3 Hybrid Repair + High-Effort Analytical Consensus (B=3, ONLY when 0 valid PALs!)
         valid_pal_so_far = [
@@ -744,8 +917,10 @@ async def solve_reasoning(
                 )
                 for name, kind, card_text, temp, seed, tb in w3_roles
             ]
+            w3_t0 = time.perf_counter()
             w3_results = await client.batch(w3_specs)
             pal_w3_jobs: list[BranchOutcome] = []
+            w3_batch_outcomes: list[BranchOutcome] = []
             for (name, kind, _, _, _, _), res in zip(w3_roles, w3_results):
                 out = BranchOutcome(
                     name=name,
@@ -763,9 +938,26 @@ async def solve_reasoning(
                         raw_ans = extract_answer_from_prose(res.content)
                         out.raw_answer = raw_ans
                         out.norm_answer = normalize_answer(raw_ans)
+                w3_batch_outcomes.append(out)
                 trace.wave2_outcomes.append(out)
             if pal_w3_jobs:
                 await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s + 6.0) for o in pal_w3_jobs))
+            w3_elapsed = time.perf_counter() - w3_t0
+            for w3_idx, (out, res) in enumerate(zip(w3_batch_outcomes, w3_results), start=1):
+                exec_s = float(out.exec_result.elapsed_s) if out.exec_result else 0.0
+                slot_elapsed = (float(out.latency_s or 0.0) + exec_s) or w3_elapsed
+                _emit(
+                    on_event,
+                    _slot_done_payload(
+                        engine="reason",
+                        slot=w3_idx,
+                        out=out,
+                        problem=problem,
+                        elapsed_s=slot_elapsed,
+                        tokens=int(getattr(res, "completion_tokens", 0) or 0),
+                        wave=3,
+                    ),
+                )
 
     # Final Weighted Adjudication across all executed & verified branches
     combined = trace.wave1_outcomes + trace.wave2_outcomes
@@ -799,6 +991,16 @@ async def solve_reasoning(
         trace.consensus_type = "fallback_extract"
         trace.final_explanation = best_raw.raw_content if best_raw else ""
         trace.wall_s = time.perf_counter() - t0
+        _emit(
+            on_event,
+            {
+                "engine": "reason",
+                "event": "done",
+                "elapsed_s": round(trace.wall_s, 2),
+                "verified": trace.verified,
+                "summary": f"{trace.consensus_type} -> {trace.final_answer}",
+            },
+        )
         return trace
 
     # Score every equivalence cluster
@@ -888,4 +1090,14 @@ async def solve_reasoning(
         + (f"\nVerification Output (`{best_member.name}`):\n```\n{stdout_preview}\n```" if stdout_preview else "")
     )
     trace.wall_s = time.perf_counter() - t0
+    _emit(
+        on_event,
+        {
+            "engine": "reason",
+            "event": "done",
+            "elapsed_s": round(trace.wall_s, 2),
+            "verified": trace.verified,
+            "summary": f"{trace.consensus_type} -> {trace.final_answer}",
+        },
+    )
     return trace

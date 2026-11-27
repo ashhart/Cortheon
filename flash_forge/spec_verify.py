@@ -31,7 +31,7 @@ import asyncio
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .client import CallSpec, TensorFoldClient
 from .memory import EpisodicMemory
@@ -437,6 +437,19 @@ def _build_graveyard_and_escalation_prompt(
     return graveyard, escalated_prompt
 
 
+def _emit(
+    on_event: Optional[Callable[[dict[str, Any]], None]],
+    payload: dict[str, Any],
+) -> None:
+    """Invoke an optional live event callback, swallowing any UI/pipe failure."""
+    if on_event is None:
+        return
+    try:
+        on_event(payload)
+    except Exception:
+        pass
+
+
 async def solve_spec_verify(
     drafter_client: TensorFoldClient,
     verifier_client: TensorFoldClient,
@@ -450,6 +463,7 @@ async def solve_spec_verify(
     require_distinct_solvers: bool = True,
     sandbox_timeout_s: float = 15.0,
     deep: bool = False,
+    on_event: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> SpecVerifyTrace:
     """Solve `problem` using Speculative Execution-Verification (`SpecVerify`).
 
@@ -470,6 +484,16 @@ async def solve_spec_verify(
     # ------------------------------------------------------------------
     # Stage 1: Tiny Drafter Speculation (ZERO big-model calls yet!)
     # ------------------------------------------------------------------
+    _emit(
+        on_event,
+        {
+            "engine": "spec",
+            "event": "start",
+            "mode": "spec",
+            "streams": drafter_streams,
+        },
+    )
+
     d_before = _stats_snapshot(drafter_client)
     t_d0 = time.perf_counter()
 
@@ -501,20 +525,30 @@ async def solve_spec_verify(
             for name, card_text, temp, seed in drafter_roles
         ]
 
-        async def _run_drafter_slot(idx: int, name: str, spec: CallSpec) -> tuple[int, BranchOutcome]:
+        async def _run_drafter_slot(
+            idx: int, name: str, spec: CallSpec
+        ) -> tuple[int, BranchOutcome, int, float]:
+            slot_t0 = time.perf_counter()
             try:
                 res = await drafter_client.complete(spec)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                return idx, BranchOutcome(
-                    name=name,
-                    wave=1,
-                    kind="pal",
-                    raw_content="",
-                    reasoning="",
-                    error=_scrub_paths(f"{type(exc).__name__}: {exc}"),
+                slot_elapsed = time.perf_counter() - slot_t0
+                return (
+                    idx,
+                    BranchOutcome(
+                        name=name,
+                        wave=1,
+                        kind="pal",
+                        raw_content="",
+                        reasoning="",
+                        error=_scrub_paths(f"{type(exc).__name__}: {exc}"),
+                    ),
+                    0,
+                    slot_elapsed,
                 )
+            tok = int(getattr(res, "completion_tokens", 0) or 0)
             out = BranchOutcome(
                 name=name,
                 wave=1,
@@ -526,28 +560,57 @@ async def solve_spec_verify(
             )
             if res.ok:
                 await asyncio.to_thread(_execute_drafter_outcome, out, problem, sandbox_timeout_s)
-            return idx, out
+            slot_elapsed = max(time.perf_counter() - slot_t0, float(out.latency_s or 0.0))
+            return idx, out, tok, slot_elapsed
 
-        slot_tasks: list[asyncio.Task[tuple[int, BranchOutcome]]] = [
+        slot_tasks: list[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = [
             asyncio.create_task(_run_drafter_slot(i, name, spec))
             for i, ((name, _, _, _), spec) in enumerate(zip(drafter_roles, specs))
         ]
         ordered_outcomes: list[Optional[BranchOutcome]] = [None] * len(drafter_roles)
         early_aborted = False
 
-        pending: set[asyncio.Task[tuple[int, BranchOutcome]]] = set(slot_tasks)
+        pending: set[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = set(slot_tasks)
         try:
             while pending:
                 done_set, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
                 # Always unpack every completed task in this wakeup before checking early-abort
                 # so already-completed disagreements are never missed.
-                for done_task in done_set:
-                    idx, out = done_task.result()
+                completed_batch: list[tuple[int, BranchOutcome, int, float]] = [
+                    done_task.result() for done_task in done_set
+                ]
+                completed_batch.sort(key=lambda item: item[0])
+                for idx, out, tok, slot_elapsed in completed_batch:
                     ordered_outcomes[idx] = out
+                    exec_ok = bool(out.exec_result and out.exec_result.ok)
+                    fmt_ok = bool(out.norm_answer and _answer_satisfies_prompt_format(problem, out.norm_answer))
+                    ok_flag = bool(exec_ok and fmt_ok and not out.error)
+                    if ok_flag:
+                        summary = "PAL verified"
+                    elif out.error:
+                        summary = _scrub_paths(out.error).splitlines()[0][:80]
+                    elif out.norm_answer and not fmt_ok:
+                        summary = "format gate rejected"
+                    else:
+                        summary = "draft failed"
+                    _emit(
+                        on_event,
+                        {
+                            "engine": "spec",
+                            "event": "slot_done",
+                            "slot": idx + 1,
+                            "role": out.name,
+                            "ok": ok_flag,
+                            "elapsed_s": round(max(0.0, float(slot_elapsed)), 2),
+                            "tokens": tok,
+                            "answer": out.norm_answer or "",
+                            "summary": summary,
+                        },
+                    )
 
                 if drafter_streams >= 3 and pending:
                     completed_so_far = [o for o in ordered_outcomes if o is not None]
-                    accepted_now, _, top_cnt, _, _, clusters_now = evaluate_drafter_consensus(
+                    accepted_now, ans_now, top_cnt, _, _, clusters_now = evaluate_drafter_consensus(
                         completed_so_far,
                         problem,
                         min_consensus=min_consensus,
@@ -555,8 +618,20 @@ async def solve_spec_verify(
                     )
                     if accepted_now and len(clusters_now) == 1 and top_cnt >= min_consensus:
                         early_aborted = True
+                        n_cancelled = len(pending)
                         for lag in pending:
                             lag.cancel()
+                        _emit(
+                            on_event,
+                            {
+                                "engine": "spec",
+                                "event": "early_abort",
+                                "cancelled": n_cancelled,
+                                "elapsed_s": round(time.perf_counter() - t_d0, 2),
+                                "consensus_answer": ans_now,
+                                "reason": f"{top_cnt}/{drafter_streams} drafter PAL consensus",
+                            },
+                        )
                         break
 
             if early_aborted and pending:
@@ -603,7 +678,7 @@ async def solve_spec_verify(
 
     if accepted:
         total_wall_s = time.perf_counter() - t_total_0
-        return SpecVerifyTrace(
+        trace = SpecVerifyTrace(
             answer=accepted_ans,
             accepted_by_drafter=True,
             escalated=False,
@@ -623,6 +698,28 @@ async def solve_spec_verify(
             drafter_graveyard=[],
             verifier_trace=None,
         )
+        _emit(
+            on_event,
+            {
+                "engine": "spec",
+                "event": "drafter_accepted",
+                "drafter_model": trace.drafter_model,
+                "answer": trace.answer,
+                "elapsed_s": round(trace.drafter_wall_s, 2),
+                "verifier_calls_saved": verifier_streams,
+            },
+        )
+        _emit(
+            on_event,
+            {
+                "engine": "spec",
+                "event": "done",
+                "elapsed_s": round(trace.total_wall_s, 2),
+                "verified": True,
+                "summary": f"drafter_accepted ({trace.drafter_consensus_count}/{drafter_streams} PAL) -> {trace.answer}",
+            },
+        )
+        return trace
 
     # ------------------------------------------------------------------
     # Escalation: Sandbox falsified drafter -> wake big verifier model
@@ -638,6 +735,16 @@ async def solve_spec_verify(
         escalation_reason,
     )
 
+    _emit(
+        on_event,
+        {
+            "engine": "spec",
+            "event": "escalated",
+            "reason": escalation_reason,
+            "verifier_model": verifier_model,
+        },
+    )
+
     v_before = _stats_snapshot(verifier_client)
     t_v0 = time.perf_counter()
     v_trace = await solve_reasoning(
@@ -648,6 +755,7 @@ async def solve_spec_verify(
         num_wave1_streams=verifier_streams,
         sandbox_timeout_s=sandbox_timeout_s,
         deep=deep,
+        on_event=on_event,
     )
     verifier_wall_s = time.perf_counter() - t_v0
     v_after = _stats_snapshot(verifier_client)
@@ -659,7 +767,7 @@ async def solve_spec_verify(
     final_answer = normalize_answer(v_trace.final_answer) or v_trace.final_answer
     total_wall_s = time.perf_counter() - t_total_0
 
-    return SpecVerifyTrace(
+    trace = SpecVerifyTrace(
         answer=final_answer,
         accepted_by_drafter=False,
         escalated=True,
@@ -679,3 +787,14 @@ async def solve_spec_verify(
         drafter_graveyard=drafter_graveyard,
         verifier_trace=v_trace,
     )
+    _emit(
+        on_event,
+        {
+            "engine": "spec",
+            "event": "done",
+            "elapsed_s": round(trace.total_wall_s, 2),
+            "verified": bool(v_trace.verified),
+            "summary": f"escalated ({v_trace.consensus_type}) -> {trace.answer}",
+        },
+    )
+    return trace
