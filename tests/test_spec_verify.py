@@ -712,7 +712,7 @@ def test_ablation_merge_shards_disjoint_arms_stats_and_pii_scrubbing(tmp_path: P
             "correct": correct,
             "accepted_by_drafter": accepted,
             "escalated": not accepted,
-            "escalation_reason": "" if accepted else "crash at /Users/ash/secret/run.py",
+            "escalation_reason": "" if accepted else "crash at /Users/alice/secret/run.py",
             "drafter_consensus_count": 2 if accepted else 0,
             "drafter_verified_scripts": 2 if accepted else 0,
             "drafter_wall_s": 1.0,

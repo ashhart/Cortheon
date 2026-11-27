@@ -2531,7 +2531,7 @@ def format_guard_sarif(report: GuardReport) -> dict[str, Any]:
                     "driver": {
                         "name": "Cortheon Guard",
                         "version": _GUARD_VERSION,
-                        "informationUri": "https://github.com/cortheon/cortheon",
+                        "informationUri": "https://github.com/ashhart/Cortheon",
                         "rules": rules,
                     }
                 },

@@ -15,7 +15,7 @@ import httpx
 
 
 _REASONING_MODEL_ID_RE = re.compile(
-    r"(?:^|[^a-z0-9])(?:deepseek|ds\d|r1|qwq|qwen3|glm[-_]?5|nemotron|o[134](?:[-_]|$)|thinking|reasoner)",
+    r"(?:^|[^a-z0-9])(?:deepseek|ds\d|r1|qwq|qwen3|glm[-_]?5|nemotron|inkling|o[134](?:[-_]|$)|thinking|reasoner)",
     re.IGNORECASE,
 )
 
@@ -34,6 +34,7 @@ class ModelCapabilities:
     structures: bool = False
     thinking_budget: bool = False
     reasoning: bool = False
+    reasoning_optional: bool = True
     thinking_switch: bool = False
     loop_guard: bool = False
     answer_limit: bool = False
@@ -197,6 +198,7 @@ class TensorFoldClient:
             structures=bool(caps_raw.get("structures", False)) if is_tensorfold else True,
             thinking_budget=bool(caps_raw.get("thinking_budget", False)),
             reasoning=bool(caps_raw.get("reasoning", False)),
+            reasoning_optional=bool(caps_raw.get("reasoning_optional", True)),
             thinking_switch=bool(caps_raw.get("thinking_switch", False)),
             loop_guard=bool(caps_raw.get("loop_guard", False)),
             answer_limit=bool(caps_raw.get("answer_limit", False)),
@@ -252,6 +254,16 @@ class TensorFoldClient:
                 payload["reasoning_effort"] = "none"
             if is_tf or not getattr(self, "_chat_template_kwargs_rejected", False):
                 payload["chat_template_kwargs"] = {"enable_thinking": False}
+
+        # Always-on reasoning models (e.g. Inkling-2 where reasoning_optional=False) ignore enable_thinking=False;
+        # cap their thinking budget / effort to minimal so short fast-route calls do not starve.
+        if not spec.enable_thinking and not caps.reasoning_optional:
+            if caps.thinking_budget:
+                payload["thinking_budget"] = 0
+            if "none" in caps.supported_efforts:
+                payload["reasoning_effort"] = "none"
+            elif "minimal" in caps.supported_efforts:
+                payload["reasoning_effort"] = "minimal"
 
         if spec.enable_thinking:
             if spec.thinking_budget is not None and caps.thinking_budget:
@@ -407,12 +419,13 @@ class TensorFoldClient:
                 self._observed_reasoning = True
 
             # Adaptive recovery when a reasoning model behind a backend without hard thinking_budget
+            # (or an always-on reasoning model with reasoning_optional=False on a fast-route call)
             # consumes the entire max_tokens budget inside reasoning_content (leaving empty content).
             if (
                 finish_reason == "length"
                 and not content.strip()
                 and (reason_tok > 0 or bool(reasoning))
-                and not caps.thinking_budget
+                and (not caps.thinking_budget or (not spec.enable_thinking and not caps.reasoning_optional))
                 and spec.max_tokens > 1
             ):
                 sent_max = int(payload.get("max_tokens", spec.max_tokens))

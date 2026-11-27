@@ -677,3 +677,81 @@ def test_proxy_lifespan_banner_and_zero_fastapi_deprecation_warnings(monkeypatch
         auto_rescue=True,
     )
     assert "--streams 8 (max diversity" in b8
+
+
+def test_always_on_reasoning_model_fast_route_recovery():
+    """Models advertising reasoning_optional=False (e.g. Inkling-2-Mini) cap thinking on fast-route
+    calls and retry cleanly if max_tokens=16 still starves inside reasoning_content."""
+    models_resp = _FakeResponse(
+        200,
+        {
+            "object": "list",
+            "data": [
+                {
+                    "id": "inkling-2-mini",
+                    "owned_by": "tensorfold",
+                    "context_length": 32768,
+                    "capabilities": {
+                        "thinking_budget": True,
+                        "reasoning": True,
+                        "reasoning_optional": False,
+                        "thinking_switch": True,
+                        "loop_guard": True,
+                        "prompt_cache": True,
+                    },
+                    "reasoning": {
+                        "default_enabled": True,
+                        "supported_efforts": ["max", "high", "medium", "low", "minimal"],
+                    },
+                }
+            ],
+        },
+    )
+    starved_resp = _FakeResponse(
+        200,
+        {
+            "choices": [
+                {
+                    "finish_reason": "length",
+                    "message": {"content": "", "reasoning_content": "thinking..."},
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 12,
+                "completion_tokens": 16,
+                "completion_tokens_details": {"reasoning_tokens": 16},
+            },
+        },
+    )
+    ok_resp = _FakeResponse(
+        200,
+        {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"content": "ok", "reasoning_content": "brief"},
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 12,
+                "completion_tokens": 22,
+                "completion_tokens_details": {"reasoning_tokens": 18},
+            },
+        },
+    )
+    fake_http = _ScriptedHttp(get_result=models_resp, post_results=[starved_resp, ok_resp])
+    report = asyncio.run(
+        run_doctor(
+            url="http://127.0.0.1:18654/v1",
+            skip_live=False,
+            client_factory=_make_client_factory(fake_http),
+        )
+    )
+    assert len(fake_http.posted_payloads) == 2
+    assert fake_http.posted_payloads[0]["thinking_budget"] == 0
+    assert fake_http.posted_payloads[0]["reasoning_effort"] == "minimal"
+    assert fake_http.posted_payloads[1]["max_tokens"] >= 1024
+    live_check = next(c for c in report.checks if c.id == "live_probe")
+    assert live_check.status == "pass"
+    assert live_check.details["thinking_starvation_failures"] == 0
+    assert live_check.details["adaptive_recovery_triggered"] is True
