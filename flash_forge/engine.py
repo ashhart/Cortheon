@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .client import CallSpec, TensorFoldClient
-from .code_forge import CodeForgeTrace, solve_code
+from .code_forge import CodeCandidate, CodeForgeTrace, solve_code
+from .flywheel import record_live_trace
 from .memory import EpisodicMemory
-from .reason_forge import ReasonForgeTrace, solve_reasoning
+from .reason_forge import ReasonForgeTrace, _answers_equivalent, solve_reasoning
 from .router import TaskMode, classify_task
 from .sandbox import extract_python_code, run_in_ephemeral_worktree
 from .schemas import LESSON_DISTILL_SCHEMA
@@ -31,6 +32,8 @@ class ForgeConfig:
     enable_memory: bool = True
     memory_db: Optional[Path] = None
     sandbox_timeout_s: float = 10.0
+    record_flywheel: bool = False
+    flywheel_path: Optional[Path] = None
 
 
 @dataclass
@@ -43,6 +46,167 @@ class ForgeResult:
     token_stats: dict[str, int] = field(default_factory=dict)
     lesson_learned: Optional[str] = None
     verified: bool = True
+    flywheel_recorded: bool = False
+
+
+SolveResult = ForgeResult
+
+
+def _is_failing_code_candidate(cand: CodeCandidate) -> bool:
+    return bool(
+        cand.syntax_error
+        or cand.fatal_error
+        or cand.redteam_fatal
+        or cand.failed_tests
+        or cand.redteam_failures
+        or (cand.total_checks > 0 and not cand.perfect)
+    )
+
+
+def _format_code_failure_reason(cand: CodeCandidate) -> str:
+    if cand.syntax_error:
+        return f"syntax_error: {cand.syntax_error[:200]}"
+    if cand.fatal_error:
+        return f"fatal_error: {cand.fatal_error[:200]}"
+    if cand.redteam_fatal:
+        return f"redteam_fatal: {cand.redteam_fatal[:200]}"
+    if cand.redteam_failures:
+        return f"redteam_failures ({cand.name}): {', '.join(cand.redteam_failures[:4])}"
+    if cand.failed_tests:
+        return f"failed_tests ({cand.name}): {', '.join(cand.failed_tests[:4])}"
+    if cand.total_checks > 0 and not cand.perfect:
+        return f"partial_pass ({cand.name}): {cand.total_passed}/{cand.total_checks}"
+    return f"wave1_failed ({cand.name})"
+
+
+def _extract_reason_flywheel_pair(
+    trace: ReasonForgeTrace,
+) -> Optional[tuple[str, str, str, dict[str, Any]]]:
+    """Return `(chosen, rejected, rejected_reason, metadata)` for a Wave-2 ReasonForge rescue."""
+    if not trace.wave2_triggered:
+        return None
+    final_ans = (trace.final_answer or "").strip()
+    chosen = (trace.final_explanation or "").strip() or final_ans
+    if not chosen:
+        return None
+
+    consensus_low = (trace.consensus_type or "").lower()
+    w2_consensus = bool(
+        final_ans
+        and consensus_low
+        and consensus_low != "fallback_extract"
+        and (
+            "wave2" in consensus_low
+            or "consensus" in consensus_low
+            or "pairwise_tiebreak" in consensus_low
+        )
+    )
+    if not (trace.verified or w2_consensus):
+        return None
+
+    rejected = ""
+    rejected_reason = ""
+    rejected_branch = ""
+
+    # Pass 1: Prefer a Wave-1 branch with a distinct wrong answer
+    for o in trace.wave1_outcomes:
+        o_ans = (o.norm_answer or o.raw_answer or "").strip()
+        if o_ans and final_ans and not _answers_equivalent(o_ans, final_ans):
+            cand = (o.raw_content or "").strip() or (o.code or "").strip() or f"ANSWER: {o_ans}"
+            if cand and cand != chosen:
+                rejected = cand
+                rejected_branch = o.name
+                rejected_reason = f"wave1_wrong_answer ({o.name}: got={o_ans!r}, winner={final_ans!r})"
+                break
+
+    # Pass 2: Wave-1 branch that errored / failed sandbox execution / produced no answer
+    if not rejected:
+        for o in trace.wave1_outcomes:
+            exec_failed = o.exec_result is not None and not o.exec_result.ok
+            no_ans = not (o.norm_answer or o.raw_answer or "").strip()
+            if o.error or exec_failed or no_ans:
+                err_txt = (
+                    (o.error or "").strip()
+                    or (o.exec_result.short_error(250) if exec_failed and o.exec_result else "")
+                )
+                cand = (o.raw_content or "").strip() or (o.code or "").strip() or err_txt
+                if cand and cand != chosen:
+                    rejected = cand
+                    rejected_branch = o.name
+                    rejected_reason = err_txt or f"wave1_failed ({o.name})"
+                    break
+
+    # Pass 3: Graveyard fallback when wave1_outcomes had no extractable rejected text
+    if not rejected and trace.graveyard:
+        gv = "\n".join(g.strip() for g in trace.graveyard[:4] if g and g.strip()).strip()
+        if gv and gv != chosen:
+            rejected = gv
+            rejected_reason = "wave1_graveyard"
+
+    if not rejected or rejected == chosen:
+        return None
+
+    metadata = {
+        "mode": "reason",
+        "wave2_triggered": bool(trace.wave2_triggered),
+        "wave2_reason": trace.wave2_reason,
+        "consensus_type": trace.consensus_type,
+        "final_answer": final_ans,
+        "trace_verified": bool(trace.verified),
+        "recovered_from_disagreement": bool(trace.recovered_from_disagreement),
+        "rejected_branch": rejected_branch,
+    }
+    return chosen, rejected, rejected_reason, metadata
+
+
+def _extract_code_flywheel_pair(
+    trace: CodeForgeTrace,
+) -> Optional[tuple[str, str, str, dict[str, Any]]]:
+    """Return `(chosen, rejected, rejected_reason, metadata)` for a Red-Team/Wave-2 CodeForge rescue."""
+    if not trace.recovered_by_redteam_or_wave2:
+        return None
+    chosen = (trace.winner_code or "").strip()
+    if not chosen:
+        return None
+
+    failing_w1 = [c for c in trace.wave1_candidates if _is_failing_code_candidate(c)]
+    rejected = ""
+    rejected_reason = ""
+    rejected_name = ""
+
+    # Pass 1: Prefer a failing Wave-1 candidate with distinct executable code
+    for cand in failing_w1:
+        cand_code = (cand.code or "").strip()
+        if cand_code and cand_code != chosen:
+            rejected = cand_code
+            rejected_name = cand.name
+            rejected_reason = _format_code_failure_reason(cand)
+            break
+
+    # Pass 2: Fallback to raw model output if failing candidate had no extracted code block
+    if not rejected:
+        for cand in failing_w1:
+            cand_raw = (cand.raw_content or "").strip()
+            if cand_raw and cand_raw != chosen:
+                rejected = cand_raw
+                rejected_name = cand.name
+                rejected_reason = _format_code_failure_reason(cand)
+                break
+
+    if not rejected or rejected == chosen:
+        return None
+
+    metadata = {
+        "mode": "code",
+        "winner_name": trace.winner_name,
+        "wave2_triggered": bool(trace.wave2_triggered),
+        "wave2_reason": trace.wave2_reason,
+        "redteam_valid_kills": list(trace.redteam_valid_kills),
+        "trace_verified": bool(trace.verified),
+        "recovered_by_redteam_or_wave2": bool(trace.recovered_by_redteam_or_wave2),
+        "rejected_candidate": rejected_name,
+    }
+    return chosen, rejected, rejected_reason, metadata
 
 
 class FlashForge:
@@ -118,6 +282,56 @@ class FlashForge:
         )
         return rule
 
+    def _current_model_id(self) -> str:
+        caps = getattr(self.client, "_caps", None)
+        if caps is not None and getattr(caps, "model_id", ""):
+            return str(caps.model_id)
+        return str(self.config.model or getattr(self.client, "requested_model", None) or "")
+
+    def _maybe_record_flywheel(self, prompt: str, trace: Any) -> bool:
+        """Record a verified Wave-2/Red-Team rescue pair into the local flywheel JSONL store.
+
+        Never raises: any I/O or extraction failure is swallowed so solves never crash.
+        """
+        if not self.config.record_flywheel:
+            return False
+        try:
+            if isinstance(trace, ReasonForgeTrace):
+                extracted = _extract_reason_flywheel_pair(trace)
+                domain = "math"
+                source = "live_reason_forge"
+            elif isinstance(trace, CodeForgeTrace):
+                extracted = _extract_code_flywheel_pair(trace)
+                domain = "code"
+                source = "live_code_forge"
+            else:
+                return False
+
+            if extracted is None:
+                return False
+
+            chosen, rejected, rejected_reason, metadata = extracted
+            log_path = (
+                Path(self.config.flywheel_path)
+                if self.config.flywheel_path is not None
+                else Path.home() / ".cortheon" / "flywheel.jsonl"
+            )
+            record_live_trace(
+                log_path,
+                prompt=prompt,
+                chosen=chosen,
+                rejected=rejected,
+                domain=domain,
+                model=self._current_model_id(),
+                chosen_verified=True,
+                rejected_reason=rejected_reason,
+                source=source,
+                metadata=metadata,
+            )
+            return True
+        except Exception:
+            return False
+
     async def solve(
         self,
         prompt: str,
@@ -125,12 +339,22 @@ class FlashForge:
         force_mode: Optional[TaskMode] = None,
         external_test_code: Optional[str] = None,
         learn: bool = True,
+        on_event: Optional[Any] = None,
     ) -> ForgeResult:
         t0 = time.perf_counter()
         self.client.reset_stats()
         await self.client.probe()
 
+        def _emit(ev: dict[str, Any]) -> None:
+            if on_event is None:
+                return
+            try:
+                on_event(ev)
+            except Exception:
+                pass
+
         mode: TaskMode = force_mode or await classify_task(self.client, prompt)
+        _emit({"engine": mode, "event": "start", "mode": mode, "streams": self.config.num_streams})
 
         if mode == "fast":
             res = await self.client.complete(
@@ -143,10 +367,12 @@ class FlashForge:
                     loop_guard=True,
                 )
             )
+            wall_s = time.perf_counter() - t0
+            _emit({"engine": "fast", "event": "done", "elapsed_s": wall_s, "summary": "fast pass complete", "verified": False})
             return ForgeResult(
                 mode="fast",
                 answer=res.content,
-                wall_s=time.perf_counter() - t0,
+                wall_s=wall_s,
                 token_stats=self.client.stats_dict(),
             )
 
@@ -160,6 +386,7 @@ class FlashForge:
                 sandbox_timeout_s=self.config.sandbox_timeout_s,
                 deep=self.config.deep,
                 external_test_code=external_test_code,
+                on_event=on_event,
             )
             lesson = None
             if learn and trace.recovered_by_redteam_or_wave2 and trace.graveyard:
@@ -169,6 +396,7 @@ class FlashForge:
                     trace.graveyard,
                     f"Winner `{trace.winner_name}` passed checks after Red-Team/Wave-2 repair.",
                 )
+            flywheel_recorded = self._maybe_record_flywheel(prompt, trace)
             formatted = f"```python\n{trace.winner_code}\n```"
             return ForgeResult(
                 mode="code",
@@ -179,6 +407,7 @@ class FlashForge:
                 token_stats=self.client.stats_dict(),
                 lesson_learned=lesson,
                 verified=trace.verified,
+                flywheel_recorded=flywheel_recorded,
             )
 
         if mode == "think":
@@ -216,6 +445,7 @@ class FlashForge:
                 rtrace.graveyard,
                 f"Resolved to `{rtrace.final_answer}` via {rtrace.consensus_type}.",
             )
+        flywheel_recorded = self._maybe_record_flywheel(prompt, rtrace)
         return ForgeResult(
             mode="reason",
             answer=rtrace.final_answer,
@@ -224,6 +454,7 @@ class FlashForge:
             token_stats=self.client.stats_dict(),
             lesson_learned=lesson,
             verified=rtrace.verified,
+            flywheel_recorded=flywheel_recorded,
         )
 
     async def solve_repo_file(
