@@ -5,7 +5,9 @@ Gives frozen local models deterministic mechanical grounding:
   - macOS: ``/usr/bin/sandbox-exec`` Seatbelt profile blocking all network I/O,
     denying writes outside the ephemeral temp directory, and denying reads of
     sensitive credential directories (``~/.ssh``, ``~/.aws``, ``~/.gnupg``,
-    ``~/.kube``, ``~/.omp``, ``~/.pi``, ``~/.config``, ``~/.netrc``).
+    ``~/.kube``, ``~/.config``, ``~/.netrc``) and the home directories of coding
+    harnesses that keep credentials or transcripts there (``~/.omp``, ``~/.pi``,
+    ``~/.dsh``, ``~/.claude``, ``~/.codex``, ``~/.cursor``).
   - Linux: ``bwrap`` (bubblewrap) with ``--unshare-net`` and read-only root
     when ``bwrap`` is installed on ``PATH``.
   - All POSIX platforms: ``resource.setrlimit`` CPU time and 64 MiB file-size
@@ -99,7 +101,13 @@ def _build_macos_seatbelt_profile(resolved_tmpdir: Path) -> str:
         if str(resolved) and resolved not in home_candidates:
             home_candidates.append(resolved)
 
-    sensitive_dirs = (".ssh", ".aws", ".gnupg", ".kube", ".omp", ".pi", ".config")
+    sensitive_dirs = (
+        ".ssh", ".aws", ".gnupg", ".kube", ".config",
+        # Agent-harness homes. Cortheon is often run *from* one of these
+        # harnesses, so a solver script that can read them can exfiltrate the
+        # very credentials it was sandboxed to protect.
+        ".omp", ".pi", ".dsh", ".claude", ".codex", ".cursor",
+    )
     denied_read_rules: list[str] = []
     for home_dir in home_candidates:
         for rel in sensitive_dirs:
