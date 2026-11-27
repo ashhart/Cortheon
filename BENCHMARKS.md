@@ -15,19 +15,41 @@ Every result in this ledger is backed by per-problem, PII-scrubbed JSON files in
 
 ---
 
-## 1. Official Untouched External Benchmarks (**8 for 8 Wins — 200 Runs Across 3 Model Families**)
+## 1. Compute-Matched 6-Arm Ablation on Full Official `MathArena/aime_2025` (30/30, `GLM-5.3-Flash-TFQ3`)
 
-| Benchmark | Split & Judge | Model Family | Vanilla | **Cortheon v2** | Delta | Flips / Regressions | Avg Wall (V → C) | Result JSONs |
+Per-problem token-, call-, and latency-logged ablation across all 30 official AIME 2025 problems ([`results/official_aime2025_ablation_glm53.json`](results/official_aime2025_ablation_glm53.json), zero timeouts, all 8/8 streams completed on every `Maj@8` problem):
+
+| Arm | Accuracy `k/30` `[95% Wilson CI]` | Avg Wall | Avg Calls | Avg Total Tok | Avg Reason Tok | McNemar `p` vs `vanilla_b1` | McNemar `p` vs `maj4_prose` | McNemar `p` vs `maj8_prose` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `vanilla_b1` | `16/30` (**53.3%**) `[36.1, 69.8]` | `45.4s` | `1.00` | `2,781` | `1,002` | — | `1.0000` | `0.4531` |
+| `maj4_prose` | `16/30` (**53.3%**) `[36.1, 69.8]` | `75.2s` | `4.00` | `6,504` | `1,821` | `1.0000` | — | `0.3750` |
+| `maj8_prose` | `19/30` (**63.3%**) `[45.5, 78.1]` | `110.0s` | `8.00` | `13,314` | `3,760` | `0.4531` | `0.3750` | — |
+| `pal_b1` | `8/30` (**26.7%**) `[14.2, 44.5]` | `19.4s` | `1.00` | `1,425` | `196` | `0.0386*` | `0.0215*` | `0.0034**` |
+| **`cortheon_w1`** | `19/30` (**63.3%**) `[45.5, 78.1]` | **`63.4s`** | `4.07` | **`6,547`** | `1,013` | `0.5078` | `0.4531` | `1.0000` |
+| **`cortheon_full`** *(effort=low)* | `21/30` (**70.0%**) `[52.1, 83.3]` | `147.9s` | `6.23` | `14,396` | `2,592` | `0.2266` | `0.2266` | `0.7744` |
+| **`cortheon_full`** *(default `tb=700/950`)* | `24/30` (**80.0%**) `[62.7, 90.5]` | `175.8s` | `7.20` | `13,700` | — | `0.0386*` | `0.0574` | `0.1797` |
+
+- `cortheon_w1` matches `Maj@8` (`19/30`) at **0.49× tokens** (`6,547` vs `13,314`) and **1.74× faster wall time** (`63.4s` vs `110.0s`), while outperforming same-token `Maj@4` (`6,504` tok) by `+10.0` points.
+- `Maj@8` still suffers correlated prose collapses (`7/8` wrong on `AIME25_27`/`29`, `6/8` on `AIME25_14`, `5/8` on `AIME25_18`), whereas default `cortheon_full` reaches `24/30` at `~1.03×` `Maj@8` tokens (`+7/−2` over `Maj@8`, catching `AIME25_18` and `AIME25_27`).
+
+---
+
+## 2. Official Untouched External Benchmarks (200 Paired Runs Across 3 Model Families)
+
+> **Statistical honesty:** Math gains on full AIME 2025 are statistically significant when pooled (`51/90 → 72/90`, `+24/−3`, exact McNemar `p = 4.92e-05`). Individual coding slices (10–30 tasks) are positive but **statistically inconclusive per run (`p = 0.45–1.0`)** pending full 148-task BigCodeBench-Hard and full LiveCodeBench Hard sweeps. Recompute all numbers directly with `python -m bench.stats --dir results`.
+
+| Benchmark | Split & Judge | Model Family | Vanilla | **Cortheon v2** | Delta | Paired (`+fix/−brk`, Exact McNemar `p`) | Avg Wall (V → C) | Result JSONs |
 |---|---|---|---:|---:|---:|---|---:|---|
-| **`MathArena/aime_2025`** | All 30/30 official problems; exact integer match | `DeepSeek-V4.1-Flash-1017` | 20/30 (66.7%) | **27/30 (90.0%)** | **+23.3 pts** | `+9` flips / `-2` regr | `113.7s → 117.6s` | [vanilla](results/official_aime2025_deepseek_vanilla.json) · [cortheon](results/official_aime2025_deepseek_cortheon.json) |
-| **`MathArena/aime_2025`** | All 30/30 official problems; exact integer match | `GLM-5.3-Flash-TFQ3` | 15/30 (50.0%) | **24/30 (80.0%)** | **+30.0 pts** *(+60% rel)* | `+10` flips / `-1` regr | `125.5s → 175.8s` | [vanilla](results/official_aime2025_glm53_vanilla.json) · [cortheon](results/official_aime2025_glm53_cortheon.json) |
-| **`MathArena/aime_2025`** | All 30/30 official problems; exact integer match | `Qwen3.8-Flash-Next-TFQ3` | 16/30 (53.3%) | **21/30 (70.0%)** | **+16.7 pts** | `+5` flips / `0` regr | `69.2s → 80.5s` | [vanilla](results/official_aime2025_qwen38_vanilla.json) · [cortheon](results/official_aime2025_qwen38_cortheon.json) |
-| **`LiveCodeBench v6 Hard`** | 20 AtCoder F/G hard problems (~43 judge tests each; **oracle-free at solve time**) | `DeepSeek-V4.1-Flash-1017` | 11/20 (55.0%) | **13/20 (65.0%)** | **+10.0 pts** | `+2` (`abc391_f`, `abc394_f`) / `0` regr | `73.6s → 201.2s` | [vanilla](results/official_lcb_v6_hard_deepseek_vanilla.json) · [cortheon](results/official_lcb_v6_hard_deepseek_cortheon.json) |
-| **`LiveCodeBench v6 Hard`** | 20 AtCoder F/G hard problems (~43 judge tests each; **oracle-free at solve time**) | `GLM-5.3-Flash-TFQ3` | 8/20 (40.0%) | **11/20 (55.0%)** | **+15.0 pts** *(+37.5% rel)* | `+5` (`abc387_f`, `abc389_e`, `abc390_e`, `abc391_g`, `abc394_g`) / `-2` | `124.7s → 249.1s` | [vanilla](results/official_lcb_v6_hard_glm53_vanilla.json) · [cortheon](results/official_lcb_v6_hard_glm53_cortheon.json) |
-| **`bigcode/bigcodebench-hard v0.1.4`** | 30 macOS-verified tasks (`complete_prompt`; **oracle-free at solve time**) | `DeepSeek-V4.1-Flash-1017` | 10/30 (33.3%) | **11/30 (36.7%)** | **+3.3 pts** | `+2` / `-1` | `44.4s → 118.2s` | [vanilla](results/official_bcb_hard_complete_deepseek_vanilla.json) · [cortheon](results/official_bcb_hard_complete_deepseek_cortheon.json) |
-| **`bigcode/bigcodebench-hard v0.1.4`** | 30 macOS-verified tasks (`instruct_prompt`; **oracle-free at solve time**) | `Qwen3.8-Flash-Next-TFQ3` | 6/30 (20.0%) | **8/30 (26.7%)** | **+6.7 pts** *(+33% rel)* | `+2` net | `57.9s → 85.5s` | [vanilla](results/official_bcb_hard_instruct_qwen38_vanilla.json) · [cortheon](results/official_bcb_hard_instruct_qwen38_cortheon.json) |
-| **`bigcode/bigcodebench-hard v0.1.4`** | 10-task Acid slice (`complete_prompt`, `CodeForge v5.1`; **oracle-free**) | `GLM-5.3-Flash-TFQ3` | 1/10 (10.0%) | **2/10 (20.0%)** | **+10.0 pts** *(2× Vanilla)* | `+1` (`BigCodeBench_777`) / `0` regr | `17.2s → 45.9s` | [vanilla](results/official_bcb_hard_acid10_glm53_vanilla.json) · [cortheon](results/official_bcb_hard_acid10_glm53_cortheon.json) |
-| **Combined Official External (200 runs)** | **All 3 Model Families** | **DeepSeek + GLM-5.3 + Qwen** | **87/200 (43.5%)** | **117/200 (58.5%)** | **+15.0 pts (+34.5% rel)** | **8/8 wins** | — | [`results/summary.json`](results/summary.json) |
+| **`MathArena/aime_2025`** | All 30/30 official problems; exact integer match | `DeepSeek-V4.1-Flash-1017` | 20/30 (66.7%) | **27/30 (90.0%)** | **+23.3 pts** | `+9 / −2` (`p=0.0654`) | `113.7s → 117.6s` | [vanilla](results/official_aime2025_deepseek_vanilla.json) · [cortheon](results/official_aime2025_deepseek_cortheon.json) |
+| **`MathArena/aime_2025`** | All 30/30 official problems; exact integer match | `GLM-5.3-Flash-TFQ3` | 15/30 (50.0%) | **24/30 (80.0%)** | **+30.0 pts** *(+60% rel)* | `+10 / −1` (**`p=0.0117*`**) | `125.5s → 175.8s` | [vanilla](results/official_aime2025_glm53_vanilla.json) · [cortheon](results/official_aime2025_glm53_cortheon.json) |
+| **`MathArena/aime_2025`** | All 30/30 official problems; exact integer match | `Qwen3.8-Flash-Next-TFQ3` | 16/30 (53.3%) | **21/30 (70.0%)** | **+16.7 pts** | `+5 / −0` (`p=0.0625`) | `69.2s → 80.5s` | [vanilla](results/official_aime2025_qwen38_vanilla.json) · [cortheon](results/official_aime2025_qwen38_cortheon.json) |
+| **`LiveCodeBench v6 Hard`** | 20 AtCoder F/G hard problems (~43 judge tests each; **oracle-free**) | `DeepSeek-V4.1-Flash-1017` | 11/20 (55.0%) | 13/20 (65.0%) | +10.0 pts | `+2 / −0` (`p=0.5000`, ns) | `73.6s → 201.2s` | [vanilla](results/official_lcb_v6_hard_deepseek_vanilla.json) · [cortheon](results/official_lcb_v6_hard_deepseek_cortheon.json) |
+| **`LiveCodeBench v6 Hard`** | 20 AtCoder F/G hard problems (~43 judge tests each; **oracle-free**) | `GLM-5.3-Flash-TFQ3` | 8/20 (40.0%) | 11/20 (55.0%) | +15.0 pts | `+5 / −2` (`p=0.4531`, ns) | `124.7s → 249.1s` | [vanilla](results/official_lcb_v6_hard_glm53_vanilla.json) · [cortheon](results/official_lcb_v6_hard_glm53_cortheon.json) |
+| **`bigcode/bigcodebench-hard v0.1.4`** | 30/148 macOS-verified tasks (`complete_prompt`; **oracle-free**) | `DeepSeek-V4.1-Flash-1017` | 10/30 (33.3%) | 11/30 (36.7%) | +3.3 pts | `+2 / −1` (`p=1.0000`, ns) | `44.4s → 118.2s` | [vanilla](results/official_bcb_hard_complete_deepseek_vanilla.json) · [cortheon](results/official_bcb_hard_complete_deepseek_cortheon.json) |
+| **`bigcode/bigcodebench-hard v0.1.4`** | 30/148 macOS-verified tasks (`instruct_prompt`; **oracle-free**) | `Qwen3.8-Flash-Next-TFQ3` | 6/30 (20.0%) | 8/30 (26.7%) | +6.7 pts | `+3 / −1` (`p=0.6250`, ns) | `57.9s → 85.5s` | [vanilla](results/official_bcb_hard_instruct_qwen38_vanilla.json) · [cortheon](results/official_bcb_hard_instruct_qwen38_cortheon.json) |
+| **`bigcode/bigcodebench-hard v0.1.4`** | 10/148 Acid slice (`complete_prompt`, `CodeForge v5.1`; **oracle-free**) | `GLM-5.3-Flash-TFQ3` | 1/10 (10.0%) | 2/10 (20.0%) | +10.0 pts | `+1 / −0` (`p=1.0000`, ns) | `17.2s → 45.9s` | [vanilla](results/official_bcb_hard_acid10_glm53_vanilla.json) · [cortheon](results/official_bcb_hard_acid10_glm53_cortheon.json) |
+| **Pooled Official Math (90 runs)** | **All 3 Model Families** | **DeepSeek + GLM-5.3 + Qwen** | **51/90 (56.7%)** | **72/90 (80.0%)** | **+23.3 pts** | **`+24 / −3` (`p=4.92e-05***`)** | — | [`results/summary.json`](results/summary.json) |
+| **Pooled Official Code Slices (110 runs)** | **All 3 Model Families** | **DeepSeek + GLM-5.3 + Qwen** | **36/110 (32.7%)** | **45/110 (40.9%)** | **+8.2 pts** | **`+13 / −4` (`p=0.0490*`)** | — | [`results/summary.json`](results/summary.json) |
 
 ### Wave-1 PAL Consensus Calibration on Official `MathArena/aime_2025`
 
@@ -40,7 +62,11 @@ Whenever Cortheon's Wave-1 executable Python/SymPy/Z3 scripts reached consensus 
 
 ---
 
-## 2. Oracle-Free Open-Ended Systems, Physics & Security (`bench/open_ended_bench.py`)
+## 3. Author-Authored Development & Open-Ended Suites *(Not Held-Out External Benchmarks)*
+
+> **Honest negative result on pure open-ended prose:** In a 12-task compute-matched internal ablation of open-ended engineering/security/systems prose prompts (`GLM-5.3-Flash-TFQ3`), `vanilla_b1` scored `10/12 (83.3%)`, `Maj@4` prose self-consistency scored `11/12 (91.7%)`, and multi-stage adversarial prose falsification scored `9/12 (75.0%)` at `16.4k` tokens. We reverted that experimental prose-falsification layer rather than shipping a regression — verification gains require executable or formal invariants, not extra prose critique.
+
+### 3a. Open-Ended Systems, Physics & Security 10 (`bench/open_ended_bench.py`)
 
 10 natural-language principal-engineer architecture, capacity-physics, distributed-quorum, and security audit prompts — **no test suite, no `ANSWER:` tag, completely oracle-free at solve time** — evaluated objectively on exact quantitative bounds and hard physics/security trap detection on `GLM-5.3-Flash-TFQ3`:
 
@@ -51,7 +77,7 @@ Whenever Cortheon's Wave-1 executable Python/SymPy/Z3 scripts reached consensus 
 
 ---
 
-## 3. 100-Task Multi-Domain Frontier Gauntlets (`Qwen3.8-Flash-Next-TFQ3`)
+### 3b. 100-Task Multi-Domain Frontier Gauntlets *(Development Set, `Qwen3.8-Flash-Next-TFQ3`)*
 
 100 hand-engineered hard & nightmare tasks across 5 domains (`math`, `logic`, `algo`, `debug`, `sys/sec`), including **20 planted buggy starter controls** mechanically verified failing before running (`bench/run_gauntlet50.py`, `bench/run_gauntlet2.py`):
 
@@ -79,14 +105,14 @@ Whenever Cortheon's Wave-1 executable Python/SymPy/Z3 scripts reached consensus 
 
 ## Reproducing Every Benchmark From a Fresh Clone
 
-Fetch official datasets cleanly into `bench/datasets/` (no extra dependencies beyond `httpx`), run `bench/stats.py` to recompute every Wilson 95% CI and exact McNemar p-value directly from `results/`, or run the 5-arm compute-matched AIME 2025 ablation on your own server:
+Fetch official datasets cleanly into `bench/datasets/` (no extra dependencies beyond `httpx`), run `bench/stats.py` to recompute every Wilson 95% CI and exact McNemar p-value directly from `results/`, or run the 6-arm compute-matched AIME 2025 ablation on your own server:
 
 ```sh
 # 0. Download official datasets into bench/datasets/ + recompute exact paired statistics
 python -m bench.fetch_datasets --dataset all
 python -m bench.stats --dir results
 
-# 1. Compute-matched 5-arm AIME 2025 ablation (vanilla_b1 vs maj4_prose vs pal_b1 vs cortheon_w1 vs cortheon_full)
+# 1. Compute-matched 6-arm AIME 2025 ablation (vanilla_b1 vs maj4_prose vs maj8_prose vs pal_b1 vs cortheon_w1 vs cortheon_full)
 python -m bench.run_aime_ablation --url http://127.0.0.1:8080/v1 --dataset bench/datasets/aime_2025.json --out bench/results/aime25_ablation.json
 
 # 2. Official MathArena/aime_2025 (30/30)

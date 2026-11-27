@@ -1,4 +1,4 @@
-"""Unit tests for client raw-upstream safety, exact paired statistics, dataset fetcher, and 5-arm AIME ablation."""
+"""Unit tests for client raw-upstream safety, exact paired statistics, dataset fetcher, and 6-arm AIME ablation."""
 
 from __future__ import annotations
 
@@ -20,11 +20,15 @@ from bench.fetch_datasets import (
 from bench.run_aime_ablation import (
     ALL_ARMS,
     MAJ4_CONFIGS,
+    MAJ8_CONFIGS,
     build_ablation_payload,
+    format_ablation_table,
     grade_aime,
     main as ablation_main,
     merge_ablation_files,
+    run_maj8_prose,
     run_single_arm,
+    scrub_detail_paths,
     select_maj4_answer,
 )
 from bench.stats import (
@@ -321,6 +325,7 @@ def test_ablation_merge_shards_and_summary(tmp_path: Path):
         target = shard1_res if idx <= 15 else shard2_res
         target["vanilla_b1"].append(_row(idx, idx <= 15, 1, 2000, 30.0))      # 15/30
         target["maj4_prose"].append(_row(idx, idx <= 18, 4, 6000, 45.0))      # 18/30
+        target["maj8_prose"].append(_row(idx, idx <= 19, 8, 12000, 90.0))     # 19/30
         target["pal_b1"].append(_row(idx, idx <= 20, 1, 1500, 20.0))          # 20/30
         target["cortheon_w1"].append(_row(idx, idx <= 23, 3, 4500, 35.0))     # 23/30
         target["cortheon_full"].append(_row(idx, idx <= 27, 5, 7000, 50.0))   # 27/30
@@ -369,6 +374,7 @@ def test_ablation_merge_shards_and_summary(tmp_path: Path):
 
     assert merged["summary"]["vanilla_b1"]["correct"] == 15
     assert merged["summary"]["maj4_prose"]["correct"] == 18
+    assert merged["summary"]["maj8_prose"]["correct"] == 19
     assert merged["summary"]["pal_b1"]["correct"] == 20
     assert merged["summary"]["cortheon_w1"]["correct"] == 23
     assert merged["summary"]["cortheon_full"]["correct"] == 27
@@ -385,12 +391,17 @@ def test_ablation_merge_shards_and_summary(tmp_path: Path):
     assert (pw_m["n11"], pw_m["n01"], pw_m["n10"], pw_m["n00"]) == (18, 9, 0, 3)
     assert math.isclose(pw_m["mcnemar_exact_p"], 2.0 / (2**9), rel_tol=1e-12)
 
+    # cortheon_full (27) vs maj8_prose (19) -> +8/-0 -> 2/2^8
+    pw_m8 = merged["pairwise"]["cortheon_full_vs_maj8_prose"]
+    assert (pw_m8["n11"], pw_m8["n01"], pw_m8["n10"], pw_m8["n00"]) == (19, 8, 0, 3)
+    assert math.isclose(pw_m8["mcnemar_exact_p"], 2.0 / (2**8), rel_tol=1e-12)
+
     # Also verify direct helper call
     direct = merge_ablation_files([p1, p2])
     assert direct["summary"]["cortheon_full"]["correct"] == 27
 
 
-def test_all_five_ablation_arms_log_complete_schema():
+def test_all_six_ablation_arms_log_complete_schema():
     required_keys = {
         "id",
         "expected",
@@ -441,6 +452,10 @@ def test_all_five_ablation_arms_log_complete_schema():
             elif tag.startswith("abl_maj4_s0"):
                 content = "ANSWER: 99"
             elif tag.startswith("abl_maj4_"):
+                content = "ANSWER: 70"
+            elif tag.startswith("abl_maj8_s0") or tag.startswith("abl_maj8_s1"):
+                content = "ANSWER: 99"
+            elif tag.startswith("abl_maj8_"):
                 content = "ANSWER: 70"
             elif tag.startswith("abl_pal_b1"):
                 content = "```python\nassert 7 * 10 == 70\nprint('ANSWER: 70')\n```"
@@ -515,6 +530,13 @@ def test_all_five_ablation_arms_log_complete_schema():
     assert [(s.seed, s.temperature) for s in m_specs] == list(MAJ4_CONFIGS)
     assert all(s.thinking_budget == 1000 and s.max_tokens == 4096 for s in m_specs)
 
+    # Verify exact hyperparams of maj8_prose
+    _, m8_specs = ran["maj8_prose"]
+    assert len(m8_specs) == 8
+    assert [(s.seed, s.temperature) for s in m8_specs] == list(MAJ8_CONFIGS)
+    assert all(s.thinking_budget == 1000 and s.max_tokens == 4096 for s in m8_specs)
+    assert all(len(s.messages) == 1 and s.messages[0]["role"] == "user" for s in m8_specs)
+
     # Verify exact hyperparams of pal_b1
     _, p_specs = ran["pal_b1"]
     assert len(p_specs) == 1
@@ -528,6 +550,269 @@ def test_all_five_ablation_arms_log_complete_schema():
     assert not any(s.tag.startswith("w2_") for s in w1_specs)
     assert "wave2=True" in full_row["detail"]
     assert any(s.tag.startswith("w2_") for s in full_specs)
+
+
+def test_maj8_prose_voting_disjoint_arm_merge_and_path_scrubbing(tmp_path: Path):
+    """Verify maj8_prose (8 prose calls, no Python exec, voting/tiebreak), disjoint-arm --merge, and path scrubbing."""
+
+    class _Maj8Client:
+        def __init__(self, responses: list[str]) -> None:
+            self.responses = responses
+            self.batch_calls: list[list[CallSpec]] = []
+            self.reset_stats()
+
+        def reset_stats(self) -> None:
+            self.calls = 0
+            self.pt = 0
+            self.ct = 0
+            self.rt = 0
+            self.cache = 0
+
+        def stats_dict(self) -> dict[str, int]:
+            return {
+                "calls": self.calls,
+                "prompt_tokens": self.pt,
+                "completion_tokens": self.ct,
+                "reasoning_tokens": self.rt,
+                "cached_tokens": self.cache,
+            }
+
+        async def batch(self, specs: list[CallSpec]) -> list[CompletionResult]:
+            self.batch_calls.append(specs)
+            out: list[CompletionResult] = []
+            for spec, text in zip(specs, self.responses):
+                self.calls += 1
+                self.pt += 250
+                self.ct += 1500
+                self.rt += 600
+                self.cache += 100
+                out.append(
+                    CompletionResult(
+                        content=text,
+                        reasoning="prose reasoning",
+                        finish_reason="stop",
+                        prompt_tokens=250,
+                        completion_tokens=1500,
+                        reasoning_tokens=600,
+                        cached_tokens=100,
+                        latency_s=0.01,
+                        tag=spec.tag,
+                    )
+                )
+            return out
+
+    item = {
+        "id": "AIME25_07",
+        "problem_idx": 7,
+        "prompt": "Find the value. End your final response with `ANSWER: <integer>`.",
+        "expected": "70",
+    }
+
+    # 1. Clear 4-vote majority across 8 parallel calls (including boxed/leading-zero/float normalization,
+    #    and fenced python block that MUST NOT be executed!)
+    responses_majority = [
+        "ANSWER: 123",                                                       # s0 temp=0.20
+        "```python\nraise SystemExit('must not execute')\n```\nANSWER: 070", # s1 temp=0.30
+        "Therefore \\boxed{70}",                                             # s2 temp=0.40
+        "ANSWER: 999",                                                       # s3 temp=0.50
+        "`ANSWER: 70.0`",                                                    # s4 temp=0.35
+        "ANSWER: 123",                                                       # s5 temp=0.45
+        "ANSWER: 70",                                                        # s6 temp=0.55
+        "ANSWER: 1024",                                                      # s7 temp=0.60 (out of 0..999 range)
+    ]
+    c_maj = _Maj8Client(responses_majority)
+    row_maj = asyncio.run(run_maj8_prose(c_maj, item))  # type: ignore[arg-type]
+
+    assert len(c_maj.batch_calls) == 1
+    specs = c_maj.batch_calls[0]
+    assert len(specs) == 8
+    assert [s.seed for s in specs] == [101, 202, 303, 404, 505, 606, 707, 808]
+    assert [s.temperature for s in specs] == [0.20, 0.30, 0.40, 0.50, 0.35, 0.45, 0.55, 0.60]
+    assert all(s.thinking_budget == 1000 and s.max_tokens == 4096 for s in specs)
+    assert row_maj["llm_calls"] == 8
+    assert row_maj["predicted"] == "70"
+    assert row_maj["correct"] is True
+    assert "maj8_prose (4/8;" in row_maj["detail"]
+
+    # 2. Exact 4-4 tie broken by lowest-temperature valid sample (0.20 < 0.30 -> 88 wins over 70)
+    responses_tie = [
+        "ANSWER: 88",  # s0 temp=0.20 (lowest temp!)
+        "ANSWER: 70",  # s1 temp=0.30
+        "ANSWER: 70",  # s2 temp=0.40
+        "ANSWER: 70",  # s3 temp=0.50
+        "ANSWER: 70",  # s4 temp=0.35
+        "ANSWER: 88",  # s5 temp=0.45
+        "ANSWER: 88",  # s6 temp=0.55
+        "ANSWER: 88",  # s7 temp=0.60
+    ]
+    c_tie = _Maj8Client(responses_tie)
+    row_tie = asyncio.run(run_maj8_prose(c_tie, item))  # type: ignore[arg-type]
+    assert row_tie["predicted"] == "88"
+    assert row_tie["correct"] is False
+    assert "4/8 (tie->low_temp)" in row_tie["detail"]
+
+    # 3. --merge merging disjoint arm files: 5-arm 30/30 file + maj8_prose 30/30 file -> 6-arm merged JSON
+    def _mk_row(idx: int, correct: bool, calls: int, tok: int, wall: float, detail: str = "") -> dict[str, Any]:
+        exp = str((idx * 19) % 1000)
+        return {
+            "id": f"AIME25_{idx:02d}",
+            "expected": exp,
+            "predicted": exp if correct else "999",
+            "correct": correct,
+            "wall_s": wall,
+            "llm_calls": calls,
+            "prompt_tokens": tok // 3,
+            "completion_tokens": tok - tok // 3,
+            "reasoning_tokens": tok // 5,
+            "cached_tokens": 0,
+            "total_tokens": tok,
+            "detail": detail or ("OK" if correct else "WRONG"),
+        }
+
+    five_arms = ["vanilla_b1", "maj4_prose", "pal_b1", "cortheon_w1", "cortheon_full"]
+    five_res: dict[str, list[dict[str, Any]]] = {a: [] for a in five_arms}
+    maj8_rows: list[dict[str, Any]] = []
+
+    for idx in range(1, 31):
+        # Craft non-nested outcomes so discordant pairs (n01, n10) are both exercised cleanly:
+        # vanilla_b1: 1..15 (15/30)
+        # maj4_prose: 1..16 (16/30)
+        # maj8_prose: 1..14 + 25..26 (16/30) -> vs cortheon_full (1..24): n11=14, n01=10, n10=2, n00=4
+        # pal_b1:     1..8 (8/30)
+        # cortheon_w1: 1..20 (20/30)
+        # cortheon_full: 1..24 (24/30)
+        five_res["vanilla_b1"].append(_mk_row(idx, idx <= 15, 1, 2800, 45.0))
+        five_res["maj4_prose"].append(_mk_row(idx, idx <= 16, 4, 6500, 75.0))
+        pal_detail = (
+            'pal_b1 | exec_err=File "/private/var/folders/4x/_abc123def456gn/T/ff_exec_zz99/_run.py", line 2 '
+            'and /Users/exampleuser/Documents/secret/proj.py | empty'
+            if idx == 9
+            else (
+                'pal_b1 | exec_err=...(truncated)...\nabc123def456gn/T/ff_exec_a_o6mlwn/_run.py", line 4 | empty'
+                if idx == 10
+                else "pal_b1 | ok"
+            )
+        )
+        five_res["pal_b1"].append(_mk_row(idx, idx <= 8, 1, 1400, 20.0, detail=pal_detail))
+        five_res["cortheon_w1"].append(_mk_row(idx, idx <= 20, 4, 6600, 63.0))
+        five_res["cortheon_full"].append(_mk_row(idx, idx <= 24, 6, 14400, 148.0))
+        maj8_rows.append(_mk_row(idx, (idx <= 14 or idx in (25, 26)), 8, 13800, 140.0))
+
+    five_path = tmp_path / "official_five_arm_30.json"
+    maj8_path = tmp_path / "aime25_maj8_prose_30.json"
+    merged_path = tmp_path / "official_six_arm_30.json"
+
+    # Write five_path with raw unscrubbed paths in results to verify --merge scrubs pre-existing files too
+    five_payload_raw = build_ablation_payload(
+        model="glm-5.3-flash-tfq3",
+        arms=five_arms,
+        results_by_arm=five_res,
+        range_info={"start": 0, "end": 30, "shards": 2},
+    )
+    five_payload_raw["results"]["pal_b1"][8]["detail"] = (
+        'pal_b1 | exec_err=File "/private/var/folders/4x/_abc123def456gn/T/ff_exec_zz99/_run.py", line 2 '
+        "and /Users/exampleuser/Documents/secret/proj.py | empty"
+    )
+    five_payload_raw["results"]["pal_b1"][9]["detail"] = (
+        'pal_b1 | exec_err=...(truncated)...\nabc123def456gn/T/ff_exec_a_o6mlwn/_run.py", line 4 | empty'
+    )
+    five_path.write_text(json.dumps(five_payload_raw, indent=2), encoding="utf-8")
+
+    maj8_payload = build_ablation_payload(
+        model="glm-5.3-flash-tfq3",
+        arms=["maj8_prose"],
+        results_by_arm={"maj8_prose": maj8_rows},
+        range_info={"start": 0, "end": 30},
+    )
+    maj8_path.write_text(json.dumps(maj8_payload, indent=2), encoding="utf-8")
+
+    rc = ablation_main(["--merge", str(five_path), str(maj8_path), "--out", str(merged_path)])
+    assert rc == 0
+
+    raw_text = merged_path.read_text(encoding="utf-8")
+    merged = json.loads(raw_text)
+
+    # Canonical 6-arm order preserved regardless of input file order
+    assert merged["arms"] == list(ALL_ARMS)
+    assert merged["model"] == "glm-5.3-flash-tfq3"
+    assert merged["range"] == {"start": 0, "end": 30, "shards": 2}
+    assert merged["merged_from"] == ["official_five_arm_30.json", "aime25_maj8_prose_30.json"]
+
+    for arm in ALL_ARMS:
+        assert len(merged["results"][arm]) == 30
+        assert [r["id"] for r in merged["results"][arm]] == [f"AIME25_{i:02d}" for i in range(1, 31)]
+
+    assert merged["summary"]["vanilla_b1"]["correct"] == 15
+    assert merged["summary"]["maj4_prose"]["correct"] == 16
+    assert merged["summary"]["maj8_prose"]["correct"] == 16
+    assert merged["summary"]["pal_b1"]["correct"] == 8
+    assert merged["summary"]["cortheon_w1"]["correct"] == 20
+    assert merged["summary"]["cortheon_full"]["correct"] == 24
+
+    # Exact paired McNemar stats against vanilla_b1, maj4_prose, AND maj8_prose!
+    pw_v = merged["pairwise"]["cortheon_full_vs_vanilla_b1"]
+    assert (pw_v["n11"], pw_v["n01"], pw_v["n10"], pw_v["n00"]) == (15, 9, 0, 6)
+    assert math.isclose(pw_v["mcnemar_exact_p"], mcnemar_exact_p(9, 0), rel_tol=1e-12)
+
+    pw_m4 = merged["pairwise"]["cortheon_full_vs_maj4_prose"]
+    assert (pw_m4["n11"], pw_m4["n01"], pw_m4["n10"], pw_m4["n00"]) == (16, 8, 0, 6)
+    assert math.isclose(pw_m4["mcnemar_exact_p"], mcnemar_exact_p(8, 0), rel_tol=1e-12)
+
+    pw_m8 = merged["pairwise"]["cortheon_full_vs_maj8_prose"]
+    assert (pw_m8["n11"], pw_m8["n01"], pw_m8["n10"], pw_m8["n00"]) == (14, 10, 2, 4)
+    assert math.isclose(pw_m8["mcnemar_exact_p"], mcnemar_exact_p(10, 2), rel_tol=1e-12)
+    assert math.isclose(pw_m8["token_ratio"], round(14400 / 13800, 3), rel_tol=1e-9)
+
+    pw_m8_v = merged["pairwise"]["maj8_prose_vs_vanilla_b1"]
+    assert (pw_m8_v["n11"], pw_m8_v["n01"], pw_m8_v["n10"], pw_m8_v["n00"]) == (14, 2, 1, 13)
+    assert math.isclose(pw_m8_v["mcnemar_exact_p"], mcnemar_exact_p(2, 1), rel_tol=1e-12)
+
+    # Also verify reverse-order and mixed (5-arm full + 2 maj8 problem shards) merge produce identical stats
+    maj8_s1 = tmp_path / "maj8_0_15.json"
+    maj8_s2 = tmp_path / "maj8_15_30.json"
+    maj8_s1.write_text(
+        json.dumps(
+            build_ablation_payload(
+                model="glm-5.3-flash-tfq3",
+                arms=["maj8_prose"],
+                results_by_arm={"maj8_prose": maj8_rows[:15]},
+                range_info={"start": 0, "end": 15},
+            )
+        ),
+        encoding="utf-8",
+    )
+    maj8_s2.write_text(
+        json.dumps(
+            build_ablation_payload(
+                model="glm-5.3-flash-tfq3",
+                arms=["maj8_prose"],
+                results_by_arm={"maj8_prose": maj8_rows[15:]},
+                range_info={"start": 15, "end": 30},
+            )
+        ),
+        encoding="utf-8",
+    )
+    mixed = merge_ablation_files([maj8_s2, five_path, maj8_s1])
+    assert mixed["arms"] == list(ALL_ARMS)
+    assert mixed["pairwise"]["cortheon_full_vs_maj8_prose"] == pw_m8
+    assert "McNemar p vs `maj8_prose`" in format_ablation_table(mixed)
+
+    # 4. Verify ephemeral temp paths & /Users/... paths were scrubbed cleanly from written JSON
+    assert "/private/var/folders" not in raw_text
+    assert "/var/folders" not in raw_text
+    assert "/Users/" not in raw_text
+    assert "exampleuser" not in raw_text
+    assert "ff_exec_" not in raw_text
+    assert "<TMPDIR>/_run.py" in merged["results"]["pal_b1"][8]["detail"]
+    assert "<HOME>" in merged["results"]["pal_b1"][8]["detail"]
+    assert "<TMPDIR>/_run.py" in merged["results"]["pal_b1"][9]["detail"]
+
+    # Direct unit checks on scrub_detail_paths edge cases
+    assert scrub_detail_paths('File "/private/var/folders/4x/_q9b/T/ff_exec_12ab/_ru') == 'File "<TMPDIR>/_ru'
+    assert scrub_detail_paths('File "/private/var/folders/4x/_q9b') == 'File "<TMPDIR>'
+    assert scrub_detail_paths('File "/tmp/ff_exec_abc123/_run.py"') == 'File "<TMPDIR>/_run.py"'
+    assert scrub_detail_paths("path=/home/alice/work/file.py:42") == "path=<HOME>:42"
+    assert scrub_detail_paths("see https://example.com/home/docs") == "see https://example.com/home/docs"
 
 
 def test_fetch_datasets_mocked_pagination_and_filtering(tmp_path: Path):

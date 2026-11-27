@@ -1,15 +1,19 @@
-"""5-Arm Compute-Matched Ablation Runner on Full 30/30 Official MathArena/aime_2025.
+"""6-Arm Compute-Matched Ablation Runner on Full 30/30 Official MathArena/aime_2025.
 
 Arms:
   1. vanilla_b1    : Single prose call (B=1, temp=0.6, seed=42, tb=1500, max_tokens=8192)
   2. maj4_prose    : Compute-matched B=4 parallel prose majority vote (no Python execution;
                      seeds 101/202/303/404, temps 0.25/0.55/0.45/0.35, tb=1000, max_tokens=4096;
                      majority normalized 0..999 integer wins, tie broken by lowest-temp valid answer)
-  3. pal_b1        : Single executable PAL Python script (B=1, pal_exact card, seed=101,
+  3. maj8_prose    : Compute-matched B=8 parallel prose majority vote (~13-15k tokens matching
+                     full Cortheon; no Python execution; seeds 101/202/303/404/505/606/707/808,
+                     temps 0.20/0.30/0.40/0.50/0.35/0.45/0.55/0.60, tb=1000, max_tokens=4096;
+                     majority normalized 0..999 integer wins, tie broken by lowest-temp valid answer)
+  4. pal_b1        : Single executable PAL Python script (B=1, pal_exact card, seed=101,
                      temp=0.25, tb=500, reasoning_effort="low", 20s sandbox, no consensus/Wave 2)
-  4. cortheon_w1   : B=4 Wave-1 PAL consensus WITHOUT Wave 2 (ReasonForge Wave 1 with
+  5. cortheon_w1   : B=4 Wave-1 PAL consensus WITHOUT Wave 2 (ReasonForge Wave 1 with
                      early-abort, low-effort PAL, 20s sandbox, NO Wave-2 falsifier)
-  5. cortheon_full : Full ReasonForge (`solve_reasoning`: Wave 1 early-abort + conditional
+  6. cortheon_full : Full ReasonForge (`solve_reasoning`: Wave 1 early-abort + conditional
                      Wave 2 falsifier + conditional Wave 3 fallback, enable_memory=False)
 
 Sharding & Merging:
@@ -17,8 +21,10 @@ Sharding & Merging:
     python -m bench.run_aime_ablation --url http://127.0.0.1:8080/v1 --start 0 --end 15 --out bench/results/ablation_s1.json
     # Shard 2 (problems 15..30)
     python -m bench.run_aime_ablation --url http://127.0.0.1:8081/v1 --start 15 --end 30 --out bench/results/ablation_s2.json
-    # Merge cleanly into 30/30 with exact Wilson CIs & paired McNemar p-values
-    python -m bench.run_aime_ablation --merge bench/results/ablation_s1.json bench/results/ablation_s2.json --out bench/results/ablation_30.json
+    # Run an additional single arm (e.g., maj8_prose) separately
+    python -m bench.run_aime_ablation --url http://127.0.0.1:8080/v1 --arms maj8_prose --start 0 --end 30 --out bench/results/ablation_maj8.json
+    # Merge disjoint problem-range shards AND/OR disjoint arm files into one unified JSON
+    python -m bench.run_aime_ablation --merge bench/results/ablation_s1.json bench/results/ablation_s2.json bench/results/ablation_maj8.json --out bench/results/ablation_30.json
 """
 
 from __future__ import annotations
@@ -49,6 +55,7 @@ from .stats import format_p_value, mcnemar_exact_p, paired_contingency, wilson_c
 ALL_ARMS: tuple[str, ...] = (
     "vanilla_b1",
     "maj4_prose",
+    "maj8_prose",
     "pal_b1",
     "cortheon_w1",
     "cortheon_full",
@@ -60,6 +67,47 @@ MAJ4_CONFIGS: tuple[tuple[int, float], ...] = (
     (303, 0.45),
     (404, 0.35),
 )
+
+MAJ8_CONFIGS: tuple[tuple[int, float], ...] = (
+    (101, 0.20),
+    (202, 0.30),
+    (303, 0.40),
+    (404, 0.50),
+    (505, 0.35),
+    (606, 0.45),
+    (707, 0.55),
+    (808, 0.60),
+)
+
+_TMPDIR_FULL_RE = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?:/private)?/var/folders/[^'\"\s/]+/[^'\"\s/]+/T/(?:ff_exec_[^'\"\s/]+|tmp[^'\"\s/]+)|"
+    r"(?<![A-Za-z0-9_.-])(?:/private)?/tmp/(?:ff_exec_[^'\"\s/]+|tmp[A-Za-z0-9_]+)"
+)
+_TMPDIR_TRUNC_RE = re.compile(
+    r"(?<![A-Za-z0-9_.-])(?:/private)?/var/folders(?:/[^'\"\s),;:]*)?|"
+    r"(?:[A-Za-z0-9_]+/)?T/(?:ff_exec_[^'\"\s/]+|tmp[A-Za-z0-9_]+)"
+)
+_HOME_PATH_RE = re.compile(r"(?<![A-Za-z0-9_.-])(?:/Users|/home)/[^'\"\s),;:]+")
+
+
+def scrub_detail_paths(text: str) -> str:
+    """Scrub ephemeral sandbox temp paths and host user home paths from `detail` strings."""
+    if not text:
+        return text
+    cleaned = _TMPDIR_FULL_RE.sub("<TMPDIR>", text)
+    cleaned = _TMPDIR_TRUNC_RE.sub("<TMPDIR>", cleaned)
+    cleaned = _HOME_PATH_RE.sub("<HOME>", cleaned)
+    return cleaned
+
+
+def _scrub_row(row: dict[str, Any]) -> dict[str, Any]:
+    detail = row.get("detail")
+    if isinstance(detail, str):
+        scrubbed = scrub_detail_paths(detail)
+        if scrubbed != detail:
+            row = dict(row)
+            row["detail"] = scrubbed
+    return row
 
 _AIME_SHARED_SYS = (
     "You are a precision reasoning engine running inside a verified neuro-symbolic sandbox "
@@ -236,7 +284,7 @@ def _make_record(
         "reasoning_tokens": reason_tok,
         "cached_tokens": cached_tok,
         "total_tokens": prompt_tok + comp_tok,
-        "detail": detail,
+        "detail": scrub_detail_paths(detail),
     }
 
 
@@ -260,18 +308,25 @@ async def run_arm_vanilla_b1(client: TensorFoldClient, item: dict[str, Any]) -> 
     wall_s = time.perf_counter() - t0
     predicted = extract_prose_candidate(res.content) if res.ok else ""
     correct, grade_msg = grade_aime(predicted, item["expected"])
-    err_note = f" | err={res.raw_error[:100]}" if res.raw_error else ""
+    err_note = f" | err={scrub_detail_paths(res.raw_error)[:100]}" if res.raw_error else ""
     detail = f"vanilla_b1 | finish={res.finish_reason} | {grade_msg}{err_note}"
     return _make_record(item, predicted, correct, wall_s, client.stats_dict(), detail)
 
 
-async def run_arm_maj4_prose(client: TensorFoldClient, item: dict[str, Any]) -> dict[str, Any]:
+async def _run_arm_maj_prose(
+    client: TensorFoldClient,
+    item: dict[str, Any],
+    *,
+    arm_name: str,
+    tag_prefix: str,
+    configs: tuple[tuple[int, float], ...],
+) -> dict[str, Any]:
     client.reset_stats()
     t0 = time.perf_counter()
     specs = [
         CallSpec(
             messages=[{"role": "user", "content": item["prompt"]}],
-            tag=f"abl_maj4_s{i}_{item['id']}",
+            tag=f"{tag_prefix}_s{i}_{item['id']}",
             max_tokens=4096,
             temperature=temp,
             top_p=0.95,
@@ -281,20 +336,43 @@ async def run_arm_maj4_prose(client: TensorFoldClient, item: dict[str, Any]) -> 
             thinking_budget=1000,
             loop_guard=True,
         )
-        for i, (seed, temp) in enumerate(MAJ4_CONFIGS)
+        for i, (seed, temp) in enumerate(configs)
     ]
     results = await client.batch(specs)
     wall_s = time.perf_counter() - t0
     samples = [
         (temp, res.content if res.ok else "")
-        for (_, temp), res in zip(MAJ4_CONFIGS, results)
+        for (_, temp), res in zip(configs, results)
     ]
     predicted, meta = select_maj4_answer(samples)
     correct, grade_msg = grade_aime(predicted, item["expected"])
     votes_str = ", ".join(f"{k}:{v}" for k, v in meta["vote_counts"].items()) or "none"
     tie_note = " (tie->low_temp)" if meta["tie_broken_by_temp"] else ""
-    detail = f"maj4_prose ({meta['winner_count']}/4{tie_note}; votes=[{votes_str}]) | {grade_msg}"
+    detail = f"{arm_name} ({meta['winner_count']}/{len(configs)}{tie_note}; votes=[{votes_str}]) | {grade_msg}"
     return _make_record(item, predicted, correct, wall_s, client.stats_dict(), detail)
+
+
+async def run_arm_maj4_prose(client: TensorFoldClient, item: dict[str, Any]) -> dict[str, Any]:
+    return await _run_arm_maj_prose(
+        client,
+        item,
+        arm_name="maj4_prose",
+        tag_prefix="abl_maj4",
+        configs=MAJ4_CONFIGS,
+    )
+
+
+async def run_arm_maj8_prose(client: TensorFoldClient, item: dict[str, Any]) -> dict[str, Any]:
+    return await _run_arm_maj_prose(
+        client,
+        item,
+        arm_name="maj8_prose",
+        tag_prefix="abl_maj8",
+        configs=MAJ8_CONFIGS,
+    )
+
+
+run_maj8_prose = run_arm_maj8_prose
 
 
 async def run_arm_pal_b1(
@@ -339,7 +417,7 @@ async def run_arm_pal_b1(
     predicted = out.norm_answer if (res.ok and not out.error) else ""
     correct, grade_msg = grade_aime(predicted, item["expected"])
     if out.error:
-        detail = f"pal_b1 | exec_err={out.error[:120]} | {grade_msg}"
+        detail = f"pal_b1 | exec_err={scrub_detail_paths(out.error)[:120]} | {grade_msg}"
     else:
         detail = f"pal_b1 | ok (assert={out.verified_constraints}) | {grade_msg}"
     return _make_record(item, predicted, correct, wall_s, client.stats_dict(), detail)
@@ -392,7 +470,8 @@ async def run_arm_cortheon_full(
     wall_s = time.perf_counter() - t0
     predicted = normalize_answer(trace.final_answer)
     correct, grade_msg = grade_aime(predicted, item["expected"])
-    w2_note = f" ({trace.wave2_reason[:80]})" if trace.wave2_triggered and trace.wave2_reason else ""
+    w2_reason = scrub_detail_paths(trace.wave2_reason)[:80] if trace.wave2_reason else ""
+    w2_note = f" ({w2_reason})" if trace.wave2_triggered and w2_reason else ""
     detail = f"{trace.consensus_type} | wave2={trace.wave2_triggered}{w2_note} | {grade_msg}"
     return _make_record(item, predicted, correct, wall_s, client.stats_dict(), detail)
 
@@ -407,6 +486,8 @@ async def run_single_arm(
         return await run_arm_vanilla_b1(client, item)
     if arm == "maj4_prose":
         return await run_arm_maj4_prose(client, item)
+    if arm == "maj8_prose":
+        return await run_arm_maj8_prose(client, item)
     if arm == "pal_b1":
         return await run_arm_pal_b1(client, skills, item)
     if arm == "cortheon_w1":
@@ -469,7 +550,7 @@ def summarize_arm(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def compute_pairwise_comparisons(
     results_by_arm: dict[str, list[dict[str, Any]]],
-    baselines: tuple[str, ...] = ("vanilla_b1", "maj4_prose"),
+    baselines: tuple[str, ...] = ("vanilla_b1", "maj4_prose", "maj8_prose"),
 ) -> dict[str, dict[str, Any]]:
     """Compute exact paired McNemar tests + compute ratios of every arm against key baselines."""
     out: dict[str, dict[str, Any]] = {}
@@ -526,7 +607,10 @@ def build_ablation_payload(
     ordered_results: dict[str, list[dict[str, Any]]] = {}
     summary: dict[str, dict[str, Any]] = {}
     for arm in arms:
-        rows = sorted(results_by_arm.get(arm, []), key=lambda r: _id_sort_key(r["id"]))
+        rows = [
+            _scrub_row(r)
+            for r in sorted(results_by_arm.get(arm, []), key=lambda r: _id_sort_key(r["id"]))
+        ]
         ordered_results[arm] = rows
         summary[arm] = summarize_arm(rows)
 
@@ -552,7 +636,7 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
 
 
 def merge_ablation_files(shard_paths: list[Path], out_path: Optional[Path] = None) -> dict[str, Any]:
-    """Merge 2+ sharded ablation JSON files cleanly by arm and problem `id`."""
+    """Merge 2+ ablation JSON files cleanly across disjoint problem-range shards AND/OR disjoint arms."""
     if not shard_paths:
         raise ValueError("merge_ablation_files requires at least one input file")
 
@@ -564,7 +648,7 @@ def merge_ablation_files(shard_paths: list[Path], out_path: Optional[Path] = Non
     for sp in shard_paths:
         data = json.loads(sp.read_text(encoding="utf-8"))
         m = str(data.get("model", "")).strip()
-        if m and m not in models:
+        if m and m.lower() != "unknown" and m not in models:
             models.append(m)
         if "range" in data:
             ranges.append(data["range"])
@@ -575,11 +659,13 @@ def merge_ablation_files(shard_paths: list[Path], out_path: Optional[Path] = Non
             if arm not in seen_arms:
                 seen_arms.append(arm)
         for arm, rows in res_map.items():
+            if not isinstance(rows, list):
+                raise ValueError(f"Shard {sp} arm {arm!r} must map to a list of rows")
             if arm not in seen_arms:
                 seen_arms.append(arm)
             arm_dict = merged_by_arm.setdefault(arm, {})
             for row in rows:
-                arm_dict[str(row["id"])] = row
+                arm_dict[str(row["id"])] = _scrub_row(row)
 
     canonical_arms = [a for a in ALL_ARMS if a in seen_arms] + [a for a in seen_arms if a not in ALL_ARMS]
     results_by_arm = {
@@ -612,11 +698,26 @@ def format_ablation_table(payload: dict[str, Any]) -> str:
     arms = payload.get("arms", [])
     summary = payload.get("summary", {})
     pairwise = payload.get("pairwise", {})
+    show_maj8 = "maj8_prose" in arms or any(k.endswith("_vs_maj8_prose") for k in pairwise)
+    header_cols = [
+        "Arm",
+        "Accuracy k/n [95% Wilson CI]",
+        "Avg Wall",
+        "Avg Calls",
+        "Avg Total Tok",
+        "Avg Reason Tok",
+        "McNemar p vs `vanilla_b1`",
+        "McNemar p vs `maj4_prose`",
+    ]
+    align_cols = ["---", "---:", "---:", "---:", "---:", "---:", "---:", "---:"]
+    if show_maj8:
+        header_cols.append("McNemar p vs `maj8_prose`")
+        align_cols.append("---:")
     lines = [
-        f"### Official AIME 2025 5-Arm Ablation (`{payload.get('model', 'unknown')}`)",
+        f"### Official AIME 2025 {len(arms)}-Arm Ablation (`{payload.get('model', 'unknown')}`)",
         "",
-        "| Arm | Accuracy k/n [95% Wilson CI] | Avg Wall | Avg Calls | Avg Total Tok | Avg Reason Tok | McNemar p vs `vanilla_b1` | McNemar p vs `maj4_prose` |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| " + " | ".join(header_cols) + " |",
+        "|" + "|".join(align_cols) + "|",
     ]
     for arm in arms:
         s = summary.get(arm, {})
@@ -627,12 +728,17 @@ def format_ablation_table(payload: dict[str, Any]) -> str:
         p_maj = pairwise.get(f"{arm}_vs_maj4_prose", {}).get("mcnemar_exact_p")
         p_van_str = "—" if p_van is None else format_p_value(p_van)
         p_maj_str = "—" if p_maj is None else format_p_value(p_maj)
-        lines.append(
+        row_str = (
             f"| `{arm}` | {k}/{n} ({acc:5.1f}%) [{ci[0]:4.1f}, {ci[1]:4.1f}] "
             f"| {s.get('avg_wall_s', 0.0):6.1f}s | {s.get('avg_llm_calls', 0.0):5.2f} "
             f"| {s.get('avg_total_tokens', 0.0):8.0f} | {s.get('avg_reasoning_tokens', 0.0):8.0f} "
-            f"| {p_van_str} | {p_maj_str} |"
+            f"| {p_van_str} | {p_maj_str}"
         )
+        if show_maj8:
+            p_maj8 = pairwise.get(f"{arm}_vs_maj8_prose", {}).get("mcnemar_exact_p")
+            p_maj8_str = "—" if p_maj8 is None else format_p_value(p_maj8)
+            row_str += f" | {p_maj8_str}"
+        lines.append(row_str + " |")
     return "\n".join(lines)
 
 
@@ -738,7 +844,7 @@ def _parse_arms(raw: str) -> list[str]:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="5-arm compute-matched AIME 2025 ablation runner with shard merge support."
+        description="6-arm compute-matched AIME 2025 ablation runner with shard & disjoint-arm merge support."
     )
     parser.add_argument(
         "--url",
@@ -755,7 +861,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--arms",
         type=_parse_arms,
         default=list(ALL_ARMS),
-        help="Comma-separated list of arms (default: vanilla_b1,maj4_prose,pal_b1,cortheon_w1,cortheon_full).",
+        help=(
+            "Comma-separated list of arms "
+            "(default: vanilla_b1,maj4_prose,maj8_prose,pal_b1,cortheon_w1,cortheon_full)."
+        ),
     )
     parser.add_argument(
         "--start",
@@ -781,7 +890,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         type=Path,
         default=None,
         metavar="SHARD_JSON",
-        help="Merge 2+ sharded ablation JSON files into --out and print combined statistics.",
+        help=(
+            "Merge 2+ ablation JSON files (disjoint problem-range shards and/or disjoint arm files) "
+            "into --out and print combined statistics."
+        ),
     )
     parser.add_argument(
         "--resume",
