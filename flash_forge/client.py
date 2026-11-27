@@ -15,7 +15,7 @@ import httpx
 
 
 _REASONING_MODEL_ID_RE = re.compile(
-    r"(?:^|[^a-z0-9])(?:deepseek|ds\d|r1|qwq|qwen3|glm[-_]?5|o[134](?:[-_]|$)|thinking|reasoner)",
+    r"(?:^|[^a-z0-9])(?:deepseek|ds\d|r1|qwq|qwen3|glm[-_]?5|nemotron|o[134](?:[-_]|$)|thinking|reasoner)",
     re.IGNORECASE,
 )
 
@@ -184,9 +184,16 @@ class TensorFoldClient:
         reasoning_info = entry.get("reasoning", {})
         # Detect whether backend is TensorFold native vs generic OpenAI-compatible (Ollama/vLLM/llama.cpp/LM Studio)
         is_tensorfold = bool(caps_raw) or (entry.get("owned_by") == "tensorfold")
+        meta = entry.get("meta") or {}
+        ctx_len = int(
+            entry.get("context_length")
+            or entry.get("max_model_len")
+            or meta.get("n_ctx")
+            or 32768
+        )
         self._caps = ModelCapabilities(
             model_id=entry["id"],
-            context_length=int(entry.get("context_length", entry.get("max_model_len", 32768))),
+            context_length=ctx_len,
             structures=bool(caps_raw.get("structures", False)) if is_tensorfold else True,
             thinking_budget=bool(caps_raw.get("thinking_budget", False)),
             reasoning=bool(caps_raw.get("reasoning", False)),

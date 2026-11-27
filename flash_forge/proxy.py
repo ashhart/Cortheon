@@ -17,6 +17,7 @@ Virtual model IDs:
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import time
 import uuid
@@ -30,6 +31,7 @@ from .code_forge import CodeForgeTrace
 from .engine import FlashForge, ForgeConfig
 from .reason_forge import ReasonForgeTrace
 from .rescue import detect_death_spiral, inject_rescue_note, run_clean_context_rescue
+from .sandbox import sandbox_backend
 from .think_forge import ThinkForgeTrace
 
 
@@ -115,6 +117,48 @@ def _format_reply_and_meta(result: Any) -> tuple[str, dict[str, Any]]:
     return reply_text, meta
 
 
+def _streams_profile_label(num_streams: int) -> str:
+    if num_streams <= 2:
+        return f"--streams {num_streams} (fast sanity check, ~2-3 calls)"
+    if num_streams == 4:
+        return "--streams 4 (balanced default, ~4-7 calls)"
+    if num_streams >= 8:
+        return f"--streams {num_streams} (max diversity, ~{num_streams}-{num_streams + 3} calls)"
+    return f"--streams {num_streams} (custom, ~{num_streams}-{num_streams + 3} calls)"
+
+
+def format_proxy_startup_banner(
+    *,
+    upstream_url: str,
+    upstream_model: Optional[str] = None,
+    referee_url: Optional[str] = None,
+    num_streams: int = 4,
+    auto_rescue: bool = True,
+    sandbox: Optional[str] = None,
+) -> str:
+    """Format the startup runtime summary banner for `cortheon proxy`."""
+    active_sandbox = sandbox or sandbox_backend()
+    rescue_label = "ON (B=3 death-spiral rescue on tool loops)" if auto_rescue else "OFF (--no-auto-rescue)"
+    bar = "━" * 74
+    upstream_line = f"{upstream_url} (model={upstream_model})" if upstream_model else upstream_url
+    lines = [
+        bar,
+        "  Cortheon Universal Proxy v2.0.0",
+        f"  Upstream    : {upstream_line}",
+    ]
+    if referee_url:
+        lines.append(f"  Referee     : {referee_url}")
+    lines.extend(
+        [
+            f"  Streams     : {_streams_profile_label(num_streams)}",
+            f"  OS Sandbox  : {active_sandbox}",
+            f"  Auto-Rescue : {rescue_label}",
+            bar,
+        ]
+    )
+    return "\n".join(lines)
+
+
 def create_app(
     upstream_url: str = "http://127.0.0.1:8080/v1",
     referee_url: Optional[str] = None,
@@ -122,49 +166,76 @@ def create_app(
     num_streams: int = 4,
     auto_rescue: bool = True,
 ) -> FastAPI:
-    app = FastAPI(title="Cortheon Universal Proxy", version="2.0.0")
-    forge_default = FlashForge(
-        ForgeConfig(
-            base_url=upstream_url,
-            referee_url=referee_url,
-            model=upstream_model,
-            num_streams=num_streams,
-            deep=False,
-        )
-    )
-    forge_deep = FlashForge(
-        ForgeConfig(
-            base_url=upstream_url,
-            referee_url=referee_url,
-            model=upstream_model,
-            num_streams=num_streams,
-            deep=True,
-        )
-    )
+    forge_default: Optional[FlashForge] = None
+    forge_deep: Optional[FlashForge] = None
 
-    @app.on_event("startup")
-    async def _startup() -> None:
-        await forge_default.client.probe()
-        await forge_deep.client.probe()
-        if forge_default.referee_client:
-            await forge_default.referee_client.probe()
-        if forge_deep.referee_client:
-            await forge_deep.referee_client.probe()
+    def _ensure_engines() -> tuple[FlashForge, FlashForge]:
+        nonlocal forge_default, forge_deep
+        if forge_default is None:
+            forge_default = FlashForge(
+                ForgeConfig(
+                    base_url=upstream_url,
+                    referee_url=referee_url,
+                    model=upstream_model,
+                    num_streams=num_streams,
+                    deep=False,
+                )
+            )
+        if forge_deep is None:
+            forge_deep = FlashForge(
+                ForgeConfig(
+                    base_url=upstream_url,
+                    referee_url=referee_url,
+                    model=upstream_model,
+                    num_streams=num_streams,
+                    deep=True,
+                )
+            )
+        return forge_default, forge_deep
 
-    @app.on_event("shutdown")
-    async def _shutdown() -> None:
-        await forge_default.close()
-        await forge_deep.close()
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        nonlocal forge_default, forge_deep
+        default_engine, deep_engine = _ensure_engines()
+        caps = await default_engine.client.probe()
+        await deep_engine.client.probe()
+        if default_engine.referee_client:
+            await default_engine.referee_client.probe()
+        if deep_engine.referee_client:
+            await deep_engine.referee_client.probe()
+        print(
+            format_proxy_startup_banner(
+                upstream_url=upstream_url,
+                upstream_model=caps.model_id,
+                referee_url=referee_url,
+                num_streams=num_streams,
+                auto_rescue=auto_rescue,
+            ),
+            flush=True,
+        )
+        try:
+            yield
+        finally:
+            await default_engine.close()
+            await deep_engine.close()
+            forge_default = None
+            forge_deep = None
+
+    app = FastAPI(title="Cortheon Universal Proxy", version="2.0.0", lifespan=lifespan)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
-        caps = await forge_default.client.probe()
+        default_engine, _ = _ensure_engines()
+        caps = await default_engine.client.probe()
         return {
             "status": "ok",
             "upstream": upstream_url,
             "upstream_model": caps.model_id,
             "referee_url": referee_url,
-            "memory_lessons": forge_default.memory.count(),
+            "memory_lessons": default_engine.memory.count(),
+            "sandbox_backend": sandbox_backend(),
+            "streams": num_streams,
+            "auto_rescue": auto_rescue,
         }
 
     @app.get("/v1/models")
@@ -192,7 +263,8 @@ def create_app(
         When `auto_rescue` is enabled and >= 2 consecutive failing tool outputs appear in the active turn,
         runs a fast clean-context B=3 Graveyard Backtracking diagnosis and injects it into the system prompt.
         """
-        caps = await forge_default.client.probe()
+        default_engine, _ = _ensure_engines()
+        caps = await default_engine.client.probe()
         fwd = dict(body)
         if auto_rescue and isinstance(fwd.get("messages"), list):
             spiral = detect_death_spiral(fwd["messages"])
@@ -201,7 +273,7 @@ def create_app(
                 if len(_rescued_fingerprints) > 256:
                     _rescued_fingerprints.clear()
                 try:
-                    note = await run_clean_context_rescue(forge_default.client, spiral)
+                    note = await run_clean_context_rescue(default_engine.client, spiral)
                     if note:
                         fwd["messages"] = inject_rescue_note(fwd["messages"], note)
                 except Exception:
@@ -242,7 +314,8 @@ def create_app(
 
         prompt = _flatten_messages(messages)
         force_mode, is_deep = _select_mode(model_req)
-        engine = forge_deep if is_deep else forge_default
+        default_engine, deep_engine = _ensure_engines()
+        engine = deep_engine if is_deep else default_engine
         cid = f"chatcmpl-ff-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
 
@@ -346,7 +419,8 @@ def create_app(
 
         prompt = _flatten_messages(messages, system_text=sys_text)
         force_mode, is_deep = _select_mode(model_req)
-        engine = forge_deep if is_deep else forge_default
+        default_engine, deep_engine = _ensure_engines()
+        engine = deep_engine if is_deep else default_engine
         mid = f"msg_ff_{uuid.uuid4().hex[:16]}"
 
         if not stream:

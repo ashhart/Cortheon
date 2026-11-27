@@ -13,10 +13,13 @@ Zero weight updates. Zero cloud APIs. Works with **TensorFold**, **oMLX**, **Oll
 git clone https://github.com/ashhart/Cortheon.git && cd Cortheon
 uv venv .venv && uv pip install --python .venv/bin/python -e .
 
-# 2. Install the /cortheon slash command across OMP, Pi, OpenCode, Claude Code, Cursor & Codex
+# 2. Verify your local backend, OS sandbox, and solvers in 2 seconds
+.venv/bin/cortheon doctor --url http://127.0.0.1:8080/v1
+
+# 3. Install the /cortheon slash command across OMP, Pi, OpenCode, Claude Code, Cursor & Codex
 .venv/bin/cortheon install-commands --harness all
 
-# 3. Start the universal proxy (or serve TensorFold natively with --cortheon --cortheon-exec --parallel 8)
+# 4. Start the universal proxy (or serve TensorFold natively with --cortheon --cortheon-exec --parallel 8)
 .venv/bin/cortheon proxy --upstream http://127.0.0.1:8080/v1 --port 18652 --streams 4
 ```
 

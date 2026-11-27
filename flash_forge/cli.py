@@ -7,11 +7,13 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import uvicorn
 
 from .code_forge import CodeForgeTrace
 from .dev_agent import run_dev_forge
+from .doctor import format_doctor_report, run_doctor
 from .duel import DUEL_PRESETS, run_duel
 from .engine import FlashForge, ForgeConfig
 from .integrations import ALL_HARNESSES, install_commands
@@ -22,17 +24,32 @@ from .replica_agent import ReplicaAgent, ReplicaConfig
 from .showdown import run_showdown
 from .think_forge import ThinkForgeTrace
 
+_STREAMS_HELP = (
+    "Parallel verification streams (2, 4, or 8): "
+    "2=fast sanity check ~2-3 calls, 4=balanced default ~4-7 calls, 8=max diversity"
+)
 
-def main() -> None:
+
+def main(argv: Optional[list[str]] = None) -> None:
     parser = argparse.ArgumentParser(prog="cortheon", description="Cortheon — Unified consensus & verification runtime for frozen local models")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_doc = sub.add_parser(
+        "doctor",
+        help="Run local diagnostics (OS sandbox, solver stack, harnesses, backend capabilities & live fast-route probe)",
+    )
+    p_doc.add_argument("--url", default="http://127.0.0.1:8080/v1", help="OpenAI-compatible backend URL to probe")
+    p_doc.add_argument("--api-key", default=None, help="Optional Bearer API key for the backend")
+    p_doc.add_argument("--model", default=None, help="Optional model ID override when backend serves multiple models")
+    p_doc.add_argument("--skip-live", action="store_true", help="Skip the live fast-route completion & throughput probe")
+    p_doc.add_argument("--json", dest="as_json", action="store_true", help="Emit structured JSON diagnostics report")
 
     p_solve = sub.add_parser("solve", help="Solve any hard math, logic, coding, debugging, or open-ended architecture/design problem")
     p_solve.add_argument("prompt", help="Problem statement (or @path/to/file.txt)")
     p_solve.add_argument("--url", default="http://127.0.0.1:8080/v1")
     p_solve.add_argument("--referee-url", default=None, help="Optional second model URL for Cross-Model Referee/Critic")
     p_solve.add_argument("--mode", choices=["auto", "code", "reason", "think", "fast"], default="auto")
-    p_solve.add_argument("--streams", type=int, default=4)
+    p_solve.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
     p_solve.add_argument("--deep", action="store_true")
     p_solve.add_argument("--no-memory", action="store_true")
 
@@ -41,20 +58,20 @@ def main() -> None:
     p_proxy.add_argument("--referee-url", default=None)
     p_proxy.add_argument("--host", default="127.0.0.1")
     p_proxy.add_argument("--port", type=int, default=18652)
-    p_proxy.add_argument("--streams", type=int, default=4, help="Parallel verification streams (2, 4, or 8)")
+    p_proxy.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
     p_proxy.add_argument("--no-auto-rescue", action="store_true", help="Disable automatic B=3 death-spiral rescue on tool-calling loops")
 
     p_show = sub.add_parser("showdown", help="Run a live 60-second Vanilla vs Cortheon knockout on your local model")
     p_show.add_argument("--url", default="http://127.0.0.1:8080/v1")
     p_show.add_argument("--referee-url", default=None)
-    p_show.add_argument("--streams", type=int, default=4)
+    p_show.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
 
     p_duel = sub.add_parser("duel", help="Live side-by-side split-screen race: Vanilla (B=1) vs Cortheon v2 (B=4 early-abort)")
     p_duel.add_argument("--url", default="http://127.0.0.1:8080/v1")
     p_duel.add_argument("--preset", choices=list(DUEL_PRESETS.keys()), default="ring")
     p_duel.add_argument("--prompt", default=None, help="Custom prompt instead of a built-in preset")
     p_duel.add_argument("--expected", default="", help="Optional exact expected answer for custom prompt")
-    p_duel.add_argument("--streams", type=int, default=4, help="Parallel verification streams (2, 4, or 8)")
+    p_duel.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
 
     p_repo = sub.add_parser("repo-fix", help="Patch a repository file verified in ephemeral git worktrees")
     p_repo.add_argument("--repo", required=True)
@@ -68,7 +85,7 @@ def main() -> None:
     p_dev.add_argument("--repo", required=True)
     p_dev.add_argument("--verify", required=True)
     p_dev.add_argument("--url", default="http://127.0.0.1:8080/v1")
-    p_dev.add_argument("--streams", type=int, default=4)
+    p_dev.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
     p_dev.add_argument("--apply", action="store_true", help="Apply winning verified multi-file patch to repo")
     p_dev.add_argument("task")
 
@@ -98,7 +115,24 @@ def main() -> None:
     p_inst.add_argument("--profile", default=None, help="Optional OMP profile name (e.g. cortheon)")
     p_inst.add_argument("--url", default="http://127.0.0.1:18651/v1", help="Default Cortheon endpoint URL for markdown commands")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+
+    if args.cmd == "doctor":
+        report = asyncio.run(
+            run_doctor(
+                url=args.url,
+                api_key=args.api_key,
+                model=args.model,
+                skip_live=args.skip_live,
+            )
+        )
+        if args.as_json:
+            print(json.dumps(report.to_dict(), indent=2))
+        else:
+            print(format_doctor_report(report))
+        if not report.ok:
+            sys.exit(1)
+        return
 
     if args.cmd == "install-commands":
         targets = ALL_HARNESSES if args.harness.strip().lower() == "all" else [x.strip() for x in args.harness.split(",") if x.strip()]
