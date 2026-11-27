@@ -1,23 +1,26 @@
-"""Zero-False-Positive Proof-Carrying Diff Breaker (`cortheon guard`).
+"""Zero-False-Positive Polyglot Proof-Carrying Diff Breaker (`cortheon guard`).
 
 Core thesis: NEVER emit LLM prose code-review slop. An adversarial finding is
-ONLY reported if it is backed by a mechanically executed failing Python
-reproducer script run inside an isolated ephemeral git worktree + Cortheon's
-OS sandbox (`run_python` / `sandbox_backend()`).
+ONLY reported if it is backed by a mechanically executed failing reproducer
+script (Python, Node.js/JS/TS, Go, or POSIX Shell) run inside an isolated
+ephemeral git worktree + Cortheon's OS sandbox (``macos-seatbelt`` /
+``linux-bwrap`` / POSIX ``setrlimit`` — blocking network & outside-worktree writes).
 
 Workflow:
   1. Extract unified diff (staged + unstaged + untracked vs ``base_ref``, or
      caller-supplied ``diff_text``). Empty diff short-circuits with 0 LLM calls.
-  2. Materialize an isolated ephemeral git worktree with the patched state
-     (never mutates the user's repository; always cleaned up in ``finally``).
+  2. Auto-detect (or honor explicit) polyglot ``runner`` (``python``, ``node``,
+     ``go``, or ``shell``) and materialize an isolated ephemeral git worktree
+     with the patched state (never mutates the user's repository; always
+     cleaned up in ``finally``).
   3. Fan out ``num_adversaries`` parallel clean-context adversarial bug-hunters
      with distinct attack lenses (boundary/edge, state/concurrency,
-     regression/contract) that output ONLY executable Python reproducer scripts.
+     regression/contract) that output ONLY executable reproducer scripts.
   4. Mechanical Zero-FP Proof Gate inside Cortheon's OS sandbox:
      - Discard prose-only / invalid-syntax outputs.
      - Discard scripts that exit 0 (no bug proven).
-     - Discard scripts that crash solely due to ``ImportError`` /
-       ``ModuleNotFoundError`` / ``SyntaxError`` in the reproducer itself.
+     - Discard scripts that crash solely due to reproducer-side import/syntax
+       or missing-command errors.
      - Optionally run surviving reproducers against a clean ``base_ref``
        ephemeral worktree to classify regressions (``passed_on_base=True``),
        pre-existing bugs (``passed_on_base=False``), and new-code bugs
@@ -26,6 +29,9 @@ Workflow:
   5. Optional ``auto_fix=True``: race ``B=2`` parallel surgical patch
      generators in ephemeral test worktrees, verify ALL proven reproducers
      (plus optional ``test_cmd``) exit 0, and attach a verified unified patch.
+  6. Export GitHub Code Scanning SARIF 2.1.0 via :func:`format_guard_sarif` and
+     install/uninstall non-destructive git hooks via :func:`install_git_hook` /
+     :func:`uninstall_git_hook`.
 """
 
 from __future__ import annotations
@@ -33,20 +39,36 @@ from __future__ import annotations
 import ast
 import asyncio
 import difflib
+import hashlib
 import os
 import re
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .client import CallSpec, CompletionResult, TensorFoldClient
-from .sandbox import ExecResult, check_syntax, extract_python_code, run_python, sandbox_backend
+from .sandbox import (
+    _SEATBELT_BIN,
+    _build_macos_seatbelt_profile,
+    _make_rlimit_preexec,
+    ExecResult,
+    check_syntax,
+    extract_python_code,
+    run_python,
+    sandbox_backend,
+)
 
+_GUARD_VERSION = "2.3.0"
+_SARIF_SCHEMA_URI = "https://json.schemastore.org/sarif-2.1.0.json"
+_GIT_HOOK_MARKER = "# CORTHEON-GUARD-HOOK"
 _META_PREFIX = "__CORTHEON_GUARD_META__:"
 _REPRO_FILENAME = "<reproducer>"
 _INVALID_REPRO_EXCS = frozenset(
@@ -55,6 +77,62 @@ _INVALID_REPRO_EXCS = frozenset(
 _BASELINE_MISSING_SYMBOL_EXCS = frozenset(
     {"ImportError", "ModuleNotFoundError", "AttributeError"}
 )
+_INVALID_NODE_REPRO_EXCS = frozenset(
+    {"MODULE_NOT_FOUND", "ERR_MODULE_NOT_FOUND", "SyntaxError"}
+)
+_INVALID_SHELL_REPRO_EXCS = frozenset({"SyntaxError", "CommandNotFound"})
+_INVALID_GO_REPRO_EXCS = frozenset({"GoBuildError"})
+
+SUPPORTED_RUNNERS: tuple[str, ...] = ("auto", "python", "node", "go", "shell")
+_RUNNER_ALIASES: dict[str, str] = {
+    "auto": "auto",
+    "python": "python",
+    "py": "python",
+    "node": "node",
+    "js": "node",
+    "javascript": "node",
+    "ts": "node",
+    "typescript": "node",
+    "go": "go",
+    "golang": "go",
+    "shell": "shell",
+    "sh": "shell",
+    "bash": "shell",
+}
+_EXT_TO_RUNNER: dict[str, str] = {
+    ".py": "python",
+    ".pyi": "python",
+    ".js": "node",
+    ".mjs": "node",
+    ".cjs": "node",
+    ".jsx": "node",
+    ".ts": "node",
+    ".mts": "node",
+    ".cts": "node",
+    ".tsx": "node",
+    ".go": "go",
+    ".sh": "shell",
+    ".bash": "shell",
+    ".rs": "python",
+    ".zig": "python",
+}
+_EXT_TO_MARKDOWN_LANG: dict[str, str] = {
+    ".py": "python",
+    ".pyi": "python",
+    ".js": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".jsx": "jsx",
+    ".ts": "typescript",
+    ".mts": "typescript",
+    ".cts": "typescript",
+    ".tsx": "tsx",
+    ".go": "go",
+    ".rs": "rust",
+    ".zig": "zig",
+    ".sh": "sh",
+    ".bash": "bash",
+}
 _SKIP_COPY_DIRS = frozenset({".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".venv", "venv", "node_modules"})
 _MAX_DIFF_CHARS = 24_000
 _MAX_SNIPPETS_CHARS = 16_000
@@ -133,9 +211,16 @@ _FIX_ROLES: tuple[tuple[str, str, float, int], ...] = (
     ),
 )
 
-_TITLE_COMMENT_RE = re.compile(r"^\s*#\s*(?:TITLE|BUG)\s*:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
-_FILE_FENCE_RE = re.compile(r"```(?:file|python|py):([^\n`]+)\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
+_TITLE_COMMENT_RE = re.compile(
+    r"^\s*(?:#|//)\s*(?:TITLE|BUG)\s*:\s*(.+)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_FILE_FENCE_RE = re.compile(
+    r"```(?:file|python|py|js|javascript|ts|typescript|go|sh|bash|shell):([^\n`]+)\s*\n(.*?)```",
+    re.DOTALL | re.IGNORECASE,
+)
 _DIFF_FENCE_RE = re.compile(r"```(?:diff|patch)\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
+_ANY_FENCE_RE = re.compile(r"```([A-Za-z0-9_+.-]*)[ \t]*\n(.*?)```", re.DOTALL)
 _CODE_FENCE_PRESENT_RE = re.compile(r"```", re.MULTILINE)
 
 
@@ -148,6 +233,7 @@ class ProvenBug:
     failure_output: str
     passed_on_base: Optional[bool]
     target_files: list[str] = field(default_factory=list)
+    language: str = "python"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -158,6 +244,7 @@ class ProvenBug:
             "failure_output": self.failure_output,
             "passed_on_base": self.passed_on_base,
             "target_files": list(self.target_files),
+            "language": self.language,
         }
 
 
@@ -175,6 +262,7 @@ class GuardReport:
     wall_s: float
     llm_calls: int
     total_tokens: int
+    runner: str = "python"
 
     @property
     def clean(self) -> bool:
@@ -185,6 +273,7 @@ class GuardReport:
             "clean": self.clean,
             "repo_path": self.repo_path,
             "base_ref": self.base_ref,
+            "runner": self.runner,
             "diff_files": list(self.diff_files),
             "adversaries_run": self.adversaries_run,
             "reproducers_executed": self.reproducers_executed,
@@ -205,6 +294,66 @@ class _SandboxRunInfo:
     exc_name: Optional[str]
     last_in_repro: bool
     last_file: Optional[str]
+    missing_symbol: bool = False
+
+
+def _emit_event(
+    on_event: Optional[Callable[[dict[str, Any]], None]],
+    payload: dict[str, Any],
+) -> None:
+    """Safely invoke an optional observability callback without affecting execution."""
+    if on_event is None:
+        return
+    try:
+        on_event(payload)
+    except Exception:
+        pass
+
+
+def _normalize_runner(runner: str) -> str:
+    key = (runner or "auto").strip().lower()
+    if key not in _RUNNER_ALIASES:
+        raise ValueError(
+            f"Unsupported guard runner {runner!r}. Expected one of: {', '.join(SUPPORTED_RUNNERS)}."
+        )
+    return _RUNNER_ALIASES[key]
+
+
+def detect_runner(diff_files: list[str], runner: str = "auto") -> str:
+    """Resolve the active polyglot runner from explicit ``runner`` or ``diff_files`` extensions.
+
+    Auto-detection rules when ``runner == "auto"``:
+      - Pure Python (``.py``/``.pyi``) -> ``"python"``
+      - Pure JS/TS (``.js``, ``.mjs``, ``.cjs``, ``.jsx``, ``.ts``, ``.mts``, ``.cts``, ``.tsx``) -> ``"node"``
+      - Pure Go (``.go``) -> ``"go"``
+      - Pure Shell (``.sh``, ``.bash``) -> ``"shell"``
+      - Rust (``.rs``), Zig (``.zig``), mixed code languages, or unrecognized -> ``"python"`` driver
+    """
+    norm = _normalize_runner(runner)
+    if norm != "auto":
+        return norm
+
+    detected: set[str] = set()
+    for rel in diff_files:
+        ext = Path(rel).suffix.lower()
+        mapped = _EXT_TO_RUNNER.get(ext)
+        if mapped:
+            detected.add(mapped)
+
+    if len(detected) == 1:
+        return next(iter(detected))
+    return "python"
+
+
+def _language_fence_tag(language: str) -> str:
+    key = (language or "python").strip().lower()
+    if key == "node":
+        return "javascript"
+    if key == "shell":
+        return "sh"
+    if key == "go":
+        return "go"
+    return "python"
 
 
 def _run_git(repo: Path, args: list[str], *, input_text: Optional[str] = None, timeout_s: float = 20.0) -> subprocess.CompletedProcess[str]:
@@ -431,10 +580,18 @@ def _copy_non_git_workspace(repo: Path) -> Path:
     return wt_dir
 
 
-def _build_file_snippets(wt_dir: Path, diff_files: list[str]) -> str:
+def _build_file_snippets(wt_dir: Path, diff_files: list[str], *, runner: str = "python") -> str:
     """Gather bounded contents of changed files from the ephemeral patched worktree."""
-    # Prioritize Python files first
-    ordered = sorted(diff_files, key=lambda p: (0 if p.endswith(".py") else 1, p))
+    def _priority(rel: str) -> tuple[int, str]:
+        ext = Path(rel).suffix.lower()
+        mapped = _EXT_TO_RUNNER.get(ext)
+        if mapped == runner:
+            return (0, rel)
+        if ext == ".py":
+            return (1, rel)
+        return (2, rel)
+
+    ordered = sorted(diff_files, key=_priority)
     chunks: list[str] = []
     used = 0
     for rel in ordered:
@@ -450,55 +607,349 @@ def _build_file_snippets(wt_dir: Path, diff_files: list[str]) -> str:
         budget = min(_MAX_SINGLE_FILE_CHARS, _MAX_SNIPPETS_CHARS - used)
         if len(text) > budget:
             text = text[:budget] + "\n# ... (truncated)\n"
-        lang = "python" if rel.endswith(".py") else ""
+        lang = _EXT_TO_MARKDOWN_LANG.get(Path(rel).suffix.lower(), "")
         chunks.append(f"### FILE: {rel}\n```{lang}\n{text.rstrip()}\n```")
         used += len(text)
     return "\n\n".join(chunks)
 
 
-def _extract_valid_reproducer(raw_output: str) -> Optional[str]:
-    """Extract an executable Python reproducer; reject prose slop and non-executable fragments."""
+_JS_ESM_RE = re.compile(r"^\s*(?:import\s+[\s\S]+?\s+from\s+|import\s+['\"]|export\s+)", re.MULTILINE)
+_JS_CJS_RE = re.compile(r"\b(?:require\s*\(|module\.exports\b|exports\.)")
+_TS_SYNTAX_RE = re.compile(
+    r"(?:from\s+['\"][^'\"]+\.[mc]?ts['\"]|^\s*(?:interface|type)\s+\w+|:\s*(?:number|string|boolean|any|unknown|void|never)\b)",
+    re.MULTILINE,
+)
+_JS_INTENT_RE = re.compile(
+    r"(?:\b(?:import|require|assert|throw|const|let|var|function|async|await|process)\b|=>|console\.\w+\s*\()"
+)
+_NODE_TAGS = frozenset({"javascript", "js", "mjs", "cjs", "typescript", "ts", "mts", "cts", "node"})
+_TS_TAGS = frozenset({"typescript", "ts", "mts", "cts"})
+_SHELL_TAGS = frozenset({"sh", "bash", "shell", "zsh"})
+_GO_TAGS = frozenset({"go", "golang"})
+
+
+def _extract_fenced_blocks(raw_output: str, preferred_tags: frozenset[str]) -> list[tuple[str, str]]:
+    """Return ``[(tag_lower, code)]`` prioritizing blocks matching ``preferred_tags`` then untagged blocks."""
+    matched: list[tuple[str, str]] = []
+    untagged: list[tuple[str, str]] = []
+    for raw_tag, body in _ANY_FENCE_RE.findall(raw_output):
+        tag = raw_tag.strip().lower()
+        cleaned = body.strip()
+        if not cleaned:
+            continue
+        if tag in preferred_tags:
+            matched.append((tag, cleaned))
+        elif tag == "":
+            untagged.append((tag, cleaned))
+    return matched if matched else untagged
+
+
+def _pick_node_ext(code: str, *, fence_tag: str = "", worktree_dir: Optional[Path] = None) -> str:
+    is_esm = bool(_JS_ESM_RE.search(code)) and not bool(_JS_CJS_RE.search(code))
+    is_ts = fence_tag in _TS_TAGS or bool(_TS_SYNTAX_RE.search(code))
+    if is_ts:
+        return ".mts" if is_esm else ".ts"
+    if is_esm:
+        return ".mjs"
+    if _JS_CJS_RE.search(code):
+        return ".cjs"
+    if worktree_dir is not None:
+        pkg_json = worktree_dir / "package.json"
+        if pkg_json.is_file():
+            try:
+                raw_pkg = pkg_json.read_text(encoding="utf-8", errors="replace")
+                if re.search(r'"type"\s*:\s*"module"', raw_pkg):
+                    return ".mjs"
+            except OSError:
+                pass
+    return ".cjs"
+
+
+def _check_node_syntax(code: str, *, fence_tag: str = "") -> Optional[str]:
+    """Run ``node --check`` on JS code (skipped for TypeScript annotations since ``--check`` does not strip types)."""
+    ext = _pick_node_ext(code, fence_tag=fence_tag)
+    if ext in (".ts", ".mts"):
+        return None
+    node_bin = shutil.which("node")
+    if not node_bin:
+        return None
+    with tempfile.TemporaryDirectory(prefix="cortheon_guard_jschk_") as tmp:
+        p = Path(tmp) / f"check{ext}"
+        p.write_text(code, encoding="utf-8")
+        try:
+            proc = subprocess.run(
+                [node_bin, "--check", str(p)],
+                capture_output=True,
+                text=True,
+                timeout=5.0,
+            )
+            if proc.returncode != 0:
+                return (proc.stderr or proc.stdout or "Node syntax error").strip()[:300]
+            return None
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+
+def _check_shell_syntax(code: str) -> Optional[str]:
+    sh_bin = shutil.which("sh") or "/bin/sh"
+    if not os.path.isfile(sh_bin):
+        return None
+    with tempfile.TemporaryDirectory(prefix="cortheon_guard_shchk_") as tmp:
+        p = Path(tmp) / "check.sh"
+        p.write_text(code, encoding="utf-8")
+        try:
+            proc = subprocess.run(
+                [sh_bin, "-n", str(p)],
+                capture_output=True,
+                text=True,
+                timeout=5.0,
+            )
+            if proc.returncode != 0:
+                return (proc.stderr or proc.stdout or "Shell syntax error").strip()[:300]
+            return None
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+
+def _check_go_syntax(code: str) -> Optional[str]:
+    gofmt = shutil.which("gofmt")
+    if not gofmt:
+        return None
+    try:
+        proc = subprocess.run(
+            [gofmt],
+            input=code,
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+        )
+        if proc.returncode != 0:
+            return (proc.stderr or "Go syntax error").strip()[:300]
+        return None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _extract_valid_reproducer(raw_output: str, *, runner: str = "python") -> Optional[str]:
+    """Extract an executable reproducer for ``runner``; reject prose slop and syntax errors."""
     if not raw_output or not raw_output.strip():
         return None
 
     has_fence = bool(_CODE_FENCE_PRESENT_RE.search(raw_output))
-    code = extract_python_code(raw_output)
-    if not code or not code.strip():
-        return None
-    if check_syntax(code) is not None:
-        return None
 
-    try:
-        tree = ast.parse(code)
-    except SyntaxError:
-        return None
+    if runner == "python":
+        code = extract_python_code(raw_output)
+        if not code or not code.strip():
+            return None
+        if check_syntax(code) is not None:
+            return None
 
-    if not tree.body:
-        return None
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return None
 
-    # Guard against bare prose words (e.g. "LGTM" or "OK") that parse as a single ast.Name expression.
-    has_executable_intent = any(
-        isinstance(
-            node,
-            (ast.Import, ast.ImportFrom, ast.Assert, ast.Call, ast.Raise, ast.FunctionDef, ast.AsyncFunctionDef),
+        if not tree.body:
+            return None
+
+        # Guard against bare prose words (e.g. "LGTM" or "OK") that parse as a single ast.Name expression.
+        has_executable_intent = any(
+            isinstance(
+                node,
+                (ast.Import, ast.ImportFrom, ast.Assert, ast.Call, ast.Raise, ast.FunctionDef, ast.AsyncFunctionDef),
+            )
+            for node in ast.walk(tree)
         )
-        for node in ast.walk(tree)
-    )
-    if not has_executable_intent:
-        return None
-    if not has_fence and not any(isinstance(node, (ast.Import, ast.ImportFrom, ast.Assert)) for node in ast.walk(tree)):
-        return None
+        if not has_executable_intent:
+            return None
+        if not has_fence and not any(isinstance(node, (ast.Import, ast.ImportFrom, ast.Assert)) for node in ast.walk(tree)):
+            return None
 
-    return code.strip()
+        return code.strip()
+
+    if runner == "node":
+        blocks = _extract_fenced_blocks(raw_output, _NODE_TAGS)
+        candidates: list[tuple[str, str]] = list(blocks)
+        if not candidates and not has_fence:
+            stripped = raw_output.strip()
+            if _JS_ESM_RE.search(stripped) or _JS_CJS_RE.search(stripped) or "assert" in stripped or "process.exit" in stripped:
+                candidates.append(("", stripped))
+        # Prefer longest syntactically valid JS/TS block with executable intent
+        valid_node: list[tuple[int, str]] = []
+        for tag, cand in candidates:
+            if not _JS_INTENT_RE.search(cand):
+                continue
+            if _check_node_syntax(cand, fence_tag=tag) is not None:
+                continue
+            valid_node.append((len(cand), cand))
+        if not valid_node:
+            return None
+        valid_node.sort(key=lambda x: x[0])
+        return valid_node[-1][1].strip()
+
+    if runner == "shell":
+        blocks = _extract_fenced_blocks(raw_output, _SHELL_TAGS)
+        candidates_sh: list[str] = [b for _, b in blocks]
+        if not candidates_sh and not has_fence:
+            stripped = raw_output.strip()
+            if stripped.startswith("#!/") or re.search(r"^\s*set\s+-[a-zA-Z]*e", stripped, re.MULTILINE):
+                candidates_sh.append(stripped)
+        valid_sh: list[tuple[int, str]] = []
+        for cand in candidates_sh:
+            non_comment = [
+                ln.strip()
+                for ln in cand.splitlines()
+                if ln.strip() and not ln.strip().startswith("#")
+            ]
+            if not non_comment:
+                continue
+            if _check_shell_syntax(cand) is not None:
+                continue
+            valid_sh.append((len(cand), cand))
+        if not valid_sh:
+            return None
+        valid_sh.sort(key=lambda x: x[0])
+        return valid_sh[-1][1].strip()
+
+    if runner == "go":
+        blocks = _extract_fenced_blocks(raw_output, _GO_TAGS)
+        candidates_go: list[str] = [b for _, b in blocks]
+        if not candidates_go and not has_fence:
+            stripped = raw_output.strip()
+            if "package " in stripped and "func Test" in stripped:
+                candidates_go.append(stripped)
+        valid_go: list[tuple[int, str]] = []
+        for cand in candidates_go:
+            if not re.search(r"^\s*package\s+\w+", cand, re.MULTILINE):
+                continue
+            if not re.search(r"\bfunc\s+Test\w*\s*\(", cand):
+                continue
+            if _check_go_syntax(cand) is not None:
+                continue
+            valid_go.append((len(cand), cand))
+        if not valid_go:
+            return None
+        valid_go.sort(key=lambda x: x[0])
+        return valid_go[-1][1].strip()
+
+    return None
 
 
-def _run_reproducer_in_sandbox(
+def _run_command_in_os_sandbox(
+    argv: list[str],
+    *,
+    cwd: Path,
+    timeout_s: float,
+    extra_env: Optional[dict[str, str]] = None,
+    tmp_files: Optional[dict[str, str]] = None,
+    unsafe_no_sandbox: bool = False,
+) -> ExecResult:
+    """Execute ``argv`` inside Cortheon's OS sandbox (``macos-seatbelt`` / ``linux-bwrap`` / POSIX rlimits).
+
+    Writes are strictly confined to an ephemeral sandbox ``tmp_path`` (never ``cwd``
+    or the user's repository), network I/O is blocked, sensitive credential directories
+    are unreadable, environment variables are scrubbed, and runaway child processes
+    are terminated via process-group ``SIGKILL`` on timeout.
+    """
+    backend = sandbox_backend(unsafe_no_sandbox=unsafe_no_sandbox)
+    t0 = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="cortheon_guard_sb_") as tmp:
+        tmp_path = Path(tmp).resolve()
+        if tmp_files:
+            for name, content in tmp_files.items():
+                p = (tmp_path / name).resolve()
+                if not p.is_relative_to(tmp_path):
+                    raise ValueError(f"Refusing tmp_files path outside sandbox temp dir: {name}")
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(content, encoding="utf-8")
+
+        _SAFE_ENV_KEYS = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "USER")
+        env = {k: os.environ[k] for k in _SAFE_ENV_KEYS if k in os.environ}
+        env["TMPDIR"] = str(tmp_path)
+        env["TEMP"] = str(tmp_path)
+        env["TMP"] = str(tmp_path)
+        if extra_env:
+            for k, v in extra_env.items():
+                env[k] = v.replace("{TMPDIR}", str(tmp_path))
+
+        resolved_argv = [arg.replace("{TMPDIR}", str(tmp_path)) for arg in argv]
+
+        cmd: list[str]
+        if backend == "macos-seatbelt":
+            profile_path = tmp_path / ".sb_profile"
+            profile_path.write_text(_build_macos_seatbelt_profile(tmp_path), encoding="utf-8")
+            cmd = [_SEATBELT_BIN, "-f", str(profile_path), *resolved_argv]
+        elif backend == "linux-bwrap":
+            bwrap_bin = shutil.which("bwrap") or "bwrap"
+            cmd = [
+                bwrap_bin,
+                "--unshare-net",
+                "--ro-bind", "/", "/",
+                "--bind", str(tmp_path), str(tmp_path),
+                "--dev", "/dev",
+                "--proc", "/proc",
+                "--die-with-parent",
+                "--",
+                *resolved_argv,
+            ]
+        else:
+            cmd = resolved_argv
+
+        preexec_fn = _make_rlimit_preexec(timeout_s) if os.name == "posix" else None
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(cwd),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+            preexec_fn=preexec_fn,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout_s)
+            dt = time.perf_counter() - t0
+            return ExecResult(
+                ok=(proc.returncode == 0),
+                returncode=proc.returncode,
+                stdout=(stdout or "")[:16000],
+                stderr=(stderr or "")[:16000],
+                elapsed_s=dt,
+                timed_out=False,
+            )
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                proc.kill()
+            try:
+                stdout, stderr = proc.communicate(timeout=2.0)
+            except Exception:
+                stdout, stderr = "", ""
+            dt = time.perf_counter() - t0
+            return ExecResult(
+                ok=False,
+                returncode=-1,
+                stdout=(stdout or "")[:8000],
+                stderr=(stderr or "")[:8000],
+                elapsed_s=dt,
+                timed_out=True,
+            )
+
+
+def _clip_failure_output(text: str, max_chars: int = 2400) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[:1500] + "\n...(truncated)...\n" + text[-(max_chars - 1520) :]
+
+
+def _run_python_reproducer_in_sandbox(
     reproducer_code: str,
     worktree_dir: Path,
     user_repo_dir: Path,
     timeout_s: float,
 ) -> _SandboxRunInfo:
-    """Execute ``reproducer_code`` against ``worktree_dir`` inside Cortheon's OS sandbox."""
+    """Execute Python ``reproducer_code`` against ``worktree_dir`` inside Cortheon's OS sandbox."""
     wt_str = str(worktree_dir.resolve())
     repo_str = str(user_repo_dir.resolve())
 
@@ -586,7 +1037,347 @@ def _run_reproducer_in_sandbox(
         exc_name=exc_name,
         last_in_repro=last_in_repro,
         last_file=last_file,
+        missing_symbol=bool(last_in_repro and exc_name in _BASELINE_MISSING_SYMBOL_EXCS),
     )
+
+
+def _run_node_reproducer_in_sandbox(
+    reproducer_code: str,
+    worktree_dir: Path,
+    timeout_s: float,
+) -> _SandboxRunInfo:
+    """Execute JS/TS ``reproducer_code`` via ``node`` inside Cortheon's OS sandbox."""
+    node_bin = shutil.which("node")
+    if not node_bin:
+        raise RuntimeError("Node.js runtime (`node`) is required for runner='node' but was not found on PATH.")
+
+    wt_resolved = worktree_dir.resolve()
+    wt_str = str(wt_resolved)
+    ext = _pick_node_ext(reproducer_code, worktree_dir=wt_resolved)
+    repro_name = f".cortheon_guard_repro_{os.getpid()}_{uuid.uuid4().hex[:8]}{ext}"
+    repro_path = wt_resolved / repro_name
+
+    repro_path.write_text(reproducer_code, encoding="utf-8")
+    try:
+        res = _run_command_in_os_sandbox(
+            [node_bin, str(repro_path)],
+            cwd=wt_resolved,
+            timeout_s=timeout_s,
+            extra_env={"NODE_NO_WARNINGS": "1"},
+        )
+    finally:
+        repro_path.unlink(missing_ok=True)
+
+    if res.timed_out:
+        return _SandboxRunInfo(
+            exec_result=res,
+            clean_output=f"TIMEOUT after {res.elapsed_s:.2f}s",
+            exc_name="TimeoutError",
+            last_in_repro=False,
+            last_file=None,
+        )
+
+    raw_err = (res.stderr or "").strip() or (res.stdout or "").strip()
+    exc_name: Optional[str] = None
+    last_in_repro = False
+    last_file: Optional[str] = None
+    missing_symbol = False
+
+    if not res.ok:
+        if "ERR_MODULE_NOT_FOUND" in raw_err:
+            exc_name = "ERR_MODULE_NOT_FOUND"
+        elif "MODULE_NOT_FOUND" in raw_err or "Cannot find module " in raw_err:
+            exc_name = "MODULE_NOT_FOUND"
+        else:
+            m_exc = re.search(
+                r"^(AssertionError|SyntaxError|TypeError|ReferenceError|RangeError|URIError|EvalError|Error)\b",
+                raw_err,
+                re.MULTILINE,
+            )
+            if m_exc:
+                exc_name = m_exc.group(1)
+
+        # Determine whether the failure originated in the reproducer itself vs target code
+        if exc_name in ("MODULE_NOT_FOUND", "ERR_MODULE_NOT_FOUND"):
+            req_match = re.search(r"Require stack:\s*\n-\s*(.+)", raw_err)
+            imp_match = re.search(r"imported from\s+(\S+)", raw_err)
+            if req_match:
+                origin = req_match.group(1).strip()
+                last_file = origin
+                last_in_repro = repro_name in origin
+            elif imp_match:
+                origin = imp_match.group(1).strip()
+                last_file = origin
+                last_in_repro = repro_name in origin
+            else:
+                last_in_repro = repro_name in raw_err
+            missing_symbol = last_in_repro
+        elif exc_name == "SyntaxError":
+            first_nonempty = next((ln.strip() for ln in raw_err.splitlines() if ln.strip()), "")
+            if "does not provide an export named" in raw_err:
+                last_in_repro = True
+                missing_symbol = True
+            else:
+                last_in_repro = repro_name in first_nonempty
+                if not last_in_repro and first_nonempty.startswith(("file://", "/", wt_str)):
+                    last_file = first_nonempty.split(":", 1)[0]
+        else:
+            for ln in raw_err.splitlines():
+                stripped = ln.strip()
+                if not stripped.startswith("at ") or "node:internal" in stripped:
+                    continue
+                last_file = stripped
+                last_in_repro = repro_name in stripped
+                break
+            if exc_name == "TypeError" and last_in_repro and "is not a function" in raw_err:
+                missing_symbol = True
+
+    clean_out = (
+        raw_err.replace(f"file://{repro_path}", _REPRO_FILENAME)
+        .replace(str(repro_path), _REPRO_FILENAME)
+        .replace(repro_name, _REPRO_FILENAME)
+        .replace(f"file://{wt_str}{os.sep}", "")
+        .replace(wt_str + os.sep, "")
+        .replace(wt_str, ".")
+    )
+    clean_out = _clip_failure_output(clean_out)
+
+    return _SandboxRunInfo(
+        exec_result=res,
+        clean_output=clean_out,
+        exc_name=exc_name,
+        last_in_repro=last_in_repro,
+        last_file=last_file,
+        missing_symbol=missing_symbol,
+    )
+
+
+def _run_shell_reproducer_in_sandbox(
+    reproducer_code: str,
+    worktree_dir: Path,
+    timeout_s: float,
+) -> _SandboxRunInfo:
+    """Execute POSIX shell ``reproducer_code`` via ``sh -e`` inside Cortheon's OS sandbox."""
+    sh_bin = shutil.which("sh") or "/bin/sh"
+    if not os.path.isfile(sh_bin):
+        raise RuntimeError("POSIX shell (`sh`) was not found on PATH.")
+
+    wt_resolved = worktree_dir.resolve()
+    wt_str = str(wt_resolved)
+    repro_name = "_cortheon_guard_repro.sh"
+
+    res = _run_command_in_os_sandbox(
+        [sh_bin, "-e", f"{{TMPDIR}}/{repro_name}"],
+        cwd=wt_resolved,
+        timeout_s=timeout_s,
+        tmp_files={repro_name: reproducer_code if reproducer_code.endswith("\n") else reproducer_code + "\n"},
+    )
+
+    if res.timed_out:
+        return _SandboxRunInfo(
+            exec_result=res,
+            clean_output=f"TIMEOUT after {res.elapsed_s:.2f}s",
+            exc_name="TimeoutError",
+            last_in_repro=False,
+            last_file=None,
+        )
+
+    raw_err = (res.stderr or "").strip()
+    raw_out = (res.stdout or "").strip()
+    combined = raw_err if raw_err else raw_out
+    if raw_err and raw_out and raw_out not in raw_err:
+        combined = f"{raw_err}\n{raw_out}"
+
+    exc_name: Optional[str] = None
+    last_in_repro = False
+    missing_symbol = False
+
+    if not res.ok:
+        lower_err = raw_err.lower()
+        if "syntax error" in lower_err and repro_name in raw_err:
+            exc_name = "SyntaxError"
+            last_in_repro = True
+        elif res.returncode == 127 or "command not found" in lower_err or ": not found" in lower_err:
+            # Relative ./script missing on base -> new script; nonexistent external binary -> invalid reproducer
+            if "./" in raw_err or "no such file or directory" in lower_err:
+                exc_name = "FileNotFound"
+                missing_symbol = True
+                last_in_repro = False
+            else:
+                exc_name = "CommandNotFound"
+                last_in_repro = True
+        elif "no such file or directory" in lower_err and "./" in raw_err:
+            exc_name = "FileNotFound"
+            missing_symbol = True
+            last_in_repro = False
+        else:
+            exc_name = f"ExitCode{res.returncode}"
+
+    clean_out = re.sub(r"\S*" + re.escape(repro_name), _REPRO_FILENAME, combined)
+    clean_out = clean_out.replace(wt_str + os.sep, "").replace(wt_str, ".")
+    clean_out = _clip_failure_output(clean_out)
+
+    return _SandboxRunInfo(
+        exec_result=res,
+        clean_output=clean_out,
+        exc_name=exc_name,
+        last_in_repro=last_in_repro,
+        last_file=None,
+        missing_symbol=missing_symbol,
+    )
+
+
+def _find_go_package_dir(worktree_dir: Path, reproducer_code: str, diff_files: list[str]) -> Path:
+    m_pkg = re.search(r"^\s*package\s+(\w+)", reproducer_code, re.MULTILINE)
+    repro_pkg = m_pkg.group(1) if m_pkg else ""
+    base_pkg = repro_pkg[:-5] if repro_pkg.endswith("_test") else repro_pkg
+
+    go_files = [f for f in diff_files if f.endswith(".go")]
+    if base_pkg:
+        for rel in go_files:
+            full = (worktree_dir / rel).resolve()
+            if full.is_file() and full.is_relative_to(worktree_dir):
+                try:
+                    head = full.read_text(encoding="utf-8", errors="replace")[:512]
+                    m = re.search(r"^\s*package\s+(\w+)", head, re.MULTILINE)
+                    if m and m.group(1) == base_pkg:
+                        return full.parent
+                except OSError:
+                    pass
+    if go_files:
+        cand = (worktree_dir / go_files[0]).resolve().parent
+        if cand.is_dir() and cand.is_relative_to(worktree_dir):
+            return cand
+    return worktree_dir
+
+
+def _run_go_reproducer_in_sandbox(
+    reproducer_code: str,
+    worktree_dir: Path,
+    timeout_s: float,
+    diff_files: list[str],
+) -> _SandboxRunInfo:
+    """Execute Go ``*_test.go`` reproducer via ``go test`` inside Cortheon's OS sandbox."""
+    go_bin = shutil.which("go")
+    if not go_bin:
+        raise RuntimeError("Go toolchain (`go`) is required for runner='go' but was not found on PATH.")
+
+    wt_resolved = worktree_dir.resolve()
+    wt_str = str(wt_resolved)
+    pkg_dir = _find_go_package_dir(wt_resolved, reproducer_code, diff_files)
+    repro_name = f"cortheon_guard_repro_{os.getpid()}_{uuid.uuid4().hex[:8]}_test.go"
+    repro_path = pkg_dir / repro_name
+
+    extra_env = {
+        "GOCACHE": "{TMPDIR}/gocache",
+        "GOTMPDIR": "{TMPDIR}",
+        "GOPROXY": "off",
+    }
+    if not (wt_resolved / "go.sum").is_file():
+        extra_env["GOPATH"] = "{TMPDIR}/gopath"
+    if not (wt_resolved / "go.mod").is_file():
+        extra_env["GO111MODULE"] = "off"
+
+    repro_path.write_text(reproducer_code, encoding="utf-8")
+    try:
+        res = _run_command_in_os_sandbox(
+            [go_bin, "test", "-v", "-count=1", "."],
+            cwd=pkg_dir,
+            timeout_s=timeout_s,
+            extra_env=extra_env,
+        )
+    finally:
+        repro_path.unlink(missing_ok=True)
+
+    if res.timed_out:
+        return _SandboxRunInfo(
+            exec_result=res,
+            clean_output=f"TIMEOUT after {res.elapsed_s:.2f}s",
+            exc_name="TimeoutError",
+            last_in_repro=False,
+            last_file=None,
+        )
+
+    combined = "\n".join(p for p in ((res.stdout or "").strip(), (res.stderr or "").strip()) if p).strip()
+    exc_name: Optional[str] = None
+    last_in_repro = False
+    missing_symbol = False
+
+    if not res.ok:
+        if "[build failed]" in combined or "[setup failed]" in combined:
+            exc_name = "GoBuildError"
+            # Check if every compiler error line references only our reproducer file
+            err_file_lines = re.findall(r"^(?:\./)?([^\s:]+\.go):\d+:", combined, re.MULTILINE)
+            if err_file_lines and all(repro_name in f for f in err_file_lines):
+                last_in_repro = True
+                if "undefined:" in combined:
+                    missing_symbol = True
+        elif "panic:" in combined:
+            exc_name = "GoPanic"
+        elif "--- FAIL:" in combined or "FAIL" in combined:
+            exc_name = "GoTestFail"
+        else:
+            exc_name = f"GoExit{res.returncode}"
+
+    clean_out = (
+        combined.replace(str(repro_path), "cortheon_guard_repro_test.go")
+        .replace(repro_name, "cortheon_guard_repro_test.go")
+        .replace(wt_str + os.sep, "")
+        .replace(wt_str, ".")
+    )
+    clean_out = _clip_failure_output(clean_out)
+
+    return _SandboxRunInfo(
+        exec_result=res,
+        clean_output=clean_out,
+        exc_name=exc_name,
+        last_in_repro=last_in_repro,
+        last_file=None,
+        missing_symbol=missing_symbol,
+    )
+
+
+def _run_reproducer_in_sandbox(
+    reproducer_code: str,
+    worktree_dir: Path,
+    user_repo_dir: Path,
+    timeout_s: float,
+    *,
+    runner: str = "python",
+    diff_files: Optional[list[str]] = None,
+) -> _SandboxRunInfo:
+    """Execute ``reproducer_code`` against ``worktree_dir`` inside Cortheon's OS sandbox."""
+    if runner == "node":
+        return _run_node_reproducer_in_sandbox(reproducer_code, worktree_dir, timeout_s)
+    if runner == "shell":
+        return _run_shell_reproducer_in_sandbox(reproducer_code, worktree_dir, timeout_s)
+    if runner == "go":
+        return _run_go_reproducer_in_sandbox(reproducer_code, worktree_dir, timeout_s, diff_files or [])
+    return _run_python_reproducer_in_sandbox(reproducer_code, worktree_dir, user_repo_dir, timeout_s)
+
+
+def _is_invalid_reproducer_failure(info: _SandboxRunInfo, runner: str) -> bool:
+    if info.exec_result.timed_out:
+        return False
+    if runner == "python":
+        return bool(info.last_in_repro and info.exc_name in _INVALID_REPRO_EXCS)
+    if runner == "node":
+        return bool(info.last_in_repro and info.exc_name in _INVALID_NODE_REPRO_EXCS)
+    if runner == "shell":
+        return bool(info.last_in_repro and info.exc_name in _INVALID_SHELL_REPRO_EXCS)
+    if runner == "go":
+        return bool(info.last_in_repro and info.exc_name in _INVALID_GO_REPRO_EXCS)
+    return False
+
+
+def _is_baseline_missing_symbol(info: _SandboxRunInfo, runner: str) -> bool:
+    if info.exec_result.timed_out:
+        return False
+    if info.missing_symbol:
+        return True
+    if runner == "python":
+        return bool(info.last_in_repro and info.exc_name in _BASELINE_MISSING_SYMBOL_EXCS)
+    return False
 
 
 def _extract_bug_title(reproducer_code: str, failure_output: str, role: str, exc_name: Optional[str]) -> str:
@@ -608,20 +1399,30 @@ def _infer_target_files(
     reproducer_code: str,
     failure_output: str,
     diff_files: list[str],
+    *,
+    runner: str = "python",
 ) -> list[str]:
     matched: list[str] = []
     for rel in diff_files:
         norm = rel.replace("\\", "/")
+        name = Path(norm).name
         stem = Path(norm).stem
-        mod_path = norm[:-3].replace("/", ".") if norm.endswith(".py") else ""
+        ext = Path(norm).suffix.lower()
+        mod_path = norm[:-3].replace("/", ".") if ext == ".py" else ""
         if (
             norm in failure_output
+            or norm in reproducer_code
+            or name in failure_output
+            or name in reproducer_code
             or (mod_path and re.search(rf"\b{re.escape(mod_path)}\b", reproducer_code))
-            or (stem and norm.endswith(".py") and re.search(rf"\b{re.escape(stem)}\b", reproducer_code))
+            or (stem and ext in _EXT_TO_RUNNER and re.search(rf"\b{re.escape(stem)}\b", reproducer_code))
         ):
             matched.append(rel)
     if matched:
         return matched
+    runner_diff = [f for f in diff_files if _EXT_TO_RUNNER.get(Path(f).suffix.lower()) == runner]
+    if runner_diff:
+        return runner_diff
     py_diff = [f for f in diff_files if f.endswith(".py")]
     return py_diff if py_diff else list(diff_files)
 
@@ -629,8 +1430,10 @@ def _infer_target_files(
 def _failure_dedup_key(info: _SandboxRunInfo, target_files: Optional[list[str]] = None) -> str:
     """Compute a normalized deduplication fingerprint for a failing execution."""
     text = info.clean_output.strip()
-    # Normalize reproducer line numbers so identical assertions at different lines deduplicate
+    # Normalize reproducer line/column numbers so identical assertions at different lines deduplicate
     normalized = re.sub(r'File "<reproducer>", line \d+', 'File "<reproducer>", line _', text)
+    normalized = re.sub(r"<reproducer>:\d+(?::\d+)?", "<reproducer>:_", normalized)
+    normalized = re.sub(r"cortheon_guard_repro_test\.go:\d+", "cortheon_guard_repro_test.go:_", normalized)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     files_tag = ",".join(sorted(target_files)) if target_files else ""
     return f"{info.exc_name or 'ERR'}::{files_tag}::{normalized[-600:]}"
@@ -640,6 +1443,8 @@ def _build_adversary_specs(
     diff_text: str,
     file_snippets: str,
     num_adversaries: int,
+    *,
+    runner: str = "python",
 ) -> list[tuple[str, CallSpec]]:
     if num_adversaries <= 0:
         return []
@@ -648,18 +1453,59 @@ def _build_adversary_specs(
     if len(clipped_diff) > _MAX_DIFF_CHARS:
         clipped_diff = clipped_diff[:_MAX_DIFF_CHARS] + "\n... (diff truncated)\n"
 
-    system_prompt = (
-        "You are an adversarial bug-hunting verifier for Cortheon Guard.\n"
-        "STRICT RULES:\n"
-        "1. NEVER write prose code review, opinions, or summaries.\n"
-        "2. Output ONLY ONE self-contained Python 3 reproducer script inside a ```python ... ``` code block.\n"
-        "3. Put `# TITLE: <concise bug title>` as the first line of the script.\n"
-        "4. Start with `import sys; sys.path.insert(0, '.')` and import/call the ACTUAL changed code.\n"
-        "5. Assert the CORRECT expected behavior so the script raises AssertionError (or exits non-zero) "
-        "ONLY when a genuine bug exists in the diff, and exits 0 cleanly if the code is correct.\n"
-        "6. Do NOT invent non-existent functions/modules, do NOT use network I/O, and do NOT write files "
-        "in the repository directory (use `tempfile` if temporary storage is needed)."
-    )
+    if runner == "node":
+        system_prompt = (
+            "You are an adversarial bug-hunting verifier for Cortheon Guard.\n"
+            "STRICT RULES:\n"
+            "1. NEVER write prose code review, opinions, or summaries.\n"
+            "2. Output ONLY ONE self-contained Node.js reproducer script inside a ```javascript ... ``` code block.\n"
+            "3. Put `// TITLE: <concise bug title>` as the first line of the script.\n"
+            "4. Import or `require()` the ACTUAL changed code using relative `./...` paths and use `node:assert/strict`.\n"
+            "5. Assert the CORRECT expected behavior so the script throws AssertionError (or exits non-zero) "
+            "ONLY when a genuine bug exists in the diff, and exits 0 cleanly if the code is correct.\n"
+            "6. Do NOT invent non-existent functions/modules, do NOT use network I/O, and do NOT write files "
+            "in the repository directory."
+        )
+        output_directive = "Output ONLY the Node.js reproducer script inside a single ```javascript ... ``` block."
+    elif runner == "shell":
+        system_prompt = (
+            "You are an adversarial bug-hunting verifier for Cortheon Guard.\n"
+            "STRICT RULES:\n"
+            "1. NEVER write prose code review, opinions, or summaries.\n"
+            "2. Output ONLY ONE self-contained POSIX shell reproducer script inside a ```sh ... ``` code block.\n"
+            "3. Put `# TITLE: <concise bug title>` as the first line and start with `set -e`.\n"
+            "4. Invoke the ACTUAL changed script/CLI in `.` and assert expected output/exit status.\n"
+            "5. Exit non-zero ONLY when a genuine bug exists in the diff, and exit 0 cleanly if the code is correct.\n"
+            "6. Do NOT use network I/O and do NOT modify files in the repository directory (use `$TMPDIR` if needed)."
+        )
+        output_directive = "Output ONLY the POSIX shell reproducer script inside a single ```sh ... ``` block."
+    elif runner == "go":
+        system_prompt = (
+            "You are an adversarial bug-hunting verifier for Cortheon Guard.\n"
+            "STRICT RULES:\n"
+            "1. NEVER write prose code review, opinions, or summaries.\n"
+            "2. Output ONLY ONE self-contained Go `*_test.go` reproducer inside a ```go ... ``` code block.\n"
+            "3. Put `// TITLE: <concise bug title>` as the first line and declare the exact `package <name>` of the changed code.\n"
+            "4. Write `func TestCortheonGuardRepro(t *testing.T)` calling the ACTUAL changed Go code.\n"
+            "5. Call `t.Fatalf(...)` ONLY when a genuine bug exists in the diff, and pass cleanly if the code is correct.\n"
+            "6. Do NOT invent non-existent symbols, do NOT use network I/O, and do NOT write files in the repository."
+        )
+        output_directive = "Output ONLY the Go test reproducer inside a single ```go ... ``` block."
+    else:
+        system_prompt = (
+            "You are an adversarial bug-hunting verifier for Cortheon Guard.\n"
+            "STRICT RULES:\n"
+            "1. NEVER write prose code review, opinions, or summaries.\n"
+            "2. Output ONLY ONE self-contained Python 3 reproducer script inside a ```python ... ``` code block.\n"
+            "3. Put `# TITLE: <concise bug title>` as the first line of the script.\n"
+            "4. Start with `import sys; sys.path.insert(0, '.')` and import/call the ACTUAL changed code "
+            "(or invoke compiled binaries/CLI tools inside `.` via `subprocess`).\n"
+            "5. Assert the CORRECT expected behavior so the script raises AssertionError (or exits non-zero) "
+            "ONLY when a genuine bug exists in the diff, and exits 0 cleanly if the code is correct.\n"
+            "6. Do NOT invent non-existent functions/modules, do NOT use network I/O, and do NOT write files "
+            "in the repository directory (use `tempfile` if temporary storage is needed)."
+        )
+        output_directive = "Output ONLY the Python 3 reproducer script inside a single ```python ... ``` block."
 
     user_base = (
         f"UNIFIED DIFF TO BREAK:\n```diff\n{clipped_diff}\n```\n\n"
@@ -679,7 +1525,7 @@ def _build_adversary_specs(
                     "content": (
                         f"{user_base}\n\n"
                         f"ATTACK LENS ({role_name}):\n{lens}\n\n"
-                        "Output ONLY the Python 3 reproducer script inside a single ```python ... ``` block."
+                        f"{output_directive}"
                     ),
                 },
             ],
@@ -725,13 +1571,25 @@ def _parse_fix_candidate(
     if (stripped.startswith("diff --git ") or stripped.startswith("--- ")) and "@@" in stripped:
         return {}, stripped + "\n"
 
-    # 3. Single Python file full replacement
+    # 3. Single file full replacement (Python or polyglot target)
     py_targets = [f for f in candidate_files if f.endswith(".py")]
     target = py_targets[0] if len(py_targets) == 1 else (candidate_files[0] if len(candidate_files) == 1 else None)
     if target:
-        code = extract_python_code(raw_output)
-        if code and code.strip():
-            return {target: code if code.endswith("\n") else code + "\n"}, None
+        if target.endswith(".py"):
+            code = extract_python_code(raw_output)
+            if code and code.strip():
+                return {target: code if code.endswith("\n") else code + "\n"}, None
+        else:
+            target_runner = _EXT_TO_RUNNER.get(Path(target).suffix.lower(), "")
+            pref_tags = (
+                _NODE_TAGS if target_runner == "node"
+                else (_SHELL_TAGS if target_runner == "shell" else (_GO_TAGS if target_runner == "go" else frozenset()))
+            )
+            blocks = _extract_fenced_blocks(raw_output, pref_tags)
+            if blocks:
+                body = blocks[-1][1]
+                if body.strip():
+                    return {target: body if body.endswith("\n") else body + "\n"}, None
 
     return {}, None
 
@@ -818,6 +1676,7 @@ async def _attempt_auto_fix(
     *,
     test_cmd: Optional[str],
     timeout_s: float,
+    runner: str = "python",
 ) -> tuple[Optional[str], bool, int, int]:
     """Race B=2 surgical patch generators and mechanically verify against all proven bugs + test_cmd."""
     target_files: list[str] = []
@@ -835,20 +1694,22 @@ async def _attempt_auto_fix(
     if not target_files:
         return None, False, 0, 0
 
-    snippets = _build_file_snippets(patched_wt, target_files)
+    snippets = _build_file_snippets(patched_wt, target_files, runner=runner)
     bugs_block_parts: list[str] = []
     for bug in proven_bugs:
+        fence_lang = _language_fence_tag(bug.language)
         bugs_block_parts.append(
             f"### {bug.id} ({bug.role}): {bug.title}\n"
-            f"Reproducer:\n```python\n{bug.reproducer_code}\n```\n"
+            f"Reproducer:\n```{fence_lang}\n{bug.reproducer_code}\n```\n"
             f"Failure output:\n```\n{bug.failure_output}\n```"
         )
     bugs_block = "\n\n".join(bugs_block_parts)
 
     if len(target_files) == 1:
+        target_fence = _EXT_TO_MARKDOWN_LANG.get(Path(target_files[0]).suffix.lower(), _language_fence_tag(runner))
         format_instr = (
             f"Output ONLY the complete fixed content of `{target_files[0]}` inside a single "
-            "```python ... ``` block (or a unified ```diff ... ``` patch). Never leave placeholders."
+            f"```{target_fence} ... ``` block (or a unified ```diff ... ``` patch). Never leave placeholders."
         )
     else:
         format_instr = (
@@ -894,10 +1755,17 @@ async def _attempt_auto_fix(
         if not file_updates and not diff_patch:
             continue
 
-        # Validate syntax for Python file updates before running sandbox checks
+        # Validate syntax for updated files before running sandbox checks
         syntax_bad = False
         for rel, content in file_updates.items():
-            if rel.endswith(".py") and check_syntax(content) is not None:
+            ext = Path(rel).suffix.lower()
+            if ext == ".py" and check_syntax(content) is not None:
+                syntax_bad = True
+                break
+            if ext in (".js", ".mjs", ".cjs") and _check_node_syntax(content) is not None:
+                syntax_bad = True
+                break
+            if ext in (".sh", ".bash") and _check_shell_syntax(content) is not None:
                 syntax_bad = True
                 break
         if syntax_bad:
@@ -926,7 +1794,7 @@ async def _attempt_auto_fix(
                 if not modified_rels:
                     continue
             elif diff_patch:
-                # Use git apply in non-repo directory via --directory or temporary git init
+                # Use git apply in non-repo directory
                 apply_proc = await asyncio.to_thread(
                     subprocess.run,
                     ["git", "apply", "--whitespace=nowarn", "-"],
@@ -949,6 +1817,8 @@ async def _attempt_auto_fix(
                     fix_wt,
                     repo,
                     timeout_s,
+                    runner=bug.language,
+                    diff_files=diff_files,
                 )
                 if not run_info.exec_result.ok:
                     all_fixed = False
@@ -988,16 +1858,19 @@ async def run_guard(
     auto_fix: bool = False,
     test_cmd: Optional[str] = None,
     timeout_s: float = 15.0,
+    runner: str = "auto",
+    on_event: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> GuardReport:
-    """Run Cortheon Guard proof-carrying adversarial diff verification.
+    """Run Cortheon Guard polyglot proof-carrying adversarial diff verification.
 
     Guarantees:
     - Never mutates ``repo_path``.
     - Always cleans up all ephemeral git worktrees in ``finally``.
-    - Never reports an LLM claim unless backed by an actually failing Python
-      reproducer executed inside Cortheon's OS sandbox.
+    - Never reports an LLM claim unless backed by an actually failing reproducer
+      executed inside Cortheon's OS sandbox.
     """
     t0 = time.perf_counter()
+    normalized_runner = _normalize_runner(runner)
     repo = Path(repo_path).resolve()
     base_exists = await asyncio.to_thread(_git_ref_exists, repo, base_ref)
 
@@ -1013,8 +1886,37 @@ async def run_guard(
             _collect_repo_diff, repo, base_ref, base_exists
         )
 
+    active_runner = detect_runner(diff_files, normalized_runner)
+
     # Empty diff short-circuit: 0 LLM calls, 0 worktrees
     if not effective_diff.strip() and not diff_files:
+        wall_s = time.perf_counter() - t0
+        _emit_event(
+            on_event,
+            {
+                "engine": "guard",
+                "event": "start",
+                "mode": active_runner,
+                "runner": active_runner,
+                "streams": 0,
+                "diff_files": [],
+            },
+        )
+        _emit_event(
+            on_event,
+            {
+                "engine": "guard",
+                "event": "done",
+                "elapsed_s": round(wall_s, 3),
+                "verified": True,
+                "clean": True,
+                "proven_bugs": 0,
+                "reproducers_executed": 0,
+                "rejected_non_failing": 0,
+                "runner": active_runner,
+                "summary": "0 diff files (clean)",
+            },
+        )
         return GuardReport(
             repo_path=str(repo),
             base_ref=base_ref,
@@ -1025,10 +1927,23 @@ async def run_guard(
             proven_bugs=[],
             suggested_patch=None,
             patch_verified=False,
-            wall_s=time.perf_counter() - t0,
+            wall_s=wall_s,
             llm_calls=0,
             total_tokens=0,
+            runner=active_runner,
         )
+
+    # Verify required polyglot runtime before spending LLM calls
+    if active_runner == "node" and not shutil.which("node"):
+        raise RuntimeError(
+            "Node.js runtime (`node`) is required for runner='node' but was not found on PATH."
+        )
+    if active_runner == "go" and not shutil.which("go"):
+        if normalized_runner == "go":
+            raise RuntimeError(
+                "Go toolchain (`go`) is required for runner='go' but was not found on PATH."
+            )
+        active_runner = "python"
 
     patched_wt: Optional[Path] = None
     patched_is_wt = False
@@ -1069,9 +1984,26 @@ async def run_guard(
             patched_is_wt = False
 
         # Step 2: Launch parallel clean-context adversaries
-        file_snippets = await asyncio.to_thread(_build_file_snippets, patched_wt, diff_files)
-        adv_specs_pairs = _build_adversary_specs(effective_diff, file_snippets, num_adversaries)
+        file_snippets = await asyncio.to_thread(_build_file_snippets, patched_wt, diff_files, runner=active_runner)
+        adv_specs_pairs = _build_adversary_specs(
+            effective_diff,
+            file_snippets,
+            num_adversaries,
+            runner=active_runner,
+        )
         adversaries_run = len(adv_specs_pairs)
+
+        _emit_event(
+            on_event,
+            {
+                "engine": "guard",
+                "event": "start",
+                "mode": active_runner,
+                "runner": active_runner,
+                "streams": adversaries_run,
+                "diff_files": list(diff_files),
+            },
+        )
 
         adv_results: list[CompletionResult] = []
         if adv_specs_pairs:
@@ -1081,14 +2013,41 @@ async def run_guard(
 
         # Step 3: Mechanical Zero-FP Proof Gate inside Cortheon's OS sandbox
         seen_traces: set[str] = set()
-        for (role_name, _spec), res in zip(adv_specs_pairs, adv_results):
+        for slot_idx, ((role_name, _spec), res) in enumerate(zip(adv_specs_pairs, adv_results), start=1):
+            slot_tokens = res.prompt_tokens + res.completion_tokens
             if not res.ok:
                 rejected_non_failing += 1
+                _emit_event(
+                    on_event,
+                    {
+                        "engine": "guard",
+                        "event": "slot_done",
+                        "slot": slot_idx,
+                        "role": role_name,
+                        "ok": False,
+                        "elapsed_s": round(res.latency_s, 3),
+                        "tokens": slot_tokens,
+                        "summary": "llm error",
+                    },
+                )
                 continue
 
-            repro_code = _extract_valid_reproducer(res.content)
+            repro_code = _extract_valid_reproducer(res.content, runner=active_runner)
             if repro_code is None:
                 rejected_non_failing += 1
+                _emit_event(
+                    on_event,
+                    {
+                        "engine": "guard",
+                        "event": "slot_done",
+                        "slot": slot_idx,
+                        "role": role_name,
+                        "ok": False,
+                        "elapsed_s": round(res.latency_s, 3),
+                        "tokens": slot_tokens,
+                        "summary": "discarded (no valid reproducer)",
+                    },
+                )
                 continue
 
             reproducers_executed += 1
@@ -1098,27 +2057,70 @@ async def run_guard(
                 patched_wt,
                 repo,
                 timeout_s,
+                runner=active_runner,
+                diff_files=diff_files,
             )
+            slot_elapsed = round(res.latency_s + patched_info.exec_result.elapsed_s, 3)
 
             # Exit 0 -> code survived the attack -> discard
             if patched_info.exec_result.ok:
                 rejected_non_failing += 1
+                _emit_event(
+                    on_event,
+                    {
+                        "engine": "guard",
+                        "event": "slot_done",
+                        "slot": slot_idx,
+                        "role": role_name,
+                        "ok": True,
+                        "elapsed_s": slot_elapsed,
+                        "tokens": slot_tokens,
+                        "summary": "survived (exit 0)",
+                    },
+                )
                 continue
 
-            # Reproducer itself failed due to bad import/syntax (not target code) -> discard
-            if (
-                not patched_info.exec_result.timed_out
-                and patched_info.last_in_repro
-                and patched_info.exc_name in _INVALID_REPRO_EXCS
-            ):
+            # Reproducer itself failed due to bad import/syntax/missing command (not target code) -> discard
+            if _is_invalid_reproducer_failure(patched_info, active_runner):
                 rejected_non_failing += 1
+                _emit_event(
+                    on_event,
+                    {
+                        "engine": "guard",
+                        "event": "slot_done",
+                        "slot": slot_idx,
+                        "role": role_name,
+                        "ok": False,
+                        "elapsed_s": slot_elapsed,
+                        "tokens": slot_tokens,
+                        "summary": f"invalid reproducer ({patched_info.exc_name or 'error'})",
+                    },
+                )
                 continue
 
-            target_files = _infer_target_files(repro_code, patched_info.clean_output, diff_files)
+            target_files = _infer_target_files(
+                repro_code,
+                patched_info.clean_output,
+                diff_files,
+                runner=active_runner,
+            )
 
             # Deduplicate identical failure traces
             dedup_key = _failure_dedup_key(patched_info, target_files)
             if dedup_key in seen_traces:
+                _emit_event(
+                    on_event,
+                    {
+                        "engine": "guard",
+                        "event": "slot_done",
+                        "slot": slot_idx,
+                        "role": role_name,
+                        "ok": True,
+                        "elapsed_s": slot_elapsed,
+                        "tokens": slot_tokens,
+                        "summary": "duplicate failure trace",
+                    },
+                )
                 continue
             seen_traces.add(dedup_key)
 
@@ -1133,15 +2135,13 @@ async def run_guard(
                     base_wt,
                     repo,
                     timeout_s,
+                    runner=active_runner,
+                    diff_files=diff_files,
                 )
                 if base_info.exec_result.ok:
                     passed_on_base = True
-                elif (
-                    not base_info.exec_result.timed_out
-                    and base_info.last_in_repro
-                    and base_info.exc_name in _BASELINE_MISSING_SYMBOL_EXCS
-                ):
-                    # Newly added function/class/module in diff -> still a real bug in new code
+                elif _is_baseline_missing_symbol(base_info, active_runner):
+                    # Newly added function/class/module/script in diff -> still a real bug in new code
                     passed_on_base = None
                 else:
                     passed_on_base = False
@@ -1149,16 +2149,43 @@ async def run_guard(
             bug_id = f"BUG-{len(proven_bugs) + 1:02d}"
             title = _extract_bug_title(repro_code, patched_info.clean_output, role_name, patched_info.exc_name)
 
-            proven_bugs.append(
-                ProvenBug(
-                    id=bug_id,
-                    role=role_name,
-                    title=title,
-                    reproducer_code=repro_code,
-                    failure_output=patched_info.clean_output,
-                    passed_on_base=passed_on_base,
-                    target_files=target_files,
-                )
+            bug = ProvenBug(
+                id=bug_id,
+                role=role_name,
+                title=title,
+                reproducer_code=repro_code,
+                failure_output=patched_info.clean_output,
+                passed_on_base=passed_on_base,
+                target_files=target_files,
+                language=active_runner,
+            )
+            proven_bugs.append(bug)
+
+            _emit_event(
+                on_event,
+                {
+                    "engine": "guard",
+                    "event": "slot_done",
+                    "slot": slot_idx,
+                    "role": role_name,
+                    "ok": True,
+                    "elapsed_s": slot_elapsed,
+                    "tokens": slot_tokens,
+                    "summary": f"PROVEN {bug_id}",
+                },
+            )
+            _emit_event(
+                on_event,
+                {
+                    "engine": "guard",
+                    "event": "bug_proven",
+                    "id": bug_id,
+                    "role": role_name,
+                    "title": title,
+                    "passed_on_base": passed_on_base,
+                    "language": active_runner,
+                    "target_files": list(target_files),
+                },
             )
 
         # Step 4: Optional auto-fix with mechanical verification
@@ -1172,6 +2199,7 @@ async def run_guard(
                 proven_bugs=proven_bugs,
                 test_cmd=test_cmd,
                 timeout_s=timeout_s,
+                runner=active_runner,
             )
             llm_calls += fix_calls
             total_tokens += fix_tokens
@@ -1179,6 +2207,23 @@ async def run_guard(
     finally:
         await asyncio.to_thread(_remove_ephemeral_worktree, repo, base_wt, is_git_worktree=True)
         await asyncio.to_thread(_remove_ephemeral_worktree, repo, patched_wt, is_git_worktree=patched_is_wt)
+
+    wall_s = time.perf_counter() - t0
+    _emit_event(
+        on_event,
+        {
+            "engine": "guard",
+            "event": "done",
+            "elapsed_s": round(wall_s, 3),
+            "verified": len(proven_bugs) == 0,
+            "clean": len(proven_bugs) == 0,
+            "proven_bugs": len(proven_bugs),
+            "reproducers_executed": reproducers_executed,
+            "rejected_non_failing": rejected_non_failing,
+            "runner": active_runner,
+            "summary": f"{len(proven_bugs)} proven bug(s) ({reproducers_executed} executed)",
+        },
+    )
 
     return GuardReport(
         repo_path=str(repo),
@@ -1190,9 +2235,10 @@ async def run_guard(
         proven_bugs=proven_bugs,
         suggested_patch=suggested_patch,
         patch_verified=patch_verified,
-        wall_s=time.perf_counter() - t0,
+        wall_s=wall_s,
         llm_calls=llm_calls,
         total_tokens=total_tokens,
+        runner=active_runner,
     )
 
 
@@ -1232,7 +2278,7 @@ def format_guard_report(report: GuardReport, *, use_color: Optional[bool] = None
         _paint(bar, _ANSI.CYAN, _ANSI.BOLD, color=color),
         _paint("  Cortheon Guard — Proof-Carrying Diff Breaker", _ANSI.CYAN, _ANSI.BOLD, color=color),
         _paint(
-            f"  Repo: {report.repo_path} | Base: {report.base_ref} | Sandbox: {backend}",
+            f"  Repo: {report.repo_path} | Base: {report.base_ref} | Runner: {report.runner} | Sandbox: {backend}",
             _ANSI.DIM,
             color=color,
         ),
@@ -1283,7 +2329,7 @@ def format_guard_report(report: GuardReport, *, use_color: Optional[bool] = None
                 lines.append(f"    {tb_line}")
             lines.append("")
             lines.append(_paint("  Copy-Paste Reproducer:", _ANSI.BOLD, color=color))
-            lines.append("  ```python")
+            lines.append(f"  ```{_language_fence_tag(bug.language)}")
             for code_line in bug.reproducer_code.splitlines():
                 lines.append(f"  {code_line}")
             lines.append("  ```")
@@ -1318,3 +2364,297 @@ def format_guard_report(report: GuardReport, *, use_color: Optional[bool] = None
         ]
     )
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# SARIF 2.1.0 Exporter (GitHub Code Scanning / PR Diff Annotations)
+# ---------------------------------------------------------------------------
+
+
+def _pascal_case(identifier: str) -> str:
+    parts = [p for p in re.split(r"[^A-Za-z0-9]+", identifier) if p]
+    return "".join(p[:1].upper() + p[1:] for p in parts) or "CortheonGuardRule"
+
+
+def _normalize_sarif_uri(path_str: str, repo_path: str) -> str:
+    raw = (path_str or "").strip()
+    if not raw:
+        return "."
+    norm = raw.replace("\\", "/")
+    if repo_path:
+        repo_norm = repo_path.replace("\\", "/").rstrip("/")
+        if repo_norm and norm.startswith(repo_norm + "/"):
+            norm = norm[len(repo_norm) + 1 :]
+    while norm.startswith("./"):
+        norm = norm[2:]
+    norm = norm.lstrip("/")
+    return norm or "."
+
+
+def _extract_failure_line(failure_output: str, target_uri: str) -> int:
+    if not failure_output or not target_uri or target_uri == ".":
+        return 1
+    candidates = [target_uri]
+    basename = Path(target_uri).name
+    if basename and basename not in candidates:
+        candidates.append(basename)
+    for cand in candidates:
+        esc = re.escape(cand)
+        # Python traceback: File "math_utils.py", line 6
+        m_py = re.search(rf'File "[^"]*{esc}", line (\d+)', failure_output)
+        if m_py:
+            val = int(m_py.group(1))
+            if val >= 1:
+                return val
+        # Node / Go / Shell style: math_utils.js:6:12 or math_utils.go:6:
+        m_colon = re.search(rf"(?:^|[\s(/]){esc}:(\d+)(?::\d+)?\b", failure_output, re.MULTILINE)
+        if m_colon:
+            val = int(m_colon.group(1))
+            if val >= 1:
+                return val
+    return 1
+
+
+def format_guard_sarif(report: GuardReport) -> dict[str, Any]:
+    """Export a :class:`GuardReport` as a strict SARIF 2.1.0 dictionary.
+
+    Compatible with GitHub Code Scanning (`github/codeql-action/upload-sarif`) and
+    inline PR diff annotations. Clean zero-bug reports emit valid SARIF 2.1.0 with
+    ``"results": []``.
+    """
+    role_descriptions: dict[str, str] = {role: desc for role, desc, _t, _s in ADVERSARY_ROLES}
+    seen_rule_ids: set[str] = set()
+    rules: list[dict[str, Any]] = []
+
+    def _register_rule(role_name: str) -> str:
+        rule_id = f"cortheon-guard/{role_name}"
+        if rule_id not in seen_rule_ids:
+            seen_rule_ids.add(rule_id)
+            base_role = re.sub(r"_\d+$", "", role_name)
+            desc = role_descriptions.get(
+                role_name,
+                role_descriptions.get(
+                    base_role,
+                    f"Mechanically proven adversarial bug discovered by Cortheon Guard role `{role_name}`.",
+                ),
+            )
+            rules.append(
+                {
+                    "id": rule_id,
+                    "name": _pascal_case(role_name),
+                    "shortDescription": {
+                        "text": f"Cortheon Guard proven bug ({role_name})",
+                    },
+                    "fullDescription": {
+                        "text": desc,
+                    },
+                    "defaultConfiguration": {
+                        "level": "error",
+                    },
+                    "properties": {
+                        "tags": ["correctness", "cortheon-guard", "zero-false-positive"],
+                    },
+                }
+            )
+        return rule_id
+
+    for role_name, _desc, _t, _s in ADVERSARY_ROLES:
+        _register_rule(role_name)
+
+    results: list[dict[str, Any]] = []
+    for bug in report.proven_bugs:
+        rule_id = _register_rule(bug.role)
+        level = "error" if bug.passed_on_base is True else "warning"
+        raw_target = (
+            bug.target_files[0]
+            if bug.target_files
+            else (report.diff_files[0] if report.diff_files else ".")
+        )
+        target_uri = _normalize_sarif_uri(raw_target, report.repo_path)
+        start_line = _extract_failure_line(bug.failure_output, target_uri)
+
+        if bug.passed_on_base is True:
+            status_label = f"REGRESSION (passed on {report.base_ref})"
+        elif bug.passed_on_base is False:
+            status_label = f"PRE-EXISTING (also failed on {report.base_ref})"
+        else:
+            status_label = "NEW CODE / BASELINE N/A"
+
+        fence_lang = _language_fence_tag(bug.language)
+        message_text = (
+            f"{bug.id}: {bug.title}\n"
+            f"Status: {status_label}\n\n"
+            f"Failure output:\n{bug.failure_output}\n\n"
+            f"Reproducer ({bug.language}):\n```{fence_lang}\n{bug.reproducer_code}\n```"
+        )
+        fp_digest = hashlib.sha256(
+            f"{rule_id}|{target_uri}|{bug.title}|{bug.language}".encode("utf-8")
+        ).hexdigest()[:16]
+
+        results.append(
+            {
+                "ruleId": rule_id,
+                "level": level,
+                "message": {"text": message_text},
+                "locations": [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {
+                                "uri": target_uri,
+                                "uriBaseId": "%SRCROOT%",
+                            },
+                            "region": {
+                                "startLine": start_line,
+                            },
+                        }
+                    }
+                ],
+                "partialFingerprints": {
+                    "primaryLocationLineHash": fp_digest,
+                },
+                "properties": {
+                    "bug_id": bug.id,
+                    "role": bug.role,
+                    "passed_on_base": bug.passed_on_base,
+                    "language": bug.language,
+                    "target_files": list(bug.target_files),
+                },
+            }
+        )
+
+    return {
+        "$schema": _SARIF_SCHEMA_URI,
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "Cortheon Guard",
+                        "version": _GUARD_VERSION,
+                        "informationUri": "https://github.com/cortheon/cortheon",
+                        "rules": rules,
+                    }
+                },
+                "results": results,
+                "invocations": [
+                    {
+                        "executionSuccessful": True,
+                        "properties": {
+                            "repo_path": report.repo_path,
+                            "base_ref": report.base_ref,
+                            "runner": report.runner,
+                            "adversaries_run": report.adversaries_run,
+                            "reproducers_executed": report.reproducers_executed,
+                            "rejected_non_failing": report.rejected_non_failing,
+                            "wall_s": round(report.wall_s, 3),
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Non-Destructive Git Hook Installer / Uninstaller
+# ---------------------------------------------------------------------------
+
+
+def _validate_hook_name(hook_name: str) -> str:
+    cleaned = (hook_name or "").strip()
+    if not cleaned or "/" in cleaned or "\\" in cleaned or cleaned in (".", ".."):
+        raise ValueError(f"Invalid git hook name: {hook_name!r}")
+    return cleaned
+
+
+def _resolve_git_hooks_dir(repo_path: str | Path) -> Path:
+    repo = Path(repo_path).resolve()
+    if not repo.exists():
+        raise ValueError(f"Repository path does not exist: {repo}")
+    proc = _run_git(repo, ["rev-parse", "--git-path", "hooks"])
+    if proc.returncode != 0 or not proc.stdout.strip():
+        raise ValueError(f"Not a git repository: {repo} ({proc.stderr.strip()})")
+    raw = proc.stdout.strip()
+    hooks_dir = Path(raw)
+    if not hooks_dir.is_absolute():
+        hooks_dir = (repo / hooks_dir).resolve()
+    return hooks_dir
+
+
+def install_git_hook(
+    repo_path: str | Path,
+    *,
+    url: str = "http://127.0.0.1:8080/v1",
+    hook_name: str = "pre-push",
+    base_ref: str = "HEAD",
+    adversaries: int = 3,
+    block_on_bug: bool = True,
+    force: bool = False,
+) -> Path:
+    """Non-destructively install an executable Cortheon Guard git hook.
+
+    Resolves the repository's hooks directory via ``git rev-parse --git-path hooks``
+    (supporting normal repositories, linked worktrees, and custom ``core.hooksPath``).
+    Refuses to overwrite an existing non-Cortheon hook unless ``force=True``, and
+    idempotently updates an existing Cortheon Guard hook in place.
+    """
+    valid_name = _validate_hook_name(hook_name)
+    hooks_dir = _resolve_git_hooks_dir(repo_path)
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    hook_path = hooks_dir / valid_name
+
+    if hook_path.exists():
+        existing = hook_path.read_text(encoding="utf-8", errors="replace")
+        if _GIT_HOOK_MARKER not in existing and not force:
+            raise FileExistsError(
+                f"Refusing to overwrite existing custom git hook at {hook_path}. "
+                "Pass force=True to replace it."
+            )
+
+    quoted_url = shlex.quote(url)
+    quoted_ref = shlex.quote(base_ref)
+    adv_n = max(1, int(adversaries))
+    suffix = "" if block_on_bug else " || true"
+
+    script = (
+        "#!/usr/bin/env sh\n"
+        f"{_GIT_HOOK_MARKER}\n"
+        "# Managed by Cortheon Guard — Zero-False-Positive Proof-Carrying Diff Breaker.\n"
+        "# Uninstall cleanly with flash_forge.guard.uninstall_git_hook() or remove this file.\n"
+        "set -eu\n\n"
+        "if command -v cortheon >/dev/null 2>&1; then\n"
+        f"    cortheon guard --repo . --url {quoted_url} --base-ref {quoted_ref} --adversaries {adv_n}{suffix}\n"
+        "else\n"
+        f"    python3 -m flash_forge.cli guard --repo . --url {quoted_url} --base-ref {quoted_ref} --adversaries {adv_n}{suffix}\n"
+        "fi\n"
+    )
+    hook_path.write_text(script, encoding="utf-8")
+    os.chmod(hook_path, 0o755)
+    return hook_path
+
+
+def uninstall_git_hook(
+    repo_path: str | Path,
+    *,
+    hook_name: str = "pre-push",
+    force: bool = False,
+) -> bool:
+    """Cleanly remove a Cortheon Guard git hook.
+
+    Returns ``True`` if the hook was removed, or ``False`` if no hook was present.
+    Refuses to delete a custom non-Cortheon hook unless ``force=True``.
+    """
+    valid_name = _validate_hook_name(hook_name)
+    hooks_dir = _resolve_git_hooks_dir(repo_path)
+    hook_path = hooks_dir / valid_name
+    if not hook_path.exists():
+        return False
+
+    existing = hook_path.read_text(encoding="utf-8", errors="replace")
+    if _GIT_HOOK_MARKER not in existing and not force:
+        raise RuntimeError(
+            f"Refusing to remove non-Cortheon git hook at {hook_path}. "
+            "Pass force=True to delete it."
+        )
+    hook_path.unlink()
+    return True
