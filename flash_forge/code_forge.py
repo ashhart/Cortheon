@@ -1,22 +1,27 @@
-"""Unified Consensus Verified Code & Adversarial Debugging Engine (v4).
+"""Unified Consensus Verified Code & Adversarial Debugging Engine (v7).
 
 Built around one universal loop (mirroring ReasonForge):
-  Stage 1 (B=4 single parallel wave — ZERO upfront Stage-1 wait):
-    - 3 diverse implementations (`radically_simple` textbook, `first_principles`, `edge_skeptic`)
-      in parallel with 1 high-signal Spec-Property Test Suite (`spec_oracle`)
-      (or 4 diverse implementations when `external_test_code` is provided).
-    - Mechanical Tier-0 per-test execution + Helper-Aware Strict B=2 Consensus Shield
+  Stage 1 (B=4 parallel wave — Sample-First Streaming or Spec-Oracle):
+    - Sample-First Mode (`stdin_mode` with >=2 verbatim samples, non-deep, streaming client) OR
+      `external_test_code`: launches all 4 diverse implementations (`radically_simple`,
+      `first_principles`, `edge_skeptic`, `alt_algorithm`) as independent async tasks via
+      `client.complete(spec)`, evaluates each immediately upon completion, and cancels lagging
+      GPU slots the moment >=2 independent candidates pass 100% with zero behavioral divergence.
+    - Library/API or <2-sample Mode: 3 diverse implementations in parallel with 1 high-signal
+      Spec-Property Test Suite (`spec_oracle`), plus Helper-Aware Strict B=2 Consensus Shield
       (any generated test with 0/N passes is audited WITH module helpers; requires 2/2 VALID).
   Stage 2 (Targeted B=1 Clean-Context Adversarial Red-Teamer):
-    - Fresh context probes the surviving leader for subtle spec violations.
+    - Fresh context probes the surviving leader for subtle spec violations (skipped on
+      unanimous fast-path, external pass, or sample-first 0-pass / single-survivor fast paths).
     - Every killing assertion is gated by the same Helper-Aware Strict B=2 Shield (2/2 VALID).
   Stage 3 (Conditional Graveyard Repair: Wave 2 B=3 + Pre-W3 Re-Audit + Wave 3 B=2):
-    - Fires ONLY if no perfect survivor exists.
+    - Fires ONLY if no perfect survivor exists (e.g., 0/4 pass pinned samples -> direct to Wave 2).
     - Includes `w2_radically_simple` (strip over-engineering) + `w2_surgical_fix` + `w2_clean_rewrite`.
     - Before Wave 3 runs, any generated test still failing 0/N across >=4 independent W1+W2
       implementations is re-audited strictly so Wave 3 NEVER overfits a poisoned generated test.
-  Final Tie-Break:
-    - Order-swapped pairwise tournament over top-scoring distinct survivors.
+  Final Selection:
+    - Correctness -> Behavioral Consensus -> API Faithfulness -> Runtime/TLE Tier -> Compactness,
+      with consensus-respecting order-swapped pairwise tie-break when behavioral fingerprints differ.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .client import CallSpec, TensorFoldClient
 from .memory import EpisodicMemory
@@ -101,6 +106,30 @@ class CodeForgeTrace:
     verified: bool = False
     unanimous_fastpath: bool = False
     pairwise_tiebreak_skipped: int = 0
+    early_aborted_slots: int = 0
+    sample_first_mode: bool = False
+
+
+def _emit_event(
+    on_event: Optional[Callable[[dict[str, Any]], None]],
+    payload: dict[str, Any],
+) -> None:
+    """Safely invoke an optional observability callback without affecting execution."""
+    if on_event is None:
+        return
+    try:
+        on_event(payload)
+    except Exception:
+        pass
+
+
+async def _call_batch(client: Any, specs: list[CallSpec]) -> list[Any]:
+    """Invoke `client.batch(specs)`, falling back to concurrent `client.complete(s)` for complete-only clients."""
+    if not specs:
+        return []
+    if callable(getattr(client, "batch", None)):
+        return await client.batch(specs)
+    return list(await asyncio.gather(*(client.complete(s) for s in specs)))
 
 
 _FUTURE_IMPORT_RE = re.compile(r"^[ \t]*from\s+__future__\s+import\s+[^\n]+$", re.MULTILINE)
@@ -495,22 +524,32 @@ def _extract_prompt_io_samples(problem: str) -> list[tuple[str, str]]:
     return pairs[:6]
 
 
-def _build_deterministic_sample_tests(samples: list[tuple[str, str]]) -> tuple[str, set[str]]:
+def _build_deterministic_sample_tests(
+    samples: list[tuple[str, str]],
+    *,
+    include_diff_probe: bool = False,
+) -> tuple[str, set[str]]:
     """Build immutable `def test_prompt_sample_k():` checks that can NEVER be mistyped or dropped."""
     if not samples:
         return "", set()
     lines: list[str] = []
     names: set[str] = set()
+    if include_diff_probe:
+        lines.append("_SAMPLE_DIFF_OUT: dict[str, str] = {}\n")
     for i, (inp, exp) in enumerate(samples, 1):
         name = f"test_prompt_sample_{i}"
         names.add(name)
         exp_norm = "\n".join(ln.rstrip() for ln in exp.strip().splitlines())
+        record_line = f"    _SAMPLE_DIFF_OUT['sample_{i}'] = _got\n" if include_diff_probe else ""
         lines.append(
             f"def {name}():\n"
             f"    _exp = {exp_norm!r}\n"
             f"    _got = '\\n'.join(ln.rstrip() for ln in run_solution({inp!r}).strip().splitlines())\n"
+            f"{record_line}"
             f"    assert _got == _exp, f'sample {i}: got={{_got[:120]!r}} exp={{_exp[:120]!r}}'\n"
         )
+    if include_diff_probe:
+        lines.append("def diff_probe():\n    return dict(_SAMPLE_DIFF_OUT)\n")
     return "\n".join(lines), names
 
 
@@ -828,7 +867,7 @@ async def _adjudicate_divergences(
             )
             meta.append(idx)
 
-    results = await client.batch(specs)
+    results = await _call_batch(client, specs)
     votes: dict[int, list[str]] = {i: [] for i in range(len(items))}
     need_fb: list[tuple[int, str, str, str, str]] = []
     for idx, res in zip(meta, results):
@@ -918,34 +957,37 @@ async def _spec_compliance_audit(
         "If the candidate violates starter-API/mockability faithfulness in a way that breaks standard `@patch` unit tests, reply `VERDICT: FAIL: <one-sentence concrete violation>`.\n"
         "Otherwise reply `VERDICT: PASS`."
     )
-    results = await client.batch([
-        CallSpec(
-            messages=[
-                {"role": "system", "content": "You are a concise, strict spec-compliance auditor. End with VERDICT: PASS or VERDICT: FAIL: <reason>."},
-                {"role": "user", "content": p_edge},
-            ],
-            tag="spec_audit_edge",
-            max_tokens=950,
-            temperature=0.0,
-            seed=59,
-            enable_thinking=True,
-            thinking_budget=380,
-            loop_guard=True,
-        ),
-        CallSpec(
-            messages=[
-                {"role": "system", "content": "You are a concise, strict Python API & mockability auditor. End with VERDICT: PASS or VERDICT: FAIL: <reason>."},
-                {"role": "user", "content": p_api},
-            ],
-            tag="spec_audit_api",
-            max_tokens=950,
-            temperature=0.0,
-            seed=61,
-            enable_thinking=True,
-            thinking_budget=360,
-            loop_guard=True,
-        ),
-    ])
+    results = await _call_batch(
+        client,
+        [
+            CallSpec(
+                messages=[
+                    {"role": "system", "content": "You are a concise, strict spec-compliance auditor. End with VERDICT: PASS or VERDICT: FAIL: <reason>."},
+                    {"role": "user", "content": p_edge},
+                ],
+                tag="spec_audit_edge",
+                max_tokens=950,
+                temperature=0.0,
+                seed=59,
+                enable_thinking=True,
+                thinking_budget=380,
+                loop_guard=True,
+            ),
+            CallSpec(
+                messages=[
+                    {"role": "system", "content": "You are a concise, strict Python API & mockability auditor. End with VERDICT: PASS or VERDICT: FAIL: <reason>."},
+                    {"role": "user", "content": p_api},
+                ],
+                tag="spec_audit_api",
+                max_tokens=950,
+                temperature=0.0,
+                seed=61,
+                enable_thinking=True,
+                thinking_budget=360,
+                loop_guard=True,
+            ),
+        ],
+    )
     violations: list[str] = []
     for res in results:
         if not res.ok:
@@ -1111,7 +1153,7 @@ async def _arbitrate_tests_strict(
             )
             meta.append((test_name, idx))
 
-    results = await client.batch(specs)
+    results = await _call_batch(client, specs)
     votes: dict[str, list[str]] = {tname: [] for tname, _, _ in items}
     need_fallback: list[tuple[str, int, str]] = []
     prompts_by_name = {tname: (ctx, err) for tname, ctx, err in items}
@@ -1273,12 +1315,37 @@ async def _evaluate_wave(
     return o_matrix, rt_matrix
 
 
-def _rank_key(c: CodeCandidate) -> tuple[int, int, int, float, int, int, int, int, float, int, float]:
+def _runtime_tier(runtime_ms: float) -> int:
+    """Coarse runtime tier (higher is faster) guarding against TLE candidates winning via shorter code.
+
+    Tier 2: fast (<500ms)
+    Tier 1: moderate (500ms..1500ms)
+    Tier 0: slow / TLE-risk (>=1500ms)
+    """
+    if runtime_ms < 500.0:
+        return 2
+    if runtime_ms < 1500.0:
+        return 1
+    return 0
+
+
+def _is_significantly_faster(a: CodeCandidate, b: CodeCandidate) -> bool:
+    """True when candidate `a` is both >3x faster AND >200ms faster than `b`."""
+    return (
+        a.runtime_ms > 0.0
+        and b.runtime_ms > 0.0
+        and (b.runtime_ms - a.runtime_ms) > 200.0
+        and b.runtime_ms > a.runtime_ms * 3.0
+    )
+
+
+def _rank_key(c: CodeCandidate) -> tuple[int, int, int, float, int, int, int, int, float, int, int, float]:
     rate = (c.total_passed / c.total_checks) if c.total_checks > 0 else 0.0
     n_fail = len(c.failed_tests) + len(c.redteam_failures)
     no_fatal = 1 if (c.fatal_error is None and c.redteam_fatal is None) else 0
     ce_net = c.diff_counterexample_wins - c.diff_counterexample_losses
     clean_perfect = 1 if (c.perfect and c.diff_counterexample_losses == 0) else 0
+    fast_tier = _runtime_tier(c.runtime_ms) if c.perfect else 0
     return (
         1 if c.syntax_error is None else 0,
         no_fatal,
@@ -1289,6 +1356,7 @@ def _rank_key(c: CodeCandidate) -> tuple[int, int, int, float, int, int, int, in
         c.total_passed,
         c.diff_majority_hits,
         round(c.starter_api_score, 3),
+        fast_tier,
         -len(c.code),
         -c.runtime_ms,
     )
@@ -1304,6 +1372,7 @@ async def solve_code(
     sandbox_timeout_s: float = 8.0,
     deep: bool = False,
     external_test_code: Optional[str] = None,
+    on_event: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> CodeForgeTrace:
     """Solve a hard coding, algorithmic, or debugging task via Unified Consensus Verification."""
     t0 = time.perf_counter()
@@ -1323,7 +1392,19 @@ async def solve_code(
     think_code = 1350 if deep else 750
     prob_clean = problem.strip()
     starter_imports = _extract_starter_imports(prob_clean)
+    starter_symbols = _extract_starter_symbols(starter_imports) if starter_imports else set()
     stdin_mode = (not external_test_code) and _is_stdin_problem(prob_clean)
+    pinned_samples: list[tuple[str, str]] = _extract_prompt_io_samples(prob_clean) if stdin_mode else []
+    can_stream = callable(getattr(client, "complete", None))
+    pinned_sample_mode = bool(
+        stdin_mode
+        and len(pinned_samples) >= 2
+        and not external_test_code
+        and not deep
+        and can_stream
+    )
+    trace.sample_first_mode = pinned_sample_mode
+
     stdin_impl_note = (
         "\n\nI/O CONTRACT: Write a complete standalone Python 3 script reading from `sys.stdin` "
         "and printing exact output to `sys.stdout` (use fast I/O `sys.stdin.buffer.read()` and iterative loops or `sys.setrecursionlimit`)."
@@ -1341,7 +1422,7 @@ async def solve_code(
     eff_timeout = max(sandbox_timeout_s, 14.0) if stdin_mode else sandbox_timeout_s
 
     # ------------------------------------------------------------------
-    # STAGE 1: Single Parallel Wave (B=4) — Implementations + Spec-Property Oracle
+    # STAGE 1: Parallel Wave 1 — Sample-First Streaming (B=4 impls) or Spec-Oracle Batch
     # ------------------------------------------------------------------
     all_w1_roles = [
         ("radically_simple", skills.card("race_minimal"), 0.15, 101, max(550, think_code - 100)),
@@ -1349,7 +1430,11 @@ async def solve_code(
         ("edge_skeptic", skills.card("race_skeptic"), 0.40, 303, think_code),
         ("alt_algorithm", skills.card("race_alt"), 0.65, 404, think_code),
     ]
-    n_impls = num_wave1_streams if (external_test_code or deep or num_wave1_streams <= 1) else max(2, num_wave1_streams - 1)
+    n_impls = (
+        num_wave1_streams
+        if (external_test_code or pinned_sample_mode or deep or num_wave1_streams <= 1)
+        else max(2, num_wave1_streams - 1)
+    )
     w1_roles = all_w1_roles[: min(n_impls, len(all_w1_roles))]
 
     w1_specs = [
@@ -1368,7 +1453,7 @@ async def solve_code(
         )
         for name, card_text, temp, seed, tb in w1_roles
     ]
-    if not external_test_code:
+    if not external_test_code and not pinned_sample_mode:
         w1_specs.append(
             CallSpec(
                 messages=[
@@ -1385,90 +1470,237 @@ async def solve_code(
             )
         )
 
-    w1_all_res = await client.batch(w1_specs)
-    w1_impl_res = w1_all_res[: len(w1_roles)]
-    trace.wave1_candidates = _parse_candidates(w1_roles, w1_impl_res, wave=1, starter_imports=starter_imports)
-
+    oracle_code = ""
+    pinned_sample_names: set[str] = set()
     if external_test_code:
         oracle_code = _normalize_modular_tests(_strip_future_imports(external_test_code))
-    else:
-        raw_oracle = extract_python_code(w1_all_res[-1].content, salvage_truncated_tests=True) if w1_all_res[-1].ok else ""
-        if not raw_oracle or check_syntax(raw_oracle) is not None:
-            # Rare fallback: regenerate clean spec oracle once
-            fb_res = await client.batch([
-                CallSpec(
-                    messages=[
-                        {"role": "system", "content": shared_sys},
-                        {"role": "user", "content": f"PROBLEM:\n{prob_clean}\n\n{skills.card('oracle')}{stdin_test_note}"},
-                    ],
-                    tag="w1_spec_oracle_retry",
-                    max_tokens=2200,
-                    temperature=0.1,
-                    seed=99,
-                    enable_thinking=True,
-                    thinking_budget=400,
-                    loop_guard=True,
-                )
-            ])
-            raw_oracle = extract_python_code(fb_res[0].content, salvage_truncated_tests=True) if fb_res[0].ok else ""
-        oracle_code = (
-            _normalize_modular_tests(_strip_future_imports(raw_oracle))
-            if raw_oracle and check_syntax(raw_oracle) is None
-            else ""
+    elif pinned_sample_mode:
+        sample_code, pinned_sample_names = _build_deterministic_sample_tests(
+            pinned_samples, include_diff_probe=True
         )
+        oracle_code = sample_code.strip()
 
-    # Prepend verbatim deterministic sample tests on stdin problems (immutable — never dropped by arbiter!)
-    pinned_sample_names: set[str] = set()
-    if stdin_mode:
-        sample_code, pinned_sample_names = _build_deterministic_sample_tests(_extract_prompt_io_samples(prob_clean))
-        if sample_code:
-            oracle_code = (sample_code + "\n\n" + oracle_code).strip()
+    all_oracle_matrix: dict[str, list[dict[str, Any]]] = {}
+    dropped_oracle: set[str] = set()
+    early_abort_triggered = False
 
-    trace.oracle_code = oracle_code
-    oracle_fn_map = _extract_test_functions(oracle_code)
-    trace.oracle_test_names = list(oracle_fn_map.keys())
-
-    # Evaluate Wave 1 mechanically
-    all_oracle_matrix, _ = await _evaluate_wave(
-        trace.wave1_candidates, oracle_code, len(oracle_fn_map), "", 0, eff_timeout, stdin_mode=stdin_mode
+    use_streaming_w1 = bool(
+        can_stream
+        and len(w1_specs) >= 2
+        and (bool(external_test_code) or pinned_sample_mode)
     )
 
-    # Helper-Aware Strict B=2 Shield against poisoned generated oracle tests (0/N passes)
-    dropped_oracle: set[str] = set()
-    valid_syn_w1 = [c for c in trace.wave1_candidates if c.syntax_error is None]
-    if not external_test_code and len(valid_syn_w1) >= 2 and oracle_fn_map:
-        suspicious: list[tuple[str, str, str]] = []
-        for tname in oracle_fn_map:
-            if tname in pinned_sample_names:
-                continue
-            passes = sum(
-                1 for c in valid_syn_w1 for r in all_oracle_matrix.get(c.name, []) if r["name"] == tname and r["ok"]
-            )
-            fails = [
-                f"[{c.name}] {r['err'][:280]}"
-                for c in valid_syn_w1
-                for r in all_oracle_matrix.get(c.name, [])
-                if r["name"] == tname and not r["ok"]
-            ]
-            if passes == 0 and len(fails) >= 2:
-                suspicious.append((tname, _build_test_context(oracle_code, tname, oracle_fn_map), "\n".join(fails[:2])))
-        if suspicious:
-            verdicts = await _arbitrate_tests_strict(
-                client,
-                prob_clean,
-                suspicious[:8],
-                skeptical_note=(
-                    f"0/{len(valid_syn_w1)} independent implementations passed this generated test. "
-                    "Verify carefully whether the test or its helper has a bug/typo."
-                ),
-            )
-            for tname, v in verdicts.items():
-                # Drop Wave-1 oracle test ONLY when positively flagged INVALID (never on UNKNOWN/DISPUTED!)
-                if v == "INVALID" and len(oracle_fn_map) - len(dropped_oracle) > 1:
-                    dropped_oracle.add(tname)
-                    trace.dropped_bad_oracle_tests.append(tname)
+    if use_streaming_w1:
+        trace.oracle_code = oracle_code
+        oracle_fn_map = _extract_test_functions(oracle_code)
+        trace.oracle_test_names = list(oracle_fn_map.keys())
 
-    _apply_matrix_scores(trace.wave1_candidates, all_oracle_matrix, dropped_oracle, is_redteam=False)
+        async def _run_w1_slot(
+            idx: int,
+            role_tuple: tuple[str, str, float, int, int],
+            spec: CallSpec,
+        ) -> tuple[int, CodeCandidate, dict[str, list[dict[str, Any]]]]:
+            slot_name = role_tuple[0]
+            try:
+                res = await client.complete(spec)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                return (
+                    idx,
+                    CodeCandidate(
+                        name=slot_name,
+                        wave=1,
+                        code="",
+                        raw_content="",
+                        syntax_error=f"LLM_ERROR: {exc}",
+                    ),
+                    {},
+                )
+            cand = _parse_candidates(
+                [role_tuple],
+                [res],
+                wave=1,
+                starter_imports=starter_imports,
+                starter_symbols=starter_symbols,
+            )[0]
+            o_mat, _ = await _evaluate_wave(
+                [cand], oracle_code, len(oracle_fn_map), "", 0, eff_timeout, stdin_mode=stdin_mode
+            )
+            _apply_matrix_scores([cand], o_mat, set(), is_redteam=False)
+            return idx, cand, o_mat
+
+        slot_tasks: list[asyncio.Task[tuple[int, CodeCandidate, dict[str, list[dict[str, Any]]]]]] = []
+        task_to_name: dict[asyncio.Task[Any], str] = {}
+        for idx, (role_tuple, spec) in enumerate(zip(w1_roles, w1_specs)):
+            task = asyncio.create_task(_run_w1_slot(idx, role_tuple, spec))
+            slot_tasks.append(task)
+            task_to_name[task] = role_tuple[0]
+
+        ordered_candidates: list[Optional[CodeCandidate]] = [None] * len(w1_roles)
+        pending: set[asyncio.Task[tuple[int, CodeCandidate, dict[str, list[dict[str, Any]]]]]] = set(slot_tasks)
+        try:
+            while pending:
+                done_set, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for done_task in done_set:
+                    idx, cand, o_mat = done_task.result()
+                    ordered_candidates[idx] = cand
+                    all_oracle_matrix.update(o_mat)
+                    _emit_event(
+                        on_event,
+                        {
+                            "engine": "code",
+                            "event": "slot_done",
+                            "wave": 1,
+                            "slot": cand.name,
+                            "passed": cand.tests_passed,
+                            "total": cand.tests_total,
+                            "perfect": cand.perfect,
+                            "runtime_ms": round(cand.runtime_ms, 2),
+                            "latency_s": round(cand.latency_s, 3),
+                        },
+                    )
+
+                if not deep:
+                    completed_so_far = [c for c in ordered_candidates if c is not None]
+                    perfect_so_far = [c for c in completed_so_far if c.perfect]
+                    enough_checks = bool(external_test_code) or len(pinned_sample_names) >= 2
+                    if len(perfect_so_far) >= 2 and enough_checks:
+                        _, divs_now = _analyze_behavioral_consensus(perfect_so_far)
+                        if not divs_now:
+                            early_abort_triggered = True
+                            if pending:
+                                cancelled_slots = [task_to_name[lag] for lag in pending]
+                                for lag in pending:
+                                    lag.cancel()
+                                await asyncio.gather(*pending, return_exceptions=True)
+                                trace.early_aborted_slots = len(pending)
+                                _emit_event(
+                                    on_event,
+                                    {
+                                        "engine": "code",
+                                        "event": "early_abort",
+                                        "wave": 1,
+                                        "early_aborted_slots": trace.early_aborted_slots,
+                                        "cancelled_slots": cancelled_slots,
+                                        "perfect_slots": [c.name for c in perfect_so_far],
+                                    },
+                                )
+                            break
+        except BaseException:
+            for lag in pending:
+                lag.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            raise
+
+        trace.wave1_candidates = [c for c in ordered_candidates if c is not None]
+        valid_syn_w1 = [c for c in trace.wave1_candidates if c.syntax_error is None]
+    else:
+        w1_all_res = await _call_batch(client, w1_specs)
+        w1_impl_res = w1_all_res[: len(w1_roles)]
+        trace.wave1_candidates = _parse_candidates(
+            w1_roles,
+            w1_impl_res,
+            wave=1,
+            starter_imports=starter_imports,
+            starter_symbols=starter_symbols,
+        )
+
+        if not external_test_code and not pinned_sample_mode:
+            raw_oracle = extract_python_code(w1_all_res[-1].content, salvage_truncated_tests=True) if w1_all_res[-1].ok else ""
+            if not raw_oracle or check_syntax(raw_oracle) is not None:
+                # Rare fallback: regenerate clean spec oracle once
+                fb_res = await _call_batch(
+                    client,
+                    [
+                        CallSpec(
+                            messages=[
+                                {"role": "system", "content": shared_sys},
+                                {"role": "user", "content": f"PROBLEM:\n{prob_clean}\n\n{skills.card('oracle')}{stdin_test_note}"},
+                            ],
+                            tag="w1_spec_oracle_retry",
+                            max_tokens=2200,
+                            temperature=0.1,
+                            seed=99,
+                            enable_thinking=True,
+                            thinking_budget=400,
+                            loop_guard=True,
+                        )
+                    ],
+                )
+                raw_oracle = extract_python_code(fb_res[0].content, salvage_truncated_tests=True) if fb_res[0].ok else ""
+            oracle_code = (
+                _normalize_modular_tests(_strip_future_imports(raw_oracle))
+                if raw_oracle and check_syntax(raw_oracle) is None
+                else ""
+            )
+
+            # Prepend verbatim deterministic sample tests on stdin problems (immutable — never dropped by arbiter!)
+            if stdin_mode and pinned_samples:
+                sample_code, pinned_sample_names = _build_deterministic_sample_tests(pinned_samples)
+                if sample_code:
+                    oracle_code = (sample_code + "\n\n" + oracle_code).strip()
+
+        trace.oracle_code = oracle_code
+        oracle_fn_map = _extract_test_functions(oracle_code)
+        trace.oracle_test_names = list(oracle_fn_map.keys())
+
+        # Evaluate Wave 1 mechanically
+        all_oracle_matrix, _ = await _evaluate_wave(
+            trace.wave1_candidates, oracle_code, len(oracle_fn_map), "", 0, eff_timeout, stdin_mode=stdin_mode
+        )
+
+        # Helper-Aware Strict B=2 Shield against poisoned generated oracle tests (0/N passes)
+        valid_syn_w1 = [c for c in trace.wave1_candidates if c.syntax_error is None]
+        if not external_test_code and not pinned_sample_mode and len(valid_syn_w1) >= 2 and oracle_fn_map:
+            suspicious: list[tuple[str, str, str]] = []
+            for tname in oracle_fn_map:
+                if tname in pinned_sample_names:
+                    continue
+                passes = sum(
+                    1 for c in valid_syn_w1 for r in all_oracle_matrix.get(c.name, []) if r["name"] == tname and r["ok"]
+                )
+                fails = [
+                    f"[{c.name}] {r['err'][:280]}"
+                    for c in valid_syn_w1
+                    for r in all_oracle_matrix.get(c.name, [])
+                    if r["name"] == tname and not r["ok"]
+                ]
+                if passes == 0 and len(fails) >= 2:
+                    suspicious.append((tname, _build_test_context(oracle_code, tname, oracle_fn_map), "\n".join(fails[:2])))
+            if suspicious:
+                verdicts = await _arbitrate_tests_strict(
+                    client,
+                    prob_clean,
+                    suspicious[:8],
+                    skeptical_note=(
+                        f"0/{len(valid_syn_w1)} independent implementations passed this generated test. "
+                        "Verify carefully whether the test or its helper has a bug/typo."
+                    ),
+                )
+                for tname, v in verdicts.items():
+                    # Drop Wave-1 oracle test ONLY when positively flagged INVALID (never on UNKNOWN/DISPUTED!)
+                    if v == "INVALID" and len(oracle_fn_map) - len(dropped_oracle) > 1:
+                        dropped_oracle.add(tname)
+                        trace.dropped_bad_oracle_tests.append(tname)
+
+        _apply_matrix_scores(trace.wave1_candidates, all_oracle_matrix, dropped_oracle, is_redteam=False)
+        for cand in trace.wave1_candidates:
+            _emit_event(
+                on_event,
+                {
+                    "engine": "code",
+                    "event": "slot_done",
+                    "wave": 1,
+                    "slot": cand.name,
+                    "passed": cand.tests_passed,
+                    "total": cand.tests_total,
+                    "perfect": cand.perfect,
+                    "runtime_ms": round(cand.runtime_ms, 2),
+                    "latency_s": round(cand.latency_s, 3),
+                },
+            )
 
     # ------------------------------------------------------------------
     # STAGE 1B: Oracle-Free Behavioral Differential Consensus & Counterexample Adjudication
@@ -1489,7 +1721,8 @@ async def solve_code(
     ranked_w1 = sorted(trace.wave1_candidates, key=_rank_key, reverse=True)
     best_w1 = ranked_w1[0]
 
-    # Fast-Path Unanimous Sample + Behavioral Consensus Exit (CodeForge v6.1):
+    # Fast-Path Unanimous Sample + Behavioral Consensus Exit (CodeForge v7):
+    # - Streaming early-abort OR `external_test_code` with >=2 independent perfect candidates & 0 divergences.
     # - On `stdin_mode` (competitive/CLI I/O specs): when >=2 independent Wave-1 candidates pass all
     #   pinned sample + generated tests (>=2 total) with >=2 diff cases OR >=2 pinned samples and
     #   ZERO behavioral divergences, fast-exit directly (skipping prose spec audit, red-team, & Wave 2).
@@ -1500,7 +1733,16 @@ async def solve_code(
     missing_exc_checks = sorted(exc for exc in req_excs if exc not in oracle_code)
     unanimous_behavioral_fastpath = False
     spec_audit_violation = ""
-    if (
+    if early_abort_triggered:
+        unanimous_behavioral_fastpath = True
+    elif (
+        external_test_code
+        and not deep
+        and len(perfect_clean_w1) >= 2
+        and not diff_divergences
+    ):
+        unanimous_behavioral_fastpath = True
+    elif (
         stdin_mode
         and not external_test_code
         and not deep
@@ -1533,7 +1775,8 @@ async def solve_code(
     trace.unanimous_fastpath = unanimous_behavioral_fastpath
 
     # ------------------------------------------------------------------
-    # STAGE 2: Targeted Clean-Context Adversarial Red-Team (skipped on external pass OR unanimous behavioral consensus!)
+    # STAGE 2: Targeted Clean-Context Adversarial Red-Team (skipped on external pass,
+    # unanimous behavioral consensus, or sample-first non-deep runs!)
     # ------------------------------------------------------------------
     combined_rt_code = ""
     rt_fn_map: dict[str, str] = {}
@@ -1546,7 +1789,11 @@ async def solve_code(
         if (best_w1.tests_total > 0 and non_fatal_w1)
         else non_fatal_w1[:2]
     )
-    skip_rt = bool((external_test_code and best_w1.perfect) or unanimous_behavioral_fastpath)
+    skip_rt = bool(
+        (external_test_code and best_w1.perfect)
+        or unanimous_behavioral_fastpath
+        or (pinned_sample_mode and not deep)
+    )
 
     if survivors_for_rt and not skip_rt:
         leader = survivors_for_rt[0]
@@ -1598,7 +1845,7 @@ async def solve_code(
                     loop_guard=True,
                 )
             )
-        rt_res = await client.batch(rt_specs)
+        rt_res = await _call_batch(client, rt_specs)
 
         rt_parts: list[str] = []
         for idx, res in enumerate(rt_res):
@@ -1701,6 +1948,18 @@ async def solve_code(
         else:
             trace.wave2_reason = f"Best Wave-1 ({best_w1.name}) passed {best_w1.total_passed}/{best_w1.total_checks}"
 
+        _emit_event(
+            on_event,
+            {
+                "engine": "code",
+                "event": "wave2_start",
+                "reason": trace.wave2_reason,
+                "best_w1": best_w1.name,
+                "best_w1_passed": best_w1.total_passed,
+                "best_w1_total": best_w1.total_checks,
+            },
+        )
+
         for c in ranked_w1[:3]:
             if c.syntax_error:
                 trace.graveyard.append(f"[{c.name}] SyntaxError: {c.syntax_error}")
@@ -1742,26 +2001,35 @@ async def solve_code(
             ("w2_clean_rewrite", skills.card("race_alt"), 0.55, 1303, think_code + 300, False),
         ][: min(3, max(1, num_wave1_streams))]
 
-        w2_res = await client.batch([
-            CallSpec(
-                messages=[
-                    {"role": "system", "content": shared_sys},
-                    {
-                        "role": "user",
-                        "content": f"{(w2_context if include_ref else w2_base_no_anchor)}\n\nREPAIR ROLE ({name}):\n{card_text}",
-                    },
-                ],
-                tag=name,
-                max_tokens=tb + 3000,
-                temperature=temp,
-                seed=seed,
-                enable_thinking=True,
-                thinking_budget=tb,
-                loop_guard=True,
-            )
-            for name, card_text, temp, seed, tb, include_ref in w2_roles
-        ])
-        trace.wave2_candidates = _parse_candidates([(n, c, t, s, b) for n, c, t, s, b, _ in w2_roles], w2_res, wave=2, starter_imports=starter_imports)
+        w2_res = await _call_batch(
+            client,
+            [
+                CallSpec(
+                    messages=[
+                        {"role": "system", "content": shared_sys},
+                        {
+                            "role": "user",
+                            "content": f"{(w2_context if include_ref else w2_base_no_anchor)}\n\nREPAIR ROLE ({name}):\n{card_text}",
+                        },
+                    ],
+                    tag=name,
+                    max_tokens=tb + 3000,
+                    temperature=temp,
+                    seed=seed,
+                    enable_thinking=True,
+                    thinking_budget=tb,
+                    loop_guard=True,
+                )
+                for name, card_text, temp, seed, tb, include_ref in w2_roles
+            ],
+        )
+        trace.wave2_candidates = _parse_candidates(
+            [(n, c, t, s, b) for n, c, t, s, b, _ in w2_roles],
+            w2_res,
+            wave=2,
+            starter_imports=starter_imports,
+            starter_symbols=starter_symbols,
+        )
 
         kept_oracle_cnt = max(1, len([n for n in oracle_fn_map if n not in dropped_oracle]))
         active_rt_cnt = len([n for n in rt_fn_map if n not in dropped_rt_names])
@@ -1774,6 +2042,21 @@ async def solve_code(
         _apply_matrix_scores(trace.wave2_candidates, all_oracle_matrix, dropped_oracle, is_redteam=False)
         if combined_rt_code.strip() and active_rt_cnt > 0:
             _apply_matrix_scores(trace.wave2_candidates, all_rt_matrix, dropped_rt_names, is_redteam=True)
+        for cand in trace.wave2_candidates:
+            _emit_event(
+                on_event,
+                {
+                    "engine": "code",
+                    "event": "slot_done",
+                    "wave": 2,
+                    "slot": cand.name,
+                    "passed": cand.total_passed,
+                    "total": cand.total_checks,
+                    "perfect": cand.perfect,
+                    "runtime_ms": round(cand.runtime_ms, 2),
+                    "latency_s": round(cand.latency_s, 3),
+                },
+            )
         # Re-compute cross-candidate behavioral consensus across Wave 1 + Wave 2 (and adjudicate new W2 divergences on API specs!)
         all_w12_cands = trace.wave1_candidates + trace.wave2_candidates
         _, w2_divs = _analyze_behavioral_consensus(all_w12_cands)
@@ -1868,26 +2151,35 @@ async def solve_code(
                 ("w3_surgical_fix", skills.card("repair_surgical"), 0.15, 2101, think_code + 500, True),
                 ("w3_fresh_alt", skills.card("race_alt"), 0.45, 2202, think_code + 550, False),
             ]
-            w3_res = await client.batch([
-                CallSpec(
-                    messages=[
-                        {"role": "system", "content": shared_sys},
-                        {
-                            "role": "user",
-                            "content": f"{(w3_context if include_ref else w3_base_no_anchor)}\n\nREPAIR ROLE ({name}):\n{card_text}",
-                        },
-                    ],
-                    tag=name,
-                    max_tokens=tb + 3500,
-                    temperature=temp,
-                    seed=seed,
-                    enable_thinking=True,
-                    thinking_budget=tb,
-                    loop_guard=True,
-                )
-                for name, card_text, temp, seed, tb, include_ref in w3_roles
-            ])
-            w3_cands = _parse_candidates([(n, c, t, s, b) for n, c, t, s, b, _ in w3_roles], w3_res, wave=3, starter_imports=starter_imports)
+            w3_res = await _call_batch(
+                client,
+                [
+                    CallSpec(
+                        messages=[
+                            {"role": "system", "content": shared_sys},
+                            {
+                                "role": "user",
+                                "content": f"{(w3_context if include_ref else w3_base_no_anchor)}\n\nREPAIR ROLE ({name}):\n{card_text}",
+                            },
+                        ],
+                        tag=name,
+                        max_tokens=tb + 3500,
+                        temperature=temp,
+                        seed=seed,
+                        enable_thinking=True,
+                        thinking_budget=tb,
+                        loop_guard=True,
+                    )
+                    for name, card_text, temp, seed, tb, include_ref in w3_roles
+                ],
+            )
+            w3_cands = _parse_candidates(
+                [(n, c, t, s, b) for n, c, t, s, b, _ in w3_roles],
+                w3_res,
+                wave=3,
+                starter_imports=starter_imports,
+                starter_symbols=starter_symbols,
+            )
             active_rt_cnt = len([n for n in rt_fn_map if n not in dropped_rt_names])
             kept_oracle_cnt = max(1, len([n for n in oracle_fn_map if n not in dropped_oracle]))
             w3_o_mat, w3_rt_mat = await _evaluate_wave(
@@ -1896,18 +2188,35 @@ async def solve_code(
             _apply_matrix_scores(w3_cands, w3_o_mat, dropped_oracle, is_redteam=False)
             if combined_rt_code.strip() and active_rt_cnt > 0:
                 _apply_matrix_scores(w3_cands, w3_rt_mat, dropped_rt_names, is_redteam=True)
+            for cand in w3_cands:
+                _emit_event(
+                    on_event,
+                    {
+                        "engine": "code",
+                        "event": "slot_done",
+                        "wave": 3,
+                        "slot": cand.name,
+                        "passed": cand.total_passed,
+                        "total": cand.total_checks,
+                        "perfect": cand.perfect,
+                        "runtime_ms": round(cand.runtime_ms, 2),
+                        "latency_s": round(cand.latency_s, 3),
+                    },
+                )
             trace.wave2_candidates.extend(w3_cands)
             _analyze_behavioral_consensus(trace.wave1_candidates + trace.wave2_candidates)
 
     # ------------------------------------------------------------------
-    # FINAL SELECTION: Ranked Best + Consensus-Respecting Order-Swapped Tie-Break
+    # FINAL SELECTION: Ranked Best + Runtime/TLE-Aware Consensus-Respecting Tie-Break
     # ------------------------------------------------------------------
     ranked_all = sorted(trace.wave1_candidates + trace.wave2_candidates, key=_rank_key, reverse=True)
     winner = ranked_all[0]
     winner_ce_net = winner.diff_counterexample_wins - winner.diff_counterexample_losses
+    winner_tier = _runtime_tier(winner.runtime_ms) if winner.perfect else 0
 
-    # Strictly preserve Behavioral Differential Consensus & Counterexample Adjudication:
-    # A minority or counterexample-losing candidate may NEVER hijack the pairwise tie-break!
+    # Strictly preserve Behavioral Differential Consensus, Counterexample Adjudication,
+    # and Runtime/TLE-tier dominance: a minority, counterexample-losing, or TLE-risk
+    # candidate may NEVER hijack the pairwise tie-break!
     top_tied = [
         c
         for c in ranked_all
@@ -1918,6 +2227,7 @@ async def solve_code(
         and (len(c.failed_tests) + len(c.redteam_failures)) == (len(winner.failed_tests) + len(winner.redteam_failures))
         and (c.diff_counterexample_wins - c.diff_counterexample_losses) == winner_ce_net
         and c.diff_majority_hits == winner.diff_majority_hits
+        and ((_runtime_tier(c.runtime_ms) if c.perfect else 0) == winner_tier)
     ]
     unique_tied: list[CodeCandidate] = []
     seen_codes: set[str] = set()
@@ -1928,11 +2238,30 @@ async def solve_code(
             unique_tied.append(c)
 
     if len(unique_tied) >= 2:
-        # Break true behavioral ties by starter-API faithfulness first, then Occam's Razor (code compactness)
-        unique_tied.sort(key=lambda c: (-round(c.starter_api_score, 3), len(c.code), c.runtime_ms))
+        # Break true behavioral ties by starter-API faithfulness, runtime tier, then Occam's Razor (code compactness)
+        unique_tied.sort(
+            key=lambda c: (
+                -round(c.starter_api_score, 3),
+                -(_runtime_tier(c.runtime_ms) if c.perfect else 0),
+                len(c.code),
+                c.runtime_ms,
+            )
+        )
         champ = unique_tied[0]
+        fastpath_consensus_skip = bool(
+            trace.early_aborted_slots > 0
+            or (unanimous_behavioral_fastpath and (bool(external_test_code) or pinned_sample_mode))
+        )
+        can_pairwise = callable(getattr(client, "pairwise_vote", None))
         for challenger in unique_tied[1:3]:
-            if _has_identical_behavioral_fingerprint(champ, challenger, min_cases=2):
+            same_api = round(challenger.starter_api_score, 3) == round(champ.starter_api_score, 3)
+            if (
+                fastpath_consensus_skip
+                or _has_identical_behavioral_fingerprint(champ, challenger, min_cases=2)
+                or not can_pairwise
+            ):
+                if champ.perfect and challenger.perfect and same_api and _is_significantly_faster(challenger, champ):
+                    champ = challenger
                 trace.pairwise_tiebreak_skipped += 1
                 continue
             p_ab = (
@@ -1972,4 +2301,18 @@ async def solve_code(
     trace.winner_name = winner.name
     trace.winner_code = winner.code
     trace.wall_s = time.perf_counter() - t0
+    _emit_event(
+        on_event,
+        {
+            "engine": "code",
+            "event": "done",
+            "winner_name": trace.winner_name,
+            "verified": trace.verified,
+            "unanimous_fastpath": trace.unanimous_fastpath,
+            "sample_first_mode": trace.sample_first_mode,
+            "early_aborted_slots": trace.early_aborted_slots,
+            "wave2_triggered": trace.wave2_triggered,
+            "wall_s": round(trace.wall_s, 3),
+        },
+    )
     return trace
