@@ -36,7 +36,7 @@ Per-problem token-, call-, and latency-logged ablation across all 30 official AI
 
 ## 2. Official Untouched External Benchmarks (200 Paired Runs Across 3 Model Families)
 
-> **Statistical honesty:** Math gains on full AIME 2025 are statistically significant when pooled (`51/90 → 72/90`, `+24/−3`, exact McNemar `p = 4.92e-05`). Individual coding slices (10–30 tasks) are positive but **statistically inconclusive per run (`p = 0.45–1.0`)** pending full 148-task BigCodeBench-Hard and full LiveCodeBench Hard sweeps. Recompute all numbers directly with `python -m bench.stats --dir results`.
+> **Statistical honesty:** Math gains on full AIME 2025 are statistically significant when pooled (`51/90 → 72/90`, `+24/−3`, exact McNemar `p = 4.92e-05`). Individual coding slices (10–30 tasks) are positive but **statistically inconclusive per run (`p = 0.45–1.0`)**. In an expanded 52-problem LiveCodeBench v6 Hard diagnostic (`GLM-5.3-Flash-TFQ3`: 32 ABC Hard + 20 ARC Hard), pre-v7 `CodeForge` improved over Vanilla (`12/52 → 18/52`, `+9/−3`, `p = 0.146`), while on the 32-problem compute-matched ABC Hard slice, a lean `best4_sample` baseline (`18/32`, ~4 calls) outperformed pre-v7 `CodeForge` (`16/32`, ~15 calls) because pre-v7 spent 1 of 4 Wave-1 slots on a synthetic oracle and occasionally preferred shorter `O(N^2)` code over faster `O(N log N)` candidates — directly motivating **CodeForge v7** (sample-first 4-slot Wave 1, streaming early-abort, and runtime-tier TLE ranking). Recompute all committed stats directly with `python -m bench.stats --dir results`.
 
 | Benchmark | Split & Judge | Model Family | Vanilla | **Cortheon v2** | Delta | Paired (`+fix/−brk`, Exact McNemar `p`) | Avg Wall (V → C) | Result JSONs |
 |---|---|---|---:|---:|---:|---|---:|---|

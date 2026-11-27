@@ -16,8 +16,9 @@ uv venv .venv && uv pip install --python .venv/bin/python -e .
 # 2. Verify your local backend, OS sandbox, and solvers in 2 seconds
 .venv/bin/cortheon doctor --url http://127.0.0.1:8080/v1
 
-# 3. Install the /cortheon slash command across OMP, Pi, OpenCode, Claude Code, Cursor & Codex
+# 3. Install /cortheon commands & register the native MCP server across your coding harnesses
 .venv/bin/cortheon install-commands --harness all
+.venv/bin/cortheon install-mcp --harness all --url http://127.0.0.1:8080/v1
 
 # 4. Start the universal proxy (or serve TensorFold natively with --cortheon --cortheon-exec --parallel 8)
 .venv/bin/cortheon proxy --upstream http://127.0.0.1:8080/v1 --port 18652 --streams 4
@@ -105,14 +106,14 @@ These internal suites were authored during development to stress-test failure mo
 1. **Neuro-Symbolic Exact-Answer Solver (`ReasonForge`):** `B=2|4|8` parallel Python / SymPy / Z3 scripts with streaming Wave-1 early-abort (cancels lagging GPU slots the instant 2 independent scripts agree), arbitrary-precision rational equivalence, and conditional Wave-2 falsification.
 2. **OS-Sandboxed Execution (`flash_forge/sandbox.py`):** macOS `sandbox-exec` / Linux `bwrap` enabled by default — blocks network sockets, outside-tempdir writes, and sensitive credential reads (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.omp`, `~/.pi`, `~/.config`), plus POSIX rlimits and hard timeouts. See [`SECURITY.md`](SECURITY.md).
 3. **Zero-False-Positive Proof-Carrying Diff Breaker (`cortheon guard`):** Spawns clean-context adversaries in isolated ephemeral `git worktree`s inside the OS sandbox and **bans prose code reviews** — a bug is *only* reported if backed by an executed failing Python reproducer (optionally verified passing on `HEAD` and auto-fixed with `--auto-fix`).
-4. **Native Zero-Dependency MCP Server (`cortheon mcp`):** Stdio JSON-RPC 2.0 MCP server exposing `cortheon_verify`, `cortheon_guard`, `cortheon_spec_verify`, and `cortheon_doctor` directly to Claude Code, Cursor, OMP, Pi, Codex, and OpenCode (`claude mcp add cortheon -- cortheon mcp --url http://127.0.0.1:8080/v1`).
-5. **Universal Drop-In Proxy (`cortheon proxy`) & Diagnostics (`cortheon doctor`):** OpenAI + Anthropic proxy with transparent tool-turn passthrough, **Automatic Death-Spiral Rescue** (`B=3` graveyard backtracking after `>=2` consecutive failing tool/test runs), 2-second live sandbox/backend/throughput diagnostics (`cortheon doctor`), and `--streams 2|4|8` cost/latency dial.
+4. **Native Zero-Dependency MCP Server (`cortheon mcp`) & One-Command Installer (`cortheon install-mcp`):** Stdio JSON-RPC 2.0 MCP server exposing `cortheon_verify`, `cortheon_guard`, `cortheon_spec_verify`, and `cortheon_doctor`, auto-registered non-destructively into Claude Code, Cursor, OpenCode, Codex, and Windsurf via `cortheon install-mcp --harness all`.
+5. **Universal Drop-In Proxy (`cortheon proxy`), Diagnostics (`cortheon doctor`) & Live Progress (`flash_forge/progress.py`):** OpenAI + Anthropic proxy with transparent tool-turn passthrough, **Automatic Death-Spiral Rescue** (`B=3` graveyard backtracking after `>=2` consecutive failing tool/test runs), live per-slot streaming progress, 2-second sandbox/backend/throughput diagnostics (`cortheon doctor`), `--record-flywheel` auto-harvesting, and `--streams 2|4|8` cost/latency dial.
 6. **All-Harness `/cortheon` Installer (`cortheon install-commands --harness all`):** Native `/cortheon` slash command & tool across **OMP**, **Pi**, **OpenCode**, **Claude Code**, **Cursor**, and **Codex**.
 
-### Frontier Research Engines (New in v2.1 — Unit-Tested, Live Benchmarks In Progress)
+### Frontier Research Engines (New in v2.1–v2.2 — Offline Unit-Tested, Live Benchmarks Ongoing)
+- **Streaming `CodeForge v7` (Sample-First All-4-Slot Wave 1 + Early-Abort + TLE Ranking):** Directly addresses what our 52-problem compute-matched LiveCodeBench v6 Hard ablation revealed (`best4_sample` beat pre-v7 `CodeForge` `18/32` vs `16/32` at 3.5× fewer calls): dedicates all 4 Wave-1 slots to diverse implementations whenever verbatim I/O samples exist, executes each stream via `asyncio.wait(FIRST_COMPLETED)`, cancels lagging GPU slots the instant `2` independent implementations pass samples unanimously, and ranks fast `O(N log N)` survivors ahead of slow TLE-risk candidates.
 - **Speculative Execution-Verification (`cortheon spec`):** Lifts speculative decoding from token logits to OS-sandboxed program execution — drafts parallel Python/SymPy/Z3 scripts on a tiny fast local model (2B–9B), accepts immediately on `>=2` distinct sandboxed script consensus (`0` big-model calls!), and escalates to the big local/cloud model *only* on falsification (`bench/run_spec_verify_ablation.py`).
-- **Self-Play Verification Flywheel (`cortheon export-dpo` / `cortheon export-sft`):** Automatically harvests mechanically verified `(rejected=Vanilla/Wave-1 falsified, chosen=sandbox-verified)` preference pairs from `results/` and live traces into deduplicated, PII-scrubbed DPO/SFT JSONL for local `mlx-lm` / `TRL` LoRA distillation.
-- **Oracle-Free Coding (`CodeForge v6.1`):** Fast unanimous Wave-1 sample+behavioral consensus exit, DataFrame/Matplotlib/filesystem side-effect fingerprinting, AST mutation-tested oracles, Starter-API Fidelity, and `B=2` Red-Teaming.
+- **Self-Play Verification Flywheel (`--record-flywheel` + `cortheon export-dpo` / `export-sft`):** Automatically logs verified Wave-2 rescues during live use and harvests mechanically verified `(rejected, chosen)` preference pairs into deduplicated, PII-scrubbed DPO/SFT JSONL for local `mlx-lm` / `TRL` LoRA distillation.
 - **Open-Ended Technical Council (`ThinkForge`) & Autonomous Repo Agents (`cortheon agent`, `cortheon dev`):** Experimental — use in containers or disposable clones.
 
 ---

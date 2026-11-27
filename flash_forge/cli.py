@@ -19,9 +19,10 @@ from .duel import DUEL_PRESETS, run_duel
 from .engine import FlashForge, ForgeConfig
 from .flywheel import export_dpo_jsonl, export_sft_jsonl, format_export_summary, harvest_from_results_dir
 from .guard import format_guard_report, run_guard
-from .integrations import ALL_HARNESSES, install_commands
+from .integrations import ALL_HARNESSES, MCP_HARNESSES, install_commands, install_mcp
 from .mcp_server import run_stdio_server
 from .memory import EpisodicMemory
+from .progress import make_progress_callback
 from .proxy import create_app
 from .reason_forge import ReasonForgeTrace
 from .replica_agent import ReplicaAgent, ReplicaConfig
@@ -29,6 +30,8 @@ from .showdown import run_showdown
 from .skill_loader import SkillPack
 from .spec_verify import solve_spec_verify
 from .think_forge import ThinkForgeTrace
+
+_VERSION = "2.2.0"
 
 _STREAMS_HELP = (
     "Parallel verification streams (2, 4, or 8): "
@@ -38,6 +41,7 @@ _STREAMS_HELP = (
 
 def main(argv: Optional[list[str]] = None) -> None:
     parser = argparse.ArgumentParser(prog="cortheon", description="Cortheon — Unified consensus & verification runtime for frozen local models")
+    parser.add_argument("-V", "--version", action="version", version=f"cortheon {_VERSION}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_doc = sub.add_parser(
@@ -58,6 +62,9 @@ def main(argv: Optional[list[str]] = None) -> None:
     p_solve.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
     p_solve.add_argument("--deep", action="store_true")
     p_solve.add_argument("--no-memory", action="store_true")
+    p_solve.add_argument("--record-flywheel", action="store_true", help="Auto-record verified Wave-2 rescue pairs to ~/.cortheon/flywheel.jsonl")
+    p_solve.add_argument("--flywheel-path", default=None, help="Optional custom JSONL path for --record-flywheel")
+    p_solve.add_argument("-q", "--quiet", action="store_true", help="Suppress live per-slot progress lines on stderr")
 
     p_proxy = sub.add_parser("proxy", help="Start drop-in OpenAI (/v1/chat/completions) + Anthropic (/v1/messages) proxy")
     p_proxy.add_argument("--upstream", default="http://127.0.0.1:8080/v1")
@@ -66,6 +73,8 @@ def main(argv: Optional[list[str]] = None) -> None:
     p_proxy.add_argument("--port", type=int, default=18652)
     p_proxy.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
     p_proxy.add_argument("--no-auto-rescue", action="store_true", help="Disable automatic B=3 death-spiral rescue on tool-calling loops")
+    p_proxy.add_argument("--record-flywheel", action="store_true", help="Auto-record verified Wave-2 rescue pairs to ~/.cortheon/flywheel.jsonl")
+    p_proxy.add_argument("--flywheel-path", default=None, help="Optional custom JSONL path for --record-flywheel")
 
     p_show = sub.add_parser("showdown", help="Run a live 60-second Vanilla vs Cortheon knockout on your local model")
     p_show.add_argument("--url", default="http://127.0.0.1:8080/v1")
@@ -120,6 +129,19 @@ def main(argv: Optional[list[str]] = None) -> None:
     p_inst.add_argument("--project", default=None, help="Install project-locally into this directory instead of $HOME")
     p_inst.add_argument("--profile", default=None, help="Optional OMP profile name (e.g. cortheon)")
     p_inst.add_argument("--url", default="http://127.0.0.1:18651/v1", help="Default Cortheon endpoint URL for markdown commands")
+
+    p_imcp = sub.add_parser(
+        "install-mcp",
+        help="Non-destructively register Cortheon's stdio MCP server in Claude Code, Cursor, OpenCode, Codex, and Windsurf",
+    )
+    p_imcp.add_argument(
+        "--harness",
+        default="all",
+        help=f"Comma-separated list or 'all' ({', '.join(MCP_HARNESSES)})",
+    )
+    p_imcp.add_argument("--url", default="http://127.0.0.1:8080/v1", help="Default upstream OpenAI-compatible URL")
+    p_imcp.add_argument("--api-key", default=None, help="Optional Bearer API key")
+    p_imcp.add_argument("--project", default=None, help="Install project-locally into this directory instead of $HOME")
 
     p_spec = sub.add_parser(
         "spec",
@@ -287,12 +309,23 @@ def main(argv: Optional[list[str]] = None) -> None:
             print(f"  - {p}")
         return
 
+    if args.cmd == "install-mcp":
+        targets = MCP_HARNESSES if args.harness.strip().lower() == "all" else [x.strip() for x in args.harness.split(",") if x.strip()]
+        proj_path = Path(args.project) if args.project else None
+        written = install_mcp(targets, url=args.url, api_key=args.api_key, project_dir=proj_path)
+        print(f"[Cortheon] Registered MCP server across {len(written)} config(s):")
+        for p in written:
+            print(f"  - {p}")
+        return
+
     if args.cmd == "proxy":
         app = create_app(
             upstream_url=args.upstream,
             referee_url=args.referee_url,
             num_streams=args.streams,
             auto_rescue=not args.no_auto_rescue,
+            record_flywheel=args.record_flywheel,
+            flywheel_path=Path(args.flywheel_path) if args.flywheel_path else None,
         )
         uvicorn.run(app, host=args.host, port=args.port)
         return
@@ -328,16 +361,19 @@ def main(argv: Optional[list[str]] = None) -> None:
             prompt = Path(prompt[1:]).read_text(encoding="utf-8")
 
         async def _run() -> None:
+            _, on_event = make_progress_callback(quiet=args.quiet)
             cfg = ForgeConfig(
                 base_url=args.url,
                 referee_url=args.referee_url,
                 num_streams=args.streams,
                 deep=args.deep,
                 enable_memory=not args.no_memory,
+                record_flywheel=args.record_flywheel,
+                flywheel_path=Path(args.flywheel_path) if args.flywheel_path else None,
             )
             async with FlashForge(cfg) as ff:
                 force = None if args.mode == "auto" else args.mode
-                res = await ff.solve(prompt, force_mode=force)
+                res = await ff.solve(prompt, force_mode=force, on_event=on_event)
                 print(f"[Cortheon] mode={res.mode} wall={res.wall_s:.2f}s stats={res.token_stats}")
                 if isinstance(res.raw_trace, ReasonForgeTrace):
                     print(f"[ReasonForge] consensus={res.raw_trace.consensus_type} wave2={res.raw_trace.wave2_triggered}")
@@ -345,11 +381,14 @@ def main(argv: Optional[list[str]] = None) -> None:
                 elif isinstance(res.raw_trace, CodeForgeTrace):
                     print(
                         f"[CodeForge] winner={res.raw_trace.winner_name} "
+                        f"aborted={res.raw_trace.early_aborted_slots} "
                         f"redteam_kills={len(res.raw_trace.redteam_valid_kills)} wave2={res.raw_trace.wave2_triggered}"
                     )
                     print(res.answer)
                 else:
                     print(res.answer)
+                if res.flywheel_recorded:
+                    print("[Flywheel] Recorded verified Wave-2 rescue pair for DPO export.")
                 if res.lesson_learned:
                     print(f"[EpisodicMemory] Learned: {res.lesson_learned}")
 

@@ -134,16 +134,18 @@ def format_proxy_startup_banner(
     referee_url: Optional[str] = None,
     num_streams: int = 4,
     auto_rescue: bool = True,
+    record_flywheel: bool = False,
     sandbox: Optional[str] = None,
 ) -> str:
     """Format the startup runtime summary banner for `cortheon proxy`."""
     active_sandbox = sandbox or sandbox_backend()
     rescue_label = "ON (B=3 death-spiral rescue on tool loops)" if auto_rescue else "OFF (--no-auto-rescue)"
+    flywheel_label = "ON (auto-logging Wave-2 rescues to flywheel.jsonl)" if record_flywheel else "OFF (pass --record-flywheel to harvest DPO pairs)"
     bar = "━" * 74
     upstream_line = f"{upstream_url} (model={upstream_model})" if upstream_model else upstream_url
     lines = [
         bar,
-        "  Cortheon Universal Proxy v2.0.0",
+        "  Cortheon Universal Proxy v2.2.0",
         f"  Upstream    : {upstream_line}",
     ]
     if referee_url:
@@ -153,6 +155,7 @@ def format_proxy_startup_banner(
             f"  Streams     : {_streams_profile_label(num_streams)}",
             f"  OS Sandbox  : {active_sandbox}",
             f"  Auto-Rescue : {rescue_label}",
+            f"  Flywheel    : {flywheel_label}",
             bar,
         ]
     )
@@ -165,6 +168,8 @@ def create_app(
     upstream_model: Optional[str] = None,
     num_streams: int = 4,
     auto_rescue: bool = True,
+    record_flywheel: bool = False,
+    flywheel_path: Optional[Any] = None,
 ) -> FastAPI:
     forge_default: Optional[FlashForge] = None
     forge_deep: Optional[FlashForge] = None
@@ -179,6 +184,8 @@ def create_app(
                     model=upstream_model,
                     num_streams=num_streams,
                     deep=False,
+                    record_flywheel=record_flywheel,
+                    flywheel_path=flywheel_path,
                 )
             )
         if forge_deep is None:
@@ -189,6 +196,8 @@ def create_app(
                     model=upstream_model,
                     num_streams=num_streams,
                     deep=True,
+                    record_flywheel=record_flywheel,
+                    flywheel_path=flywheel_path,
                 )
             )
         return forge_default, forge_deep
@@ -210,6 +219,7 @@ def create_app(
                 referee_url=referee_url,
                 num_streams=num_streams,
                 auto_rescue=auto_rescue,
+                record_flywheel=record_flywheel,
             ),
             flush=True,
         )
@@ -221,7 +231,7 @@ def create_app(
             forge_default = None
             forge_deep = None
 
-    app = FastAPI(title="Cortheon Universal Proxy", version="2.0.0", lifespan=lifespan)
+    app = FastAPI(title="Cortheon Universal Proxy", version="2.2.0", lifespan=lifespan)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -229,6 +239,7 @@ def create_app(
         caps = await default_engine.client.probe()
         return {
             "status": "ok",
+            "version": "2.2.0",
             "upstream": upstream_url,
             "upstream_model": caps.model_id,
             "referee_url": referee_url,
@@ -236,6 +247,7 @@ def create_app(
             "sandbox_backend": sandbox_backend(),
             "streams": num_streams,
             "auto_rescue": auto_rescue,
+            "record_flywheel": record_flywheel,
         }
 
     @app.get("/v1/models")

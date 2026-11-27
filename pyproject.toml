@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cortheon"
-version = "2.1.0"
-description = "Execution-verified parallel consensus, SpecVerify, proof-carrying diff guard, self-play DPO flywheel, and MCP server for local models."
+version = "2.2.0"
+description = "Execution-verified parallel consensus, CodeForge v7 streaming, SpecVerify, proof-carrying diff guard, self-play DPO flywheel, and MCP server for local models."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
