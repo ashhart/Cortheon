@@ -64,6 +64,7 @@ def main(argv: Optional[list[str]] = None) -> None:
     p_solve = sub.add_parser("solve", help="Solve any hard math, logic, coding, debugging, or open-ended architecture/design problem")
     p_solve.add_argument("prompt", help="Problem statement (or @path/to/file.txt)")
     p_solve.add_argument("--url", default="http://127.0.0.1:8080/v1")
+    p_solve.add_argument("--model", default=None, help="Optional model ID override when backend serves multiple models")
     p_solve.add_argument("--referee-url", default=None, help="Optional second model URL for Cross-Model Referee/Critic")
     p_solve.add_argument("--mode", choices=["auto", "code", "reason", "think", "fast"], default="auto")
     p_solve.add_argument("--streams", type=int, default=4, help=_STREAMS_HELP)
@@ -417,6 +418,7 @@ def main(argv: Optional[list[str]] = None) -> None:
             cfg = ForgeConfig(
                 base_url=args.url,
                 referee_url=args.referee_url,
+                model=args.model,
                 num_streams=args.streams,
                 deep=args.deep,
                 enable_memory=not args.no_memory,
