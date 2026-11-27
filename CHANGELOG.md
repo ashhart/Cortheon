@@ -5,6 +5,21 @@ All notable changes to Cortheon are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-11-27
+
+### Added
+- **Live MCP Progress & Task/Sandbox Cancellation (`#6`, reported by `@JordiPosthumus`):** `cortheon mcp` now reads `_meta.progressToken` and streams strictly increasing `notifications/progress` events from Cortheon's universal `on_event` hooks across `cortheon_verify`, `cortheon_guard`, and `cortheon_spec_verify`. Stdio `tools/call` runs in tracked concurrent `asyncio.Task`s scoped via `sandbox_scope()` so `notifications/cancelled` and closed client stdout pipes cancel in-flight verifications immediately and SIGKILL orphaned sandbox subprocess groups.
+- **`--model` Flag on `cortheon solve` (PR `#4` by `@JordiPosthumus`):** Passes explicit model ID overrides through `ForgeConfig.model` for multi-model backends (LM Studio, vLLM).
+- **Published 32/32 `CodeForge v7` LiveCodeBench v6 Hard & 30/30 AIME 2025 `SpecVerify` Receipts:** Committed PII-scrubbed `results/official_lcb_v6_hard_ablation_glm53.json` (`12/32 → 23/32 = 71.9%`, `+34.4 pts`, `p = 0.0034**`, `+5/−0` vs `best4_sample`, `+7/−0` vs `CodeForge v6` at `2.75×` fewer calls) and `results/official_aime2025_spec_verify_inkling_glm53.json` (`20/30`, `9/9 = 100.0%` drafter precision, `30%` zero-verifier bypass).
+
+### Security
+- **Agent-Harness Home Directory Sandbox Hardening (PR `#3` by `@JordiPosthumus`):** Added `~/.dsh`, `~/.claude`, `~/.codex`, and `~/.cursor` to macOS Seatbelt `sensitive_dirs` with regression tests preventing credential and transcript exfiltration.
+
+### Fixed
+- **Lazy FastAPI/Uvicorn Web Surface Loading (PR `#5` by `@JordiPosthumus`):** Deferred `fastapi`/`uvicorn` imports in `flash_forge/cli.py` and `cortheon/__init__.py` (via PEP 562 `__getattr__`) so minimal installs without the web stack still run `cortheon mcp` and `cortheon solve`, while keeping `fastapi`/`uvicorn` in default dependencies so Quick Start `cortheon proxy` continues to work out of the box.
+- **Always-On Reasoning Model Fast-Route Recovery (`flash_forge/client.py`):** Added `reasoning_optional=False` handling (e.g. `inkling-2-mini`) so `enable_thinking=False` caps thinking budget/effort and adapts cleanly without thinking starvation.
+- **SARIF `informationUri` & Cold CI Timeout Polish:** Pointed SARIF `informationUri` to `https://github.com/ashhart/Cortheon` and raised `clang -fsyntax-only` syntax-check timeout from `8s` to `25s` in `flash_forge/tools.py`.
+
 ## [2.3.0] - 2026-11-27
 
 ### Added

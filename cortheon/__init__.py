@@ -1,6 +1,6 @@
 """Cortheon — Unified Consensus & Verification Runtime for Frozen Local Models."""
 
-__version__ = "2.3.0"
+__version__ = "2.3.1"
 
 from flash_forge.client import CompletionResult, ModelCapabilities, TensorFoldClient
 from flash_forge.code_forge import CodeCandidate, CodeForgeTrace

@@ -626,7 +626,7 @@ def test_format_guard_sarif_schema_with_proven_bugs_and_severity_mapping():
     run = sarif["runs"][0]
     driver = run["tool"]["driver"]
     assert driver["name"] == "Cortheon Guard"
-    assert driver["version"] == "2.3.0"
+    assert driver["version"] == "2.3.1"
     rule_ids = {r["id"] for r in driver["rules"]}
     assert "cortheon-guard/regression_contract_breaker" in rule_ids
     assert "cortheon-guard/edge_boundary_breaker" in rule_ids
@@ -688,7 +688,7 @@ def test_format_guard_sarif_clean_zero_bug_report():
     assert json.loads(json.dumps(sarif)) == sarif
     assert sarif["version"] == "2.1.0"
     assert sarif["runs"][0]["tool"]["driver"]["name"] == "Cortheon Guard"
-    assert sarif["runs"][0]["tool"]["driver"]["version"] == "2.3.0"
+    assert sarif["runs"][0]["tool"]["driver"]["version"] == "2.3.1"
     assert sarif["runs"][0]["results"] == []
 
 

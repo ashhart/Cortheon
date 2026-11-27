@@ -36,7 +36,7 @@ from .skill_loader import SkillPack
 from .spec_verify import solve_spec_verify
 from .think_forge import ThinkForgeTrace
 
-_VERSION = "2.3.0"
+_VERSION = "2.3.1"
 
 _STREAMS_HELP = (
     "Parallel verification streams (2, 4, or 8): "
