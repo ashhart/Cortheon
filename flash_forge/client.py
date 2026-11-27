@@ -256,6 +256,11 @@ class TensorFoldClient:
                 if spec.grammar_budget and is_tf:
                     payload["grammar_budget"] = True
 
+        # Prevent server-side double-nesting when talking to a TensorFold server started with --cortheon.
+        # Only sent to TensorFold backends so Ollama/vLLM/llama.cpp never see an unknown field.
+        if getattr(self, "_is_tensorfold", False):
+            payload["cortheon"] = False
+
         return payload
 
     async def complete(self, spec: CallSpec) -> CompletionResult:
