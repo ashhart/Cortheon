@@ -413,6 +413,119 @@ def test_client_soft_effort_mapping_and_nongrammar_choice():
     assert p_low["reasoning_effort"] == "low"
 
 
+def test_client_generic_openai_reasoning_headroom_and_recovery():
+    import asyncio
+    from flash_forge.client import CallSpec, ModelCapabilities, TensorFoldClient
+
+    # 1. Generic OpenAI-compatible server (oMLX/vLLM/llama.cpp) serving a reasoning model without /v1/models capabilities
+    c = TensorFoldClient(base_url="http://127.0.0.1:9999/v1")
+    c._is_tensorfold = False
+    c._caps = ModelCapabilities(
+        model_id="ds41-flash",
+        context_length=1048576,
+        structures=True,
+        thinking_budget=False,
+        thinking_switch=False,
+        supported_efforts=[],
+    )
+    p_off = c._build_payload(CallSpec(messages=[{"role": "user", "content": "Classify 2+2"}], enable_thinking=False, max_tokens=64))
+    assert p_off["chat_template_kwargs"] == {"enable_thinking": False}
+    assert p_off["max_tokens"] == 64
+
+    p_think = c._build_payload(CallSpec(messages=[{"role": "user", "content": "solve"}], enable_thinking=True, thinking_budget=500, max_tokens=2500))
+    assert p_think["max_tokens"] >= 6144
+    assert p_think["reasoning_effort"] == "low"
+
+    # Non-reasoning model on generic server keeps caller max_tokens untouched until reasoning_content is observed
+    c_plain = TensorFoldClient(base_url="http://127.0.0.1:9999/v1")
+    c_plain._is_tensorfold = False
+    c_plain._caps = ModelCapabilities(model_id="llama3.2:latest", context_length=32768, structures=True)
+    p_plain = c_plain._build_payload(CallSpec(messages=[{"role": "user", "content": "hi"}], enable_thinking=True, max_tokens=2000))
+    assert p_plain["max_tokens"] == 2000
+    assert "reasoning_effort" not in p_plain
+
+    # 2. Adaptive recovery: custom model alias hits finish_reason="length" with empty content -> auto-learns & retries
+    sent_payloads: list[dict] = []
+
+    class _FakeResp:
+        def __init__(self, status_code: int, body: dict):
+            self.status_code = status_code
+            self._body = body
+            self.text = str(body)
+
+        def json(self):
+            return self._body
+
+    class _FakeHttp:
+        def __init__(self, responses):
+            self._responses = list(responses)
+
+        async def post(self, url, json=None):
+            sent_payloads.append(dict(json or {}))
+            return self._responses.pop(0)
+
+    c_alias = TensorFoldClient(base_url="http://127.0.0.1:9999/v1")
+    c_alias._is_tensorfold = False
+    c_alias._caps = ModelCapabilities(model_id="my-local-alias", context_length=65536, structures=True)
+    c_alias._http = _FakeHttp([
+        _FakeResp(200, {
+            "choices": [{"message": {"role": "assistant", "content": None, "reasoning_content": "thinking..."}, "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 50, "completion_tokens": 2000, "prompt_tokens_details": None, "completion_tokens_details": {"reasoning_tokens": 2000}},
+        }),
+        _FakeResp(200, {
+            "choices": [{"message": {"role": "assistant", "content": "ANSWER: 42", "reasoning_content": "done"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 50, "completion_tokens": 2400, "completion_tokens_details": {"reasoning_tokens": 2300}},
+        }),
+    ])  # type: ignore[assignment]
+    res = asyncio.run(c_alias.complete(CallSpec(messages=[{"role": "user", "content": "q"}], max_tokens=2000, enable_thinking=True)))
+    assert res.ok and res.content == "ANSWER: 42"
+    assert c_alias._observed_reasoning is True
+    assert sent_payloads[0]["max_tokens"] == 2000
+    assert sent_payloads[1]["max_tokens"] >= 6144
+
+    # 3. Exhausted >=6144 thinking budget triggers fast enable_thinking=False commit pass seeded with scratchpad tail
+    sent_payloads.clear()
+    c_commit = TensorFoldClient(base_url="http://127.0.0.1:9999/v1")
+    c_commit._is_tensorfold = False
+    c_commit._caps = ModelCapabilities(model_id="ds41-flash", context_length=1048576, structures=True)
+    c_commit._http = _FakeHttp([
+        _FakeResp(200, {
+            "choices": [{"message": {"role": "assistant", "content": "", "reasoning_content": "DP recurrence gives 54662"}, "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 6144, "completion_tokens_details": {"reasoning_tokens": 6144}},
+        }),
+        _FakeResp(200, {
+            "choices": [{"message": {"role": "assistant", "content": "ANSWER: 54662"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 220, "completion_tokens": 12, "completion_tokens_details": {"reasoning_tokens": 0}},
+        }),
+    ])  # type: ignore[assignment]
+    res2 = asyncio.run(c_commit.complete(CallSpec(messages=[{"role": "user", "content": "count"}], max_tokens=2500, enable_thinking=True)))
+    assert res2.ok and res2.content == "ANSWER: 54662"
+    assert res2.reasoning == "DP recurrence gives 54662"
+    assert sent_payloads[0]["max_tokens"] == 6144
+    assert sent_payloads[1]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "DP recurrence gives 54662" in sent_payloads[1]["messages"][-1]["content"]
+
+    # 4. Strict server rejecting chat_template_kwargs / reasoning_effort with HTTP 400 falls back cleanly and caches rejection
+    sent_payloads.clear()
+    c_strict = TensorFoldClient(base_url="http://127.0.0.1:9999/v1")
+    c_strict._is_tensorfold = False
+    c_strict._caps = ModelCapabilities(model_id="llama3.2:latest", context_length=32768, structures=True)
+    c_strict._http = _FakeHttp([
+        _FakeResp(400, {"error": "unknown field chat_template_kwargs"}),
+        _FakeResp(200, {
+            "choices": [{"message": {"role": "assistant", "content": "code"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 20, "completion_tokens": 1},
+        }),
+    ])  # type: ignore[assignment]
+    res3 = asyncio.run(c_strict.complete(CallSpec(messages=[{"role": "user", "content": "route"}], max_tokens=64, enable_thinking=False)))
+    assert res3.ok and res3.content == "code"
+    assert c_strict._chat_template_kwargs_rejected is True
+    assert "chat_template_kwargs" in sent_payloads[0]
+    assert "chat_template_kwargs" not in sent_payloads[1]
+    p_next = c_strict._build_payload(CallSpec(messages=[{"role": "user", "content": "route2"}], max_tokens=64, enable_thinking=False))
+    assert "chat_template_kwargs" not in p_next
+
+
 def test_reason_format_gate_and_trailing_prose_strip():
     from flash_forge.reason_forge import _answer_satisfies_prompt_format
 
