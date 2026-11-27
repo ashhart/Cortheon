@@ -142,6 +142,7 @@ def test_sandbox_blocks_sensitive_credential_paths_in_home(tmp_path: Path, monke
     assert "LEAKED:" not in res.stdout
 
 
+@pytest.mark.skipif(not _IS_MACOS_SEATBELT, reason="Requires macOS Seatbelt (/usr/bin/sandbox-exec)")
 def test_sandbox_blocks_agent_harness_homes_in_home(tmp_path: Path, monkeypatch):
     """Harness home directories hold credentials and transcripts.
 
