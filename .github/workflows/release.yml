@@ -1,0 +1,101 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run offline test gate, build sdist/wheel, twine check, and CLI smoke test"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Offline Test Gate (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and test dependencies
+        run: python -m pip install --quiet -e '.[test]'
+      - name: Run offline pytest suite
+        run: python -m pytest -q
+
+  build:
+    name: Build and Verify Distributions
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build and verification tools
+        run: python -m pip install --quiet --upgrade pip build twine
+      - name: Build sdist and wheel
+        run: python -m build --sdist --wheel
+      - name: Validate package metadata with twine
+        run: python -m twine check dist/*
+      - name: Verify wheel install and CLI
+        run: |
+          python -m venv /tmp/cortheon-wheel-check
+          /tmp/cortheon-wheel-check/bin/python -m pip install --quiet dist/*.whl
+          /tmp/cortheon-wheel-check/bin/cortheon --version
+          /tmp/cortheon-wheel-check/bin/cortheon --help > /dev/null
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  github-release:
+    name: Create GitHub Release
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+  publish-pypi:
+    name: Publish to PyPI (OIDC)
+    needs: [build, github-release]
+    if: startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_TO_PYPI == 'true'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
