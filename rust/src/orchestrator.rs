@@ -8,12 +8,12 @@ use crate::consensus::{branch_weight, cluster, equiv, format_ok, Outcome};
 use crate::prompts::{self, Role, SkillPack, SHARED_SYS};
 use crate::timeline::Timeline;
 use crate::verifier::VerifierPool;
-use anyhow::Result;
-use futures::future::{BoxFuture, FutureExt, Shared};
+use anyhow::{Context, Result};
+use futures::future::{BoxFuture, Fuse, FusedFuture, FutureExt, Shared};
+use futures::StreamExt;
 use regex::Regex;
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -54,65 +54,48 @@ impl Ctx {
     }
 }
 
-type ExecFut = Shared<BoxFuture<'static, Arc<Value>>>;
+type ExecFut = Shared<BoxFuture<'static, Result<Arc<Value>, String>>>;
 
-/// Start a verifier job immediately (spawned). The returned shared future yields the
-/// result; when every clone is dropped (slot cancelled, speculation unused) the job is
-/// aborted, which makes the worker kill the sandboxed script.
-fn start_exec(
+/// The stream polls this same execution that can later supply the final result.
+/// Dropping its last owner cancels the worker call and closes the timing span.
+fn script_execution(
     pool: VerifierPool,
     tl: Timeline,
     slot: String,
     code: String,
     timeout: f64,
 ) -> ExecFut {
-    let guard = VerifyGuard::new(tl, slot);
-    let h = tokio::spawn(async move {
-        let _g = guard;
-        Arc::new(
-            pool.exec(&code, timeout)
-                .await
-                .unwrap_or_else(|e| json!({"ok": false, "error": e.to_string()})),
-        )
-    });
-    let h = ExecHandle(h);
-    async move { h.await }.boxed().shared()
+    async move {
+        let _guard = VerifyGuard::new(tl, slot, "exec");
+        pool.exec(&code, timeout)
+            .await
+            .map(Arc::new)
+            .map_err(|e| format!("{e:#}"))
+    }
+    .boxed()
+    .shared()
 }
 
 struct VerifyGuard {
     tl: Timeline,
     slot: String,
+    phase: &'static str,
 }
 impl VerifyGuard {
-    fn new(tl: Timeline, slot: String) -> Self {
-        tl.emit("verify_start", &slot, 0, "exec");
-        VerifyGuard { tl, slot }
+    fn new(tl: Timeline, slot: String, phase: &'static str) -> Self {
+        tl.emit("verify_start", &slot, 0, phase);
+        VerifyGuard { tl, slot, phase }
     }
 }
 impl Drop for VerifyGuard {
     fn drop(&mut self) {
-        self.tl.emit("verify_end", &self.slot, 0, "exec");
+        self.tl.emit("verify_end", &self.slot, 0, self.phase);
     }
 }
 
-struct ExecHandle(tokio::task::JoinHandle<Arc<Value>>);
-impl std::future::Future for ExecHandle {
-    type Output = Arc<Value>;
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Arc<Value>> {
-        std::pin::Pin::new(&mut self.0).poll(cx).map(|r| {
-            r.unwrap_or_else(|e| {
-                Arc::new(json!({"ok": false, "error": format!("verifier task: {e}")}))
-            })
-        })
-    }
-}
-impl Drop for ExecHandle {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
+pub(crate) struct Candidate {
+    code: String,
+    execution: ExecFut,
 }
 
 fn closed_fences(s: &str) -> usize {
@@ -122,18 +105,27 @@ fn closed_fences(s: &str) -> usize {
         .count()
 }
 
-fn apply_exec(out: &mut Outcome, v: &Value) {
-    out.exec_elapsed_s = v["elapsed_s"].as_f64().unwrap_or_default();
-    out.exec_ok = v.get("ok").and_then(|x| x.as_bool()).or(Some(false));
-    if v.get("returncode").map(|r| r.is_null()).unwrap_or(true) && v.get("stdout").is_none() {
-        // worker-level failure before execution
-        out.exec_ok = None;
+fn apply_exec(out: &mut Outcome, v: &Value) -> Result<()> {
+    #[derive(serde::Deserialize)]
+    struct Execution {
+        ok: bool,
+        elapsed_s: f64,
+        stdout: String,
+        raw_answer: String,
+        norm_answer: String,
+        verified_constraints: bool,
+        error: String,
     }
-    out.exec_stdout = v["stdout"].as_str().unwrap_or("").to_string();
-    out.raw_answer = v["raw_answer"].as_str().unwrap_or("").to_string();
-    out.norm_answer = v["norm_answer"].as_str().unwrap_or("").to_string();
-    out.verified_constraints = v["verified_constraints"].as_bool().unwrap_or(false);
-    out.error = v["error"].as_str().unwrap_or("").to_string();
+    let result: Execution =
+        serde::Deserialize::deserialize(v).context("malformed verifier exec reply")?;
+    out.exec_elapsed_s = result.elapsed_s;
+    out.exec_ok = Some(result.ok);
+    out.exec_stdout = result.stdout;
+    out.raw_answer = result.raw_answer;
+    out.norm_answer = result.norm_answer;
+    out.verified_constraints = result.verified_constraints;
+    out.error = result.error;
+    Ok(())
 }
 
 /// Port of _execute_pal_outcome, with an optional cache of speculative executions.
@@ -143,25 +135,23 @@ pub(crate) async fn execute_pal(
     out: &mut Outcome,
     slot: &str,
     timeout: f64,
-    spec: Option<&Arc<Mutex<HashMap<String, ExecFut>>>>,
-) -> bool {
-    tl.emit("verify_start", slot, 0, "extract");
-    let code = ctx
-        .light_pool
-        .extract(&out.raw_content)
-        .await
-        .unwrap_or_default();
+    candidate: Option<Candidate>,
+) -> Result<bool> {
+    let code = {
+        let _guard = VerifyGuard::new(tl.clone(), slot.to_owned(), "extract");
+        ctx.light_pool.extract(&out.raw_content).await?
+    };
+    // A stale candidate must release its worker before the final script queues.
+    let candidate = candidate.filter(|c| c.code == code);
     out.code = code.clone();
     if code.is_empty() {
         out.error = "No valid Python code block extracted".into();
-        tl.emit("verify_end", slot, 0, "extract");
-        return false;
+        return Ok(false);
     }
-    let cached = spec.and_then(|m| m.lock().unwrap().get(&code).cloned());
-    let hit = cached.is_some();
-    let fut = match cached {
-        Some(f) => f,
-        None => start_exec(
+    let hit = candidate.is_some();
+    let fut = match candidate {
+        Some(c) => c.execution,
+        None => script_execution(
             ctx.exec_pool.clone(),
             tl.clone(),
             slot.to_string(),
@@ -169,15 +159,9 @@ pub(crate) async fn execute_pal(
             timeout,
         ),
     };
-    let v = fut.await;
-    apply_exec(out, &v);
-    tl.emit(
-        "verify_end",
-        slot,
-        0,
-        if hit { "spec_hit" } else { "extract" },
-    );
-    hit
+    let v = fut.await.map_err(anyhow::Error::msg)?;
+    apply_exec(out, &v)?;
+    Ok(hit)
 }
 
 pub(crate) fn mk_outcome(
@@ -207,68 +191,37 @@ async fn run_w1_slot(
     idx: usize,
     role: Role,
     spec: CallSpec,
-) -> (usize, Outcome, bool, f64) {
+) -> Result<(usize, Outcome, bool, f64)> {
     let start = Instant::now();
     let ep = ctx.ep(idx);
     let slot = format!("w1_{}", role.name);
-    let spec_map: Arc<Mutex<HashMap<String, ExecFut>>> = Arc::new(Mutex::new(HashMap::new()));
-    let (tx, listener) = if ctx.speculative && role.kind == "pal" {
-        let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-        let (c2, tl2, m2, slot2) = (ctx.clone(), tl.clone(), spec_map.clone(), slot.clone());
-        let timeout = ctx.sandbox_timeout_s;
-        let h = tokio::spawn(async move {
-            let mut seen = 0usize;
-            while let Some(mut snap) = rx.recv().await {
-                while let Ok(s) = rx.try_recv() {
-                    snap = s;
-                }
-                let n = closed_fences(&snap);
-                if n <= seen {
-                    continue;
-                }
-                seen = n;
-                // Safe speculation: run the script that is complete so far. It is only
-                // used if the final extracted code is byte-identical.
-                if let Ok(code) = c2.light_pool.extract(&snap).await {
-                    if !code.is_empty() && !m2.lock().unwrap().contains_key(&code) {
-                        let f = start_exec(
-                            c2.exec_pool.clone(),
-                            tl2.clone(),
-                            format!("spec:{slot2}"),
-                            code.clone(),
-                            timeout,
-                        );
-                        m2.lock().unwrap().insert(code, f);
-                    }
-                }
-            }
-        });
-        (Some(tx), Some(AbortOnDrop(h)))
+    let mut candidate = None;
+    let res = if ctx.speculative && role.kind == "pal" {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let completion = ep.complete(&spec, &slot, &tl, &ctx.stats, Some(tx));
+        tokio::pin!(completion);
+        // Both futures belong to the slot. Once completion wins, its listener
+        // cannot publish a late candidate or start a job behind the final script.
+        tokio::select! {
+            result = &mut completion => result,
+            () = speculate(&ctx, &tl, &slot, rx, &mut candidate) => completion.await,
+        }
     } else {
-        (None, None)
+        ep.complete(&spec, &slot, &tl, &ctx.stats, None).await
     };
-    let res = ep.complete(&spec, &slot, &tl, &ctx.stats, tx).await;
-    drop(listener);
     let mut out = mk_outcome(&role.name, 1, &role.kind, &res, &ep.base_url);
     let mut hit = false;
     if res.ok() {
         if role.kind == "pal" {
-            hit = execute_pal(
-                &ctx,
-                &tl,
-                &mut out,
-                &slot,
-                ctx.sandbox_timeout_s,
-                Some(&spec_map),
-            )
-            .await;
-        } else if let Ok((raw, norm)) = ctx.light_pool.prose(&res.content).await {
+            hit = execute_pal(&ctx, &tl, &mut out, &slot, ctx.sandbox_timeout_s, candidate).await?;
+        } else {
+            let (raw, norm) = ctx.light_pool.prose(&res.content).await?;
             out.raw_answer = raw;
             out.norm_answer = norm;
         }
     }
     let elapsed = start.elapsed().as_secs_f64().max(out.latency_s);
-    (idx, out, hit, elapsed)
+    Ok((idx, out, hit, elapsed))
 }
 
 fn round_seconds(s: f64) -> f64 {
@@ -301,10 +254,59 @@ fn slot_done(tl: &Timeline, idx: usize, out: &Outcome, problem: &str, elapsed: f
     }));
 }
 
-struct AbortOnDrop(tokio::task::JoinHandle<()>);
-impl Drop for AbortOnDrop {
-    fn drop(&mut self) {
-        self.0.abort();
+async fn speculate(
+    ctx: &Ctx,
+    tl: &Timeline,
+    slot: &str,
+    rx: mpsc::UnboundedReceiver<String>,
+    candidate: &mut Option<Candidate>,
+) {
+    let scripts = futures::stream::unfold((rx, 0), |(mut rx, mut seen)| async move {
+        while let Some(mut snapshot) = rx.recv().await {
+            while let Ok(latest) = rx.try_recv() {
+                snapshot = latest;
+            }
+            let count = closed_fences(&snapshot);
+            if count > seen {
+                seen = count;
+                // A speculative extraction is advisory. The final extraction
+                // independently checks the complete response.
+                let extraction = {
+                    let _guard = VerifyGuard::new(tl.clone(), format!("spec:{slot}"), "extract");
+                    ctx.light_pool.extract(&snapshot).await
+                };
+                if let Ok(code) = extraction {
+                    return Some((code, (rx, seen)));
+                }
+            }
+        }
+        None
+    });
+    tokio::pin!(scripts);
+    let mut running = Fuse::terminated();
+    loop {
+        tokio::select! {
+            update = scripts.next() => {
+                let Some(code) = update else { break };
+                if candidate.as_ref().is_some_and(|c| c.code == code) {
+                    continue;
+                }
+                *candidate = None;
+                running = Fuse::terminated();
+                if !code.is_empty() {
+                    let execution = script_execution(
+                        ctx.exec_pool.clone(),
+                        tl.clone(),
+                        format!("spec:{slot}"),
+                        code.clone(),
+                        ctx.sandbox_timeout_s,
+                    );
+                    running = execution.clone().fuse();
+                    *candidate = Some(Candidate { code, execution });
+                }
+            }
+            _ = &mut running, if !running.is_terminated() => {}
+        }
     }
 }
 
@@ -388,7 +390,7 @@ pub async fn solve_reasoning(
         let attempt = run_w1_slot(ctx.clone(), tl.clone(), i, role.clone(), spec);
         if ctx.serial_attempts {
             // Capture every role for the matched deterministic comparison.
-            let (_, out, hit, elapsed) = attempt.await;
+            let (_, out, hit, elapsed) = attempt.await?;
             slot_done(tl, i, &out, problem, elapsed);
             trace.spec_hits += usize::from(hit);
             ordered[i] = Some(out);
@@ -397,12 +399,13 @@ pub async fn solve_reasoning(
         }
     }
     let mut pal_ok: Vec<Outcome> = vec![];
+    let collect: Result<()> = async {
     while let Some(j) = set.join_next().await {
         // Match asyncio.wait(FIRST_COMPLETED): consider every already-finished
         // slot, in role order, before judging the batch or cancelling a straggler.
-        let mut completed = vec![j?];
+        let mut completed = vec![j??];
         while let Some(ready) = set.try_join_next() {
-            completed.push(ready?);
+            completed.push(ready??);
         }
         completed.sort_by_key(|(idx, ..)| *idx);
         for (idx, out, hit, elapsed) in completed {
@@ -418,14 +421,14 @@ pub async fn solve_reasoning(
         }
         if !set.is_empty() && !pal_ok.is_empty() {
             let refs: Vec<&Outcome> = pal_ok.iter().collect();
-            let cl = cluster(&ctx.light_pool, &refs).await;
+            let cl = cluster(&ctx.light_pool, &refs).await?;
             if let Some((top, members)) = cl.first() {
                 if members.len() >= ctx.agree {
                     let mut ana_contradicts = false;
                     for o in ordered.iter().flatten() {
                         if o.kind == "analytical"
                             && !o.norm_answer.is_empty()
-                            && !equiv(&ctx.light_pool, &o.norm_answer, top).await
+                            && !equiv(&ctx.light_pool, &o.norm_answer, top).await?
                         {
                             ana_contradicts = true;
                         }
@@ -438,14 +441,17 @@ pub async fn solve_reasoning(
                             "elapsed_s":round_seconds(start.elapsed().as_secs_f64()), "consensus_answer":top,
                             "reason":format!("{}/{} PAL consensus", members.len(), roles.len()),
                         }));
-                        set.abort_all();
-                        while set.join_next().await.is_some() {}
                         break;
                     }
                 }
             }
         }
     }
+    Ok(())
+    }.await;
+    // Close all in-flight request/verification spans before returning a result or error.
+    set.shutdown().await;
+    collect?;
     for (i, role) in roles.iter().enumerate() {
         trace.wave1.push(ordered[i].take().unwrap_or(Outcome {
             name: role.name.clone(),
@@ -468,8 +474,8 @@ pub async fn solve_reasoning(
         .iter()
         .filter(|o| !o.norm_answer.is_empty() && format_ok(problem, &o.norm_answer))
         .collect();
-    let pal_clusters = cluster(&ctx.light_pool, &valid_pal).await;
-    let all_clusters = cluster(&ctx.light_pool, &all_valid).await;
+    let pal_clusters = cluster(&ctx.light_pool, &valid_pal).await?;
+    let all_clusters = cluster(&ctx.light_pool, &all_valid).await?;
     let mut need_wave2 = false;
     if valid_pal.is_empty() {
         need_wave2 = true;
@@ -568,7 +574,7 @@ pub async fn solve_reasoning(
             trace.wave2.push(o);
         }
         let t2 = ctx.sandbox_timeout_s + 4.0;
-        exec_many(&ctx, tl, &mut trace.wave2, &jobs, t2).await;
+        exec_many(&ctx, tl, &mut trace.wave2, &jobs, t2).await?;
         let wave_elapsed = wave_start.elapsed().as_secs_f64();
         for (idx, o) in trace.wave2.iter().enumerate() {
             if !o.error.is_empty() {
@@ -592,11 +598,11 @@ pub async fn solve_reasoning(
                 && format_ok(problem, &o.norm_answer)
         });
         if !any_valid {
-            wave3(&ctx, tl, &mut trace, problem, &shared_sys).await;
+            wave3(&ctx, tl, &mut trace, problem, &shared_sys).await?;
         }
     }
 
-    adjudicate(&ctx, tl, &mut trace, problem, need_wave2, enable_wave2).await;
+    adjudicate(&ctx, tl, &mut trace, problem, need_wave2, enable_wave2).await?;
     tl.progress(json!({
         "engine":"reason", "event":"done", "elapsed_s":round_seconds(start.elapsed().as_secs_f64()),
         "verified":trace.verified, "summary":format!("{} -> {}", trace.consensus_type, trace.final_answer),
@@ -610,22 +616,29 @@ async fn exec_many(
     outs: &mut [Outcome],
     jobs: &[usize],
     timeout: f64,
-) {
+) -> Result<()> {
     let futs = jobs.iter().map(|&i| {
         let mut o = outs[i].clone();
         let (ctx, tl) = (ctx.clone(), tl.clone());
         async move {
             let slot = format!("w{}_{}", o.wave, o.name);
-            execute_pal(&ctx, &tl, &mut o, &slot, timeout, None).await;
-            (i, o)
+            execute_pal(&ctx, &tl, &mut o, &slot, timeout, None).await?;
+            Ok::<_, anyhow::Error>((i, o))
         }
     });
-    for (i, o) in futures::future::join_all(futs).await {
+    for (i, o) in futures::future::try_join_all(futs).await? {
         outs[i] = o;
     }
+    Ok(())
 }
 
-async fn wave3(ctx: &Arc<Ctx>, tl: &Timeline, trace: &mut Trace, problem: &str, shared_sys: &str) {
+async fn wave3(
+    ctx: &Arc<Ctx>,
+    tl: &Timeline,
+    trace: &mut Trace,
+    problem: &str,
+    shared_sys: &str,
+) -> Result<()> {
     // Python scans reversed(wave2 + wave1), preferring the last Wave-1 script.
     let closest = trace
         .wave1
@@ -678,7 +691,8 @@ async fn wave3(ctx: &Arc<Ctx>, tl: &Timeline, trace: &mut Trace, problem: &str, 
         if res.ok() {
             if *kind == "pal" {
                 jobs.push(trace.wave2.len());
-            } else if let Ok((raw, norm)) = ctx.light_pool.prose(&res.content).await {
+            } else {
+                let (raw, norm) = ctx.light_pool.prose(&res.content).await?;
                 o.raw_answer = raw;
                 o.norm_answer = norm;
             }
@@ -686,7 +700,7 @@ async fn wave3(ctx: &Arc<Ctx>, tl: &Timeline, trace: &mut Trace, problem: &str, 
         trace.wave2.push(o);
     }
     let t3 = ctx.sandbox_timeout_s + 6.0;
-    exec_many(ctx, tl, &mut trace.wave2, &jobs, t3).await;
+    exec_many(ctx, tl, &mut trace.wave2, &jobs, t3).await?;
     let wall = wave_start.elapsed().as_secs_f64();
     for (idx, o) in trace.wave2[first..].iter().enumerate() {
         let elapsed = o.latency_s + o.exec_elapsed_s;
@@ -698,6 +712,7 @@ async fn wave3(ctx: &Arc<Ctx>, tl: &Timeline, trace: &mut Trace, problem: &str, 
             if elapsed > 0.0 { elapsed } else { wall },
         );
     }
+    Ok(())
 }
 
 async fn pairwise_vote(ctx: &Arc<Ctx>, tl: &Timeline, p_ab: String, p_ba: String) -> String {
@@ -748,7 +763,7 @@ async fn adjudicate(
     problem: &str,
     need_wave2: bool,
     enable_wave2: bool,
-) {
+) -> Result<()> {
     let combined: Vec<Outcome> = trace
         .wave1
         .iter()
@@ -765,7 +780,7 @@ async fn adjudicate(
             .filter(|o| !o.norm_answer.is_empty())
             .collect();
     }
-    let clusters = cluster(&ctx.light_pool, &valid).await;
+    let clusters = cluster(&ctx.light_pool, &valid).await?;
     if clusters.is_empty() {
         // Python len() counts Unicode characters and max() retains the first tie.
         let best = combined
@@ -799,14 +814,15 @@ async fn adjudicate(
         let r = ctx.endpoints[0]
             .complete(&spec, "reason_fallback_extract", tl, &ctx.stats, None)
             .await;
-        trace.final_answer = ctx
-            .light_pool
-            .fallback_answer(&r.content)
-            .await
-            .unwrap_or_default();
-        trace.consensus_type = "fallback_extract".into();
+        if r.ok() {
+            trace.final_answer = ctx.light_pool.fallback_answer(&r.content).await?;
+            trace.consensus_type = "fallback_extract".into();
+        } else {
+            trace.final_answer.clear();
+            trace.consensus_type = "fallback_extract_failed".into();
+        }
         trace.final_explanation = best.map(|out| out.raw_content.clone()).unwrap_or_default();
-        return;
+        return Ok(());
     }
     let mut scored: Vec<(f64, usize, String, Vec<usize>)> = clusters
         .iter()
@@ -851,6 +867,7 @@ async fn adjudicate(
         let p_ab = format!("PROBLEM:\n{}\n\nCANDIDATE A (Answer: {ans_a}):\n{ca}\n\nCANDIDATE B (Answer: {ans_b}):\n{cb}\n\n{q}", problem.trim());
         let p_ba = format!("PROBLEM:\n{}\n\nCANDIDATE A (Answer: {ans_b}):\n{cb}\n\nCANDIDATE B (Answer: {ans_a}):\n{ca}\n\n{q}", problem.trim());
         let mut vote = pairwise_vote(ctx, tl, p_ab.clone(), p_ba).await;
+        let mut audit_failed = false;
         if vote == "TIE" {
             let spec = CallSpec {
                 messages: vec![
@@ -868,17 +885,23 @@ async fn adjudicate(
             let a = ctx.endpoints[0]
                 .complete(&spec, "reason_judge_audit", tl, &ctx.stats, None)
                 .await;
-            let txt = a.content.to_uppercase();
-            if txt.contains("WINNER: B") {
-                vote = "B".into();
-            } else if txt.contains("WINNER: A") {
-                vote = "A".into();
+            if a.ok() {
+                let txt = a.content.to_uppercase();
+                if txt.contains("WINNER: B") {
+                    vote = "B".into();
+                } else if txt.contains("WINNER: A") {
+                    vote = "A".into();
+                }
+            } else {
+                audit_failed = true;
             }
         }
         if vote == "B" {
             winner = ans_b;
             members = mem_b;
             trace.consensus_type = "pairwise_tiebreak_B".into();
+        } else if audit_failed {
+            trace.consensus_type = "pairwise_audit_failed_default_A".into();
         } else {
             trace.consensus_type = "pairwise_tiebreak_A".into();
         }
@@ -898,7 +921,7 @@ async fn adjudicate(
             .iter()
             .find(|o| o.kind == "pal" && !o.norm_answer.is_empty());
         trace.recovered_from_disagreement = match first_pal {
-            Some(pal) => !equiv(&ctx.light_pool, &pal.norm_answer, &winner).await,
+            Some(pal) => !equiv(&ctx.light_pool, &pal.norm_answer, &winner).await?,
             None => true,
         };
     }
@@ -922,22 +945,13 @@ async fn adjudicate(
         ));
     }
     trace.final_answer = winner;
+    Ok(())
 }
 
 /// Run upstream's published temperature schedules at widths 4 and 8. Other
 /// widths keep the generic maj arm's repeating four-temperature schedule.
+/// Verifier errors propagate to the caller so an incomplete vote can be excluded.
 pub async fn majority_vote(
-    ctx: Arc<Ctx>,
-    tl: &Timeline,
-    prompt: &str,
-    n: usize,
-) -> (String, Value) {
-    try_majority_vote(ctx, tl, prompt, n)
-        .await
-        .unwrap_or_else(|e| (String::new(), json!({"error": e.to_string()})))
-}
-
-pub(crate) async fn try_majority_vote(
     ctx: Arc<Ctx>,
     tl: &Timeline,
     prompt: &str,
@@ -996,7 +1010,7 @@ pub(crate) async fn try_majority_vote(
         }
         let mut found = None;
         for c in &mut clusters {
-            if c.answer == answer || (!valid && equiv(&ctx.light_pool, &c.answer, &answer).await) {
+            if c.answer == answer || (!valid && equiv(&ctx.light_pool, &c.answer, &answer).await?) {
                 found = Some(c);
                 break;
             }
@@ -1059,10 +1073,11 @@ pub fn aime_int(norm: &str) -> String {
     String::new()
 }
 
-/// Port of grade_aime.
-pub async fn grade_aime(light: &VerifierPool, predicted: &str, expected: &str) -> (bool, String) {
-    light
-        .grade_aime(predicted, expected)
-        .await
-        .unwrap_or_else(|error| (false, format!("grader error: {error}")))
+/// Grade with the upstream Python routine. A grader failure returns an error.
+pub async fn grade_aime(
+    light: &VerifierPool,
+    predicted: &str,
+    expected: &str,
+) -> Result<(bool, String)> {
+    light.grade_aime(predicted, expected).await
 }

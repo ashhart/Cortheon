@@ -91,7 +91,7 @@ impl Timeline {
     }
     pub fn events(&self) -> Vec<Event> {
         let mut v = self.events.lock().unwrap().clone();
-        v.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap());
+        v.sort_by(|a, b| a.t.total_cmp(&b.t));
         v
     }
 }
@@ -119,7 +119,7 @@ pub struct Breakdown {
 /// Compute the phase partition from a problem's events (times relative to problem start).
 pub fn breakdown(events: &[Event]) -> Breakdown {
     let mut evs: Vec<&Event> = events.iter().collect();
-    evs.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap());
+    evs.sort_by(|a, b| a.t.total_cmp(&b.t));
     let start = evs
         .iter()
         .find(|e| e.ev == "problem_start")
@@ -213,6 +213,16 @@ mod tests {
             tokens,
             note: String::new(),
         }
+    }
+    #[test]
+    fn non_finite_event_timestamp_does_not_panic_during_sort() {
+        let timeline = Timeline::new();
+        timeline.events.lock().unwrap().extend([
+            ev(1.0, "problem_end", "", 0.0, 0),
+            ev(f64::NAN, "extra", "", 0.0, 0),
+            ev(0.0, "problem_start", "", 0.0, 0),
+        ]);
+        assert_eq!(breakdown(&timeline.events()).wall_s, 1.0);
     }
     #[test]
     fn partition_sums_to_wall() {

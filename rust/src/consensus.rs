@@ -117,15 +117,18 @@ pub fn fast_equiv(a: &str, b: &str) -> Option<bool> {
     None
 }
 
-pub async fn equiv(light: &VerifierPool, a: &str, b: &str) -> bool {
+pub async fn equiv(light: &VerifierPool, a: &str, b: &str) -> anyhow::Result<bool> {
     match fast_equiv(a, b) {
-        Some(x) => x,
-        None => light.equiv(a, b).await.unwrap_or(false),
+        Some(x) => Ok(x),
+        None => light.equiv(a, b).await,
     }
 }
 
 /// Port of reason_forge._cluster_answers. Returns (representative, member indices).
-pub async fn cluster(light: &VerifierPool, outs: &[&Outcome]) -> Vec<(String, Vec<usize>)> {
+pub async fn cluster(
+    light: &VerifierPool,
+    outs: &[&Outcome],
+) -> anyhow::Result<Vec<(String, Vec<usize>)>> {
     let mut clusters: Vec<(String, Vec<usize>)> = vec![];
     for (i, o) in outs.iter().enumerate() {
         if o.norm_answer.is_empty() {
@@ -133,7 +136,7 @@ pub async fn cluster(light: &VerifierPool, outs: &[&Outcome]) -> Vec<(String, Ve
         }
         let mut placed = false;
         for c in clusters.iter_mut() {
-            if equiv(light, &c.0, &o.norm_answer).await {
+            if equiv(light, &c.0, &o.norm_answer).await? {
                 c.1.push(i);
                 if (o.norm_answer.contains('/') || is_int(&o.norm_answer)) && c.0.contains('.') {
                     c.0 = o.norm_answer.clone();
@@ -158,7 +161,7 @@ pub async fn cluster(light: &VerifierPool, outs: &[&Outcome]) -> Vec<(String, Ve
         ky.0.cmp(&kx.0)
             .then(ky.1.partial_cmp(&kx.1).unwrap_or(std::cmp::Ordering::Equal))
     });
-    clusters
+    Ok(clusters)
 }
 
 #[cfg(test)]

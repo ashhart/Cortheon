@@ -38,7 +38,31 @@ jobs:
           apt-get install -y --no-install-recommends python3-venv
           python3 -m venv /tmp/cortheon-venv
           /tmp/cortheon-venv/bin/python -m pip install .
+      - name: Verify the wheel-only worker with resource limits
+        run: /tmp/cortheon-venv/bin/python -I rust/tests/wheel_worker_smoke.py subprocess-rlimit
       - name: Run Rust tests with the Python verifier
         env:
           CORTHEON_PYTHON: /tmp/cortheon-venv/bin/python
         run: cargo test --locked --manifest-path rust/Cargo.toml -- --test-threads=1
+
+  bubblewrap:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Prepare bubblewrap on the native runner
+        run: |
+          if ! command -v bwrap; then
+            cd "$RUNNER_TEMP"
+            sudo apt-get update -qq
+            apt-get download bubblewrap
+            dpkg-deb -x bubblewrap_*.deb bubblewrap
+            echo "$RUNNER_TEMP/bubblewrap/usr/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Verify the wheel-only worker with bubblewrap
+        run: |
+          python -m pip install .
+          python -I rust/tests/wheel_worker_smoke.py linux-bwrap

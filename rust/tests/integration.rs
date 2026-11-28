@@ -11,6 +11,80 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::time::Instant;
 
+#[tokio::test]
+async fn failed_streams_cannot_supply_a_fallback_answer_or_an_audit_vote() {
+    use axum::extract::State;
+    use axum::routing::{get, post};
+    use axum::{Json, Router};
+    use serde_json::json;
+
+    async fn reply(State(audit): State<bool>, Json(request): Json<Value>) -> String {
+        let system = request["messages"][0]["content"].as_str().unwrap();
+        let prompt = request["messages"].as_array().unwrap().last().unwrap()["content"]
+            .as_str()
+            .unwrap();
+        let (text, failed) = if request.get("response_format").is_some() {
+            (r#"{"final_answer":"777"}"#.into(), true)
+        } else if system.starts_with("Compare Candidate A") {
+            ("WINNER: B".into(), true)
+        } else if !audit {
+            (String::new(), false)
+        } else if system.starts_with("You are a strict") {
+            ("A".into(), false) // A in both sample orders requires an audit.
+        } else {
+            (
+                pal(
+                    if prompt.contains("PROTOCOL (pal_exact)") {
+                        "7"
+                    } else {
+                        "8"
+                    },
+                    "",
+                ),
+                false,
+            )
+        };
+        let choice = json!({"choices":[{"index":0,"delta":{"content":text},
+            "finish_reason":if failed {Value::Null} else {json!("stop")}}]});
+        if failed {
+            format!(
+                "data: {choice}\n\ndata: {{\"error\":{{\"message\":\"generation failed\"}}}}\n\n"
+            )
+        } else {
+            format!("data: {choice}\n\ndata: [DONE]\n\n")
+        }
+    }
+    for (audit, expected, decision) in [
+        (false, "", "fallback_extract_failed"),
+        (true, "7", "pairwise_audit_failed_default_A"),
+    ] {
+        let app = Router::new()
+            .route(
+                "/v1/models",
+                get(|| async { Json(json!({"data":[{"id":"mock"}]})) }),
+            )
+            .route("/v1/chat/completions", post(reply))
+            .with_state(audit);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/v1", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let ctx = ctx_for(vec![url], 2, false, 5.).await;
+        let tr = solve_reasoning(
+            ctx,
+            &Timeline::new(),
+            PROBLEM,
+            if audit { 2 } else { 1 },
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+        assert_eq!(tr.final_answer, expected);
+        assert_eq!(tr.consensus_type, decision);
+        server.abort();
+    }
+}
+
 const PROBLEM: &str = "Find the sum of all integer bases b>9 for which 17_b divides 97_b.\n\nNote: Every AIME answer is an integer from 000 to 999.\nEnd your final response with `ANSWER: <integer>`.";
 
 fn pal(ans: &str, tail: &str) -> String {
@@ -242,7 +316,7 @@ async fn consensus_matches_upstream_on_mixed_math_and_verified_branches() {
         .collect();
     let refs = values.iter().collect::<Vec<_>>();
     assert_eq!(
-        json!(cluster(&ctx.light_pool, &refs).await),
+        json!(cluster(&ctx.light_pool, &refs).await.unwrap()),
         reference["clusters"]
     );
     assert_eq!(
@@ -255,7 +329,7 @@ async fn consensus_matches_upstream_on_mixed_math_and_verified_branches() {
     );
     let mut equivalent = vec![];
     for (a, b) in pairs {
-        equivalent.push(equiv(&ctx.light_pool, a, b).await);
+        equivalent.push(equiv(&ctx.light_pool, a, b).await.unwrap());
     }
     assert_eq!(json!(equivalent), reference["equiv"]);
 }
@@ -385,7 +459,9 @@ async fn sampling_and_cap_reach_both_endpoints_and_fallback() {
         .unwrap();
     assert_eq!(tr.consensus_type, "fallback_extract");
     assert_eq!(tr.final_answer, "7");
-    majority_vote(ctx, &Timeline::new(), PROBLEM, 4).await;
+    majority_vote(ctx, &Timeline::new(), PROBLEM, 4)
+        .await
+        .unwrap();
     for (url, expected_seeds) in [
         (
             first,
@@ -440,7 +516,7 @@ async fn deterministic_capture_preserves_order_seed_and_all_four_attempts() {
         .await
         .unwrap();
     assert_eq!(trace.final_answer, "7");
-    majority_vote(ctx, &tl, PROBLEM, 4).await;
+    majority_vote(ctx, &tl, PROBLEM, 4).await.unwrap();
     let events = tl.events();
     let outputs: Vec<_> = events.iter().filter(|e| e.ev == "req_output").collect();
     assert_eq!(
@@ -605,7 +681,9 @@ async fn majority_vote_and_temperature_tiebreak() {
     };
     let (url, _h) = mock::spawn(sc, 0).await.unwrap();
     let ctx = ctx_for(vec![url.clone()], 2, false, 10.0).await;
-    let (win, meta) = majority_vote(ctx.clone(), &Timeline::new(), PROBLEM, 4).await;
+    let (win, meta) = majority_vote(ctx.clone(), &Timeline::new(), PROBLEM, 4)
+        .await
+        .unwrap();
     assert_eq!(win, "7", "{meta}");
     // tie 2-2: {5 (t=.25), 9 (t=.35)} vs {7,7 (t=.55,.45)} -> lowest temperature cluster wins
     let sc2 = Scenario {
@@ -614,7 +692,9 @@ async fn majority_vote_and_temperature_tiebreak() {
     };
     let (url2, _h2) = mock::spawn(sc2, 0).await.unwrap();
     let ctx2 = ctx_for(vec![url2], 2, false, 10.0).await;
-    let (win2, _) = majority_vote(ctx2, &Timeline::new(), PROBLEM, 4).await;
+    let (win2, _) = majority_vote(ctx2, &Timeline::new(), PROBLEM, 4)
+        .await
+        .unwrap();
     assert_eq!(win2, "5");
 }
 
@@ -641,6 +721,111 @@ async fn speculative_verification_reuses_result() {
         tr.spec_hits, 2,
         "both finished PAL slots should reuse their speculative run"
     );
+}
+
+#[tokio::test]
+async fn replacing_a_speculative_script_frees_the_only_worker() {
+    // Cortheon extracts the longest valid block. Once the second block closes,
+    // the sleeping first script is obsolete even though generation continues.
+    let first = "```python\nimport time\ntime.sleep(20)\n```";
+    let second = pal("70", "");
+    let reply = format!(
+        "{first}\n{}\n{second}\n{}",
+        "working ".repeat(100),
+        "done ".repeat(160)
+    );
+    let sc = Scenario {
+        model: "m".into(),
+        rules: vec![rule("", reply, 1.0, 800.0)],
+    };
+    let (url, _h) = mock::spawn(sc, 0).await.unwrap();
+    let mut opts = opts_for(vec![url], 2, true, 20.0);
+    opts.exec_workers = 1;
+    let ctx = build_ctx(&opts).await.unwrap();
+    let tl = Timeline::new();
+    let tr = tokio::time::timeout(
+        std::time::Duration::from_secs(6),
+        solve_reasoning(ctx, &tl, PROBLEM, 1, false, false),
+    )
+    .await
+    .expect("obsolete script still holds the worker")
+    .unwrap();
+    assert_eq!(tr.final_answer, "70");
+    assert_eq!(tr.spec_hits, 1);
+    let events = tl.events();
+    let spans: Vec<_> = events
+        .iter()
+        .filter(|e| e.slot == "spec:w1_pal_exact" && e.note == "exec")
+        .map(|e| e.ev.as_str())
+        .collect();
+    assert_eq!(
+        spans,
+        ["verify_start", "verify_end", "verify_start", "verify_end"]
+    );
+    let last_check = events
+        .iter()
+        .rfind(|e| e.slot == "spec:w1_pal_exact")
+        .unwrap();
+    let finish = events.iter().find(|e| e.ev == "req_end").unwrap();
+    assert!(
+        last_check.t < finish.t,
+        "replacement should finish while the stream is open"
+    );
+}
+
+#[tokio::test]
+async fn verifier_failures_return_an_error_without_grading_the_problem() {
+    let sc = Scenario {
+        model: "m".into(),
+        // The successful model script prints the correct answer. Silently treating
+        // a crashed verifier as a bad script would let the fallback return 5.
+        rules: vec![
+            rule("Extract ONLY", "ANSWER: 5".into(), 1.0, 5000.0),
+            rule("", pal("4", ""), 1.0, 5000.0),
+        ],
+    };
+    let (url, _h) = mock::spawn(sc, 0).await.unwrap();
+    let item = AimeItem {
+        id: "check".into(),
+        prompt: "Two plus two?".into(),
+        expected: "4".into(),
+    };
+    for (op, fault, message) in [
+        ("extract", "os._exit(12)", "verifier extract"),
+        (
+            "extract",
+            "return {'error':'broken extractor'}",
+            "broken extractor",
+        ),
+        ("extract", "return {}", "missing code"),
+        (
+            "exec",
+            "return {'ok':False}",
+            "malformed verifier exec reply",
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = opts_for(vec![url.clone()], 2, false, 2.0);
+        opts.exec_workers = 1;
+        opts.light_workers = 1;
+        let package = serde_json::to_string(opts.worker_script.parent().unwrap()).unwrap();
+        let wrapper = dir.path().join("fault.py");
+        std::fs::write(
+            &wrapper,
+            format!(
+            "import os,sys\nsys.path.insert(0,{package})\nimport worker\noriginal=worker.handle\n\
+             def handle(req):\n    if req['op']=='{op}': {fault}\n    return original(req)\n\
+             worker.handle=handle\nworker.main()\n"
+        ),
+        )
+        .unwrap();
+        opts.worker_script = wrapper;
+        let ctx = build_ctx(&opts).await.unwrap();
+        let error = run_one(&ctx, "cortheon_w1", &item, 1, false)
+            .await
+            .unwrap_err();
+        assert!(format!("{error:#}").contains(message), "{error:#}");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -764,13 +949,19 @@ async fn straggler_verifier_is_killed_after_consensus() {
     );
     let ok = ctx.exec_pool.exec("print('ANSWER: 1')", 5.0).await.unwrap();
     assert_eq!(ok["norm_answer"], "1");
-    let alt_end = tl
+    let spans: Vec<_> = tl
         .events()
-        .iter()
-        .filter(|e| e.ev == "verify_end" && e.slot == "w1_pal_alt_z3")
-        .count();
+        .into_iter()
+        .filter(|e| e.slot == "w1_pal_alt_z3" && e.ev.starts_with("verify_"))
+        .map(|e| (e.ev, e.note))
+        .collect();
     assert_eq!(
-        alt_end, 1,
-        "abandoned check should still close its verify interval"
+        spans,
+        [
+            ("verify_start".into(), "extract".into()),
+            ("verify_end".into(), "extract".into()),
+            ("verify_start".into(), "exec".into()),
+            ("verify_end".into(), "exec".into()),
+        ]
     );
 }

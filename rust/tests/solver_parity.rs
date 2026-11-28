@@ -26,3 +26,8 @@ fn solver_matches_upstream_python_on_the_same_mock_responses() {
 fn all_official_aime_arms_match_upstream_python() {
     compare_with_python("upstream_parity.py");
 }
+
+#[test]
+fn cli_checkpoints_each_completed_row_and_exposes_log_failures() {
+    compare_with_python("checkpoints.py");
+}

@@ -65,7 +65,7 @@ pub(crate) async fn single(
     }
     let mut outcome = mk_outcome("pal_exact", 1, "pal", &res, &endpoint.base_url);
     // The official PAL control fixes its sandbox budget at 20 s.
-    execute_pal(ctx, tl, &mut outcome, &spec.tag, 20.0, None).await;
+    execute_pal(ctx, tl, &mut outcome, &spec.tag, 20.0, None).await?;
     if outcome.error.is_empty() {
         Ok((
             outcome.norm_answer,

@@ -149,6 +149,7 @@ impl VerifierPool {
     /// Queued calls leave the semaphore queue when dropped. Once a worker is
     /// assigned, an independent task cancels an abandoned exec and drains its reply.
     pub async fn call(&self, req: Value, timeout: Duration) -> Result<Value> {
+        let op = req["op"].as_str().unwrap_or("unknown").to_owned();
         let permit = self.sem.clone().acquire_owned().await?;
         let worker = self.idle.lock().unwrap().pop();
         let mut worker = match worker {
@@ -174,7 +175,15 @@ impl VerifierPool {
             }
             let _ = sender.send(result);
         });
-        receiver.await?
+        let reply = receiver.await?.with_context(|| format!("verifier {op}"))?;
+        if let Some(error) = reply["error"].as_str().filter(|s| !s.is_empty()) {
+            // Model script failures are a normal exec response with an explicit
+            // ok flag. The worker's own exceptions have only an error message.
+            if op != "exec" || !reply["ok"].is_boolean() {
+                anyhow::bail!("verifier {op}: {error}");
+            }
+        }
+        Ok(reply)
     }
 
     /// Free worker slots right now (used by tests to prove abandoned checks are killed).
@@ -189,7 +198,10 @@ impl VerifierPool {
                 Duration::from_secs(30),
             )
             .await?;
-        Ok(v["code"].as_str().unwrap_or("").to_string())
+        Ok(v["code"]
+            .as_str()
+            .context("verifier extract reply missing code")?
+            .to_owned())
     }
     pub async fn exec(&self, code: &str, timeout_s: f64) -> Result<Value> {
         self.call(
@@ -206,8 +218,14 @@ impl VerifierPool {
             )
             .await?;
         Ok((
-            v["raw_answer"].as_str().unwrap_or("").into(),
-            v["norm_answer"].as_str().unwrap_or("").into(),
+            v["raw_answer"]
+                .as_str()
+                .context("verifier prose reply missing raw_answer")?
+                .into(),
+            v["norm_answer"]
+                .as_str()
+                .context("verifier prose reply missing norm_answer")?
+                .into(),
         ))
     }
     pub async fn equiv(&self, a: &str, b: &str) -> Result<bool> {
@@ -217,7 +235,9 @@ impl VerifierPool {
                 Duration::from_secs(30),
             )
             .await?;
-        Ok(v["eq"].as_bool().unwrap_or(false))
+        v["eq"]
+            .as_bool()
+            .context("verifier equivalence reply missing eq")
     }
     pub async fn aime_candidate(&self, content: &str) -> Result<(String, String)> {
         let v = self
@@ -274,7 +294,10 @@ impl VerifierPool {
                 Duration::from_secs(30),
             )
             .await?;
-        Ok(v["norm"].as_str().unwrap_or("").into())
+        Ok(v["norm"]
+            .as_str()
+            .context("verifier normalization reply missing norm")?
+            .into())
     }
     pub(crate) async fn fallback_answer(&self, content: &str) -> Result<String> {
         let v = self

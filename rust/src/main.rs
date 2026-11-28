@@ -6,8 +6,9 @@ use cortheon_rs::runner::{
     build_ctx_for_arms, run_one_with_timeline, summarize, write_events, BuildOpts,
 };
 use cortheon_rs::timeline::Timeline;
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{BufWriter, Write};
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
@@ -119,6 +120,73 @@ fn checkout(src: Option<PathBuf>) -> PathBuf {
     })
 }
 
+fn output_path(path: &Path) -> Result<PathBuf> {
+    match path.canonicalize() {
+        Ok(existing) => Ok(existing),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && !path.is_symlink() => {
+            let parent = path
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            Ok(parent
+                .canonicalize()?
+                .join(path.file_name().context("missing output filename")?))
+        }
+        Err(e) => Err(e).with_context(|| format!("resolving {}", path.display())),
+    }
+}
+
+fn check_output_paths(out: &Path, events: &Path, progress: Option<&Path>) -> Result<()> {
+    let mut seen = Vec::new();
+    for path in [Some(out), Some(events), progress].into_iter().flatten() {
+        let identity = match path.metadata() {
+            Ok(meta) => {
+                anyhow::ensure!(
+                    path != out || meta.is_file(),
+                    "--out must be a regular file"
+                );
+                Some((meta.dev(), meta.ino()))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        };
+        anyhow::ensure!(
+            !seen
+                .iter()
+                .any(|&(other, id)| path == other || (identity.is_some() && identity == id)),
+            "--out, --events and --progress-jsonl must use distinct files"
+        );
+        seen.push((path, identity));
+    }
+    Ok(())
+}
+
+fn checkpoint(
+    out: &Path,
+    rows: &[serde_json::Value],
+    n: usize,
+    agree: usize,
+    complete: bool,
+) -> Result<()> {
+    let result = serde_json::json!({
+        "impl": "rust", "n": n, "agree": agree, "complete": complete,
+        "summary": summarize(rows), "rows": rows,
+    });
+    // Keep the last complete JSON document readable if this write is interrupted.
+    let mut pending =
+        tempfile::NamedTempFile::new_in(out.parent().context("missing output directory")?)?;
+    {
+        let mut writer = BufWriter::new(pending.as_file_mut());
+        serde_json::to_writer_pretty(&mut writer, &result)?;
+        writer.flush()?;
+    }
+    pending.as_file().sync_all()?;
+    pending
+        .persist(out)
+        .with_context(|| format!("publishing checkpoint {}", out.display()))?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -228,12 +296,10 @@ async fn main() -> Result<()> {
                 agree,
                 speculative: !no_speculative && !no_stream,
             };
-            if let Some(path) = &progress_jsonl {
-                anyhow::ensure!(
-                    path != &out && path != &events,
-                    "--progress-jsonl needs its own output file"
-                );
-            }
+            let out = output_path(&out)?;
+            let events = output_path(&events)?;
+            let progress_jsonl = progress_jsonl.as_deref().map(output_path).transpose()?;
+            check_output_paths(&out, &events, progress_jsonl.as_deref())?;
             let ctx = build_ctx_for_arms(&opts, &arms, n).await?;
             let progress = progress_jsonl
                 .map(std::fs::File::create)
@@ -253,30 +319,45 @@ async fn main() -> Result<()> {
                             let mut writer = file.lock().unwrap();
                             if let Ok(f) = &mut *writer {
                                 if let Err(err) = writeln!(f, "{record}") {
+                                    eprintln!("warning: progress log write failed ({err}); continuing without live progress");
                                     *writer = Err(err);
                                 }
                             }
                         });
                     }
                     let (row, evs, b) =
-                        run_one_with_timeline(&ctx, arm, it, n, deep, timeline).await?;
+                        match run_one_with_timeline(&ctx, arm, it, n, deep, timeline.clone()).await
+                        {
+                            Ok(result) => result,
+                            Err(e) => {
+                                timeline.emit("problem_error", "", 0, &format!("{e:#}"));
+                                write_events(&mut ev_file, arm, &it.id, &timeline.events())?;
+                                ev_file.flush()?;
+                                return Err(e)
+                                    .with_context(|| format!("{arm} failed on {}", it.id));
+                            }
+                        };
                     eprintln!(
                         "[{arm}] {} pred={} correct={} wall={:.2}s gen={:.2}s verify={:.2}s orch={:.3}s idle={:.3}s | {}",
                         it.id, row["predicted"], row["correct"], b.wall_s, b.gen_prefill_s + b.gen_decode_s, b.verify_s, b.orch_busy_s, b.idle_wait_s,
                         row["detail"].as_str().unwrap_or("")
                     );
                     write_events(&mut ev_file, arm, &it.id, &evs)?;
+                    ev_file.flush()?;
                     rows.push(row);
+                    checkpoint(
+                        &out,
+                        &rows,
+                        n,
+                        agree,
+                        rows.len() == items.len() * arms.len(),
+                    )?;
                 }
             }
-            ev_file.flush()?;
+            if rows.is_empty() {
+                checkpoint(&out, &rows, n, agree, true)?;
+            }
             let summary = summarize(&rows);
-            std::fs::write(
-                &out,
-                serde_json::to_string_pretty(
-                    &serde_json::json!({"impl": "rust", "n": n, "agree": agree, "summary": summary, "rows": rows}),
-                )?,
-            )?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
             if let Some(file) = progress {
                 if let Err(e) = &*file.lock().unwrap() {

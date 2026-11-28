@@ -56,6 +56,9 @@ async fn reply(State(state): State<Fixture>, Json(body): Json<Value>) -> Respons
         "server error" => Body::from("data: {\"error\":\"overloaded\"}\n\n"),
         "missing finish" => Body::from(format!("{USAGE}{DONE}")),
         "missing done" => Body::from(format!("{terminal}{USAGE}")),
+        "done at EOF" => Body::from(format!("{terminal}{USAGE}data: [DONE]")),
+        "choice at EOF" => Body::from(format!("data: {choice}")),
+        "broken line at EOF" => Body::from(format!("{terminal}{USAGE}data: {{")),
         "missing usage" => Body::from(format!("{terminal}{DONE}")),
         "double finish" => Body::from(format!("{terminal}{terminal}{USAGE}{DONE}")),
         "late delta" => {
@@ -218,6 +221,8 @@ async fn row_distinguishes_ties_abstentions_and_stream_failures() {
         ("http error", "invalid_stream"),
         ("server error", "invalid_stream"),
         ("missing done", "invalid_stream"),
+        ("done at EOF", "winner"),
+        ("broken line at EOF", "invalid_stream"),
         ("missing usage", "invalid_stream"),
         ("missing finish", "invalid_stream"),
         ("double finish", "invalid_stream"),
@@ -244,4 +249,31 @@ async fn row_distinguishes_ties_abstentions_and_stream_failures() {
             assert_eq!(row["predicted"], "");
         }
     }
+}
+
+#[tokio::test]
+async fn ordinary_completion_reads_final_choice_at_eof() {
+    use cortheon_rs::{client::CallSpec, timeline::Timeline};
+    let (_gate, trailers) = watch::channel(true);
+    let url = server(Fixture {
+        all_dispatched: Arc::new(Barrier::new(1)),
+        bodies: Default::default(),
+        trailers,
+        n: 1,
+    })
+    .await;
+    let ctx = build_ctx_for_arms(&opts(vec![url]), &["maj_early".into()], 1)
+        .await
+        .unwrap();
+    let spec = CallSpec {
+        messages: vec![("user".into(), "choice at EOF".into())],
+        seed: Some(101),
+        ..Default::default()
+    };
+    let result = ctx.endpoints[0]
+        .complete(&spec, "one", &Timeline::new(), &ctx.stats, None)
+        .await;
+    assert!(result.ok(), "{:?}", result.raw_error);
+    assert_eq!(result.content, "work\n**ANSWER:** 007.");
+    assert_eq!(result.finish_reason, "stop");
 }

@@ -7,6 +7,7 @@ use regex::Regex;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 pub const SHARED_SYS: &str = "You are a precision reasoning engine running inside a verified neuro-symbolic sandbox with Python 3, sympy, z3, fractions, itertools, math, and numpy available.\nNever guess arithmetic, combinatorics, or constraint satisfaction in prose when Python can compute and verify it exactly.";
 
@@ -40,9 +41,9 @@ impl SkillPack {
 
     /// Port of SkillPack.match_exemplars (stable sort, descending score).
     pub fn match_exemplars(&self, phase: &str, query: &str, limit: usize) -> String {
-        let re = Regex::new(r"[a-z0-9_]{3,}").unwrap();
+        static TOKENS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9_]{3,}").unwrap());
         let q = query.to_lowercase();
-        let q_tokens: HashSet<&str> = re.find_iter(&q).map(|m| m.as_str()).collect();
+        let q_tokens: HashSet<&str> = TOKENS.find_iter(&q).map(|m| m.as_str()).collect();
         let mut scored: Vec<(usize, &Value)> = vec![];
         for ex in &self.exemplars {
             if ex.get("phase").and_then(|p| p.as_str()) != Some(phase) {

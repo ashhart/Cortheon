@@ -31,6 +31,12 @@ if src and src not in sys.path:
     sys.path.insert(0, src)
 
 from flash_forge import reason_forge as rf  # noqa: E402
+from flash_forge.aime import (  # noqa: E402
+    extract_prose_candidate,
+    grade_aime,
+    normalize_aime_integer,
+    scrub_detail_paths,
+)
 from flash_forge.sandbox import (  # noqa: E402
     extract_python_code,
     kill_active_sandbox_children,
@@ -95,17 +101,14 @@ def handle(req: dict) -> dict:
         raw = str(obj.get("final_answer", "")).strip() if isinstance(obj, dict) else ""
         return {"norm": rf.normalize_answer(raw or rf.extract_answer_from_prose(text))}
     if op in ("aime_candidate", "aime_prose"):
-        from bench.run_aime_ablation import extract_prose_candidate, normalize_aime_integer
         norm = extract_prose_candidate(req["content"])
         if op == "aime_prose":
             return {"norm": norm}
         return {"norm": norm, "valid_aime_int": normalize_aime_integer(norm)}
     if op == "grade_aime":
-        from bench.run_aime_ablation import grade_aime
         correct, detail = grade_aime(req["predicted"], req["expected"])
         return {"correct": correct, "detail": detail}
     if op == "scrub_detail":
-        from bench.run_aime_ablation import scrub_detail_paths
         return {"detail": scrub_detail_paths(req["detail"])}
     if op == "equiv":
         return {"eq": bool(rf._answers_equivalent(req.get("a", ""), req.get("b", "")))}

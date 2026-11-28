@@ -19,6 +19,7 @@ regex = "1"
 anyhow = "1"
 bytes = "1"
 libc = "0.2"
+tempfile = { version = "3", default-features = false }
 
 [dev-dependencies]
 

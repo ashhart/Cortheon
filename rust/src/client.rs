@@ -139,6 +139,7 @@ pub struct Endpoint {
     reasoning_token_floor: AtomicI64,
     template_kwargs_rejected: AtomicBool,
     reasoning_effort_rejected: AtomicBool,
+    native_capture_rejected: AtomicBool,
 }
 
 /// Only sampling fields can be overridden. Routing, prompts, seeds and response
@@ -206,6 +207,104 @@ impl Stats {
 enum Listener<'a> {
     Content(Option<&'a mpsc::UnboundedSender<String>>),
     Ballot(&'a (dyn Fn(&str, &str) + Sync)),
+}
+
+// An opaque 400 can require trying one omission and restoring it before
+// trying the next. A mask describes a complete request relative to the original.
+#[derive(Clone, Copy)]
+enum OptionalFields {
+    NativeCapture = 1,
+    Grammar = 2,
+    Template = 4,
+    Effort = 8,
+}
+
+const OPTIONAL: [OptionalFields; 4] = [
+    OptionalFields::NativeCapture,
+    OptionalFields::Grammar,
+    OptionalFields::Template,
+    OptionalFields::Effort,
+];
+
+impl OptionalFields {
+    fn keys(self) -> &'static [&'static str] {
+        match self {
+            Self::NativeCapture => &["return_tokens", "verbose"],
+            Self::Grammar => &["guided_choice", "response_format", "grammar_budget"],
+            Self::Template => &["chat_template_kwargs"],
+            Self::Effort => &["reasoning_effort"],
+        }
+    }
+}
+
+fn unsupported_fields(body: &str) -> u8 {
+    // Read error diagnostics, excluding echoed request bodies (e.g. FastAPI's
+    // detail[].input), which can mention options unrelated to the error.
+    fn identify(value: &Value) -> u8 {
+        let diagnostics = match value {
+            Value::Array(items) => return items.iter().fold(0, |mask, v| mask | identify(v)),
+            Value::Object(_) if value.get("error").is_some() => return identify(&value["error"]),
+            Value::Object(_) if value.get("detail").is_some() => return identify(&value["detail"]),
+            Value::Object(_) => ["msg", "message"]
+                .into_iter()
+                .filter_map(|k| value[k].as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+            Value::String(text) => text.clone(),
+            _ => return 0,
+        };
+        let words = diagnostics
+            .to_ascii_lowercase()
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let unsupported_parameter = ["code", "type"].into_iter().any(|k| {
+            matches!(
+                value.get(k).and_then(Value::as_str),
+                Some("extra_forbidden" | "unsupported_parameter" | "unknown_parameter")
+            )
+        });
+        let names_parameter = |key: &str| {
+            if unsupported_parameter
+                && (value["param"] == key
+                    || value["loc"]
+                        .as_array()
+                        .is_some_and(|loc| loc.iter().any(|name| name == key)))
+            {
+                return true;
+            }
+            let name = key.replace('_', " ");
+            [
+                "unknown parameter ",
+                "unsupported parameter ",
+                "unknown field ",
+                "unsupported field ",
+                "unrecognized request argument supplied ",
+                "unexpected keyword argument ",
+                "unrecognized field ",
+                "does not support ",
+            ]
+            .iter()
+            .any(|prefix| words.contains(&format!("{prefix}{name}")))
+                || [
+                    " unsupported",
+                    " is unsupported",
+                    " not supported",
+                    " is not supported",
+                ]
+                .iter()
+                .any(|suffix| words.contains(&format!("{name}{suffix}")))
+        };
+        OPTIONAL
+            .iter()
+            .filter(|group| group.keys().iter().any(|key| names_parameter(key)))
+            .fold(0, |mask, group| mask | *group as u8)
+    }
+    match serde_json::from_str(body) {
+        Ok(value) => identify(&value),
+        Err(_) => identify(&Value::String(body.to_owned())),
+    }
 }
 
 impl Endpoint {
@@ -297,6 +396,7 @@ impl Endpoint {
             reasoning_token_floor: AtomicI64::new(0),
             template_kwargs_rejected: AtomicBool::new(false),
             reasoning_effort_rejected: AtomicBool::new(false),
+            native_capture_rejected: AtomicBool::new(false),
         })
     }
 
@@ -344,12 +444,10 @@ impl Endpoint {
             if eff("none") {
                 o.insert("reasoning_effort".into(), json!("none"));
             }
-            if caps.is_tensorfold || !self.template_kwargs_rejected.load(Ordering::Relaxed) {
-                o.insert(
-                    "chat_template_kwargs".into(),
-                    json!({"enable_thinking": false}),
-                );
-            }
+            o.insert(
+                "chat_template_kwargs".into(),
+                json!({"enable_thinking": false}),
+            );
         }
         if !spec.enable_thinking && !caps.reasoning_optional {
             if caps.thinking_budget {
@@ -385,7 +483,6 @@ impl Endpoint {
             } else if generic_reasoner
                 && !caps.thinking_budget
                 && spec.template_reasoning_effort.is_none()
-                && !self.reasoning_effort_rejected.load(Ordering::Relaxed)
             {
                 let effort = spec
                     .reasoning_effort
@@ -429,6 +526,17 @@ impl Endpoint {
         if caps.is_tensorfold {
             o.insert("cortheon".into(), json!(false));
         }
+        // Learned capability failures apply to automatic controls, including
+        // advertised ones. Fixed profiles and explicit template/sampling fields
+        // retain the settings the caller requested.
+        if self.deterministic_seed.is_none() && spec.template_reasoning_effort.is_none() {
+            if self.template_kwargs_rejected.load(Ordering::Relaxed) {
+                o.remove("chat_template_kwargs");
+            }
+            if self.reasoning_effort_rejected.load(Ordering::Relaxed) {
+                o.remove("reasoning_effort");
+            }
+        }
         if let Some(effort) = &spec.template_reasoning_effort {
             o.entry("chat_template_kwargs").or_insert_with(|| json!({}))["reasoning_effort"] =
                 json!(effort);
@@ -455,7 +563,7 @@ impl Endpoint {
             o.insert("logprobs".into(), json!(true));
             o.insert("top_logprobs".into(), json!(1));
             o.insert("stream".into(), json!(self.stream));
-            if !self.stream {
+            if !self.stream && !self.native_capture_rejected.load(Ordering::Relaxed) {
                 o.insert("verbose".into(), json!(true));
                 o.insert("return_tokens".into(), json!(true));
             }
@@ -476,50 +584,81 @@ impl Endpoint {
 
     async fn post_with_fallback(
         &self,
-        mut payload: Value,
+        original: Value,
         guard: &mut CancelGuard,
         preserve_thinking: bool,
     ) -> Result<reqwest::Response> {
-        let mut rejected_controls = (false, false);
+        let available = OPTIONAL
+            .iter()
+            .filter(|group| {
+                group.keys().iter().any(|key| original.get(key).is_some())
+                    && match group {
+                        OptionalFields::Template | OptionalFields::Effort => {
+                            !preserve_thinking && !self.sampling.0.contains_key(group.keys()[0])
+                        }
+                        _ => true,
+                    }
+            })
+            .fold(0, |mask, group| mask | *group as u8);
+        let mut omitted = 0;
+        let mut diagnosed = 0;
+        let mut tried = Vec::new();
         loop {
-            let response = self.post(&payload).send().await?;
+            let mut reduced;
+            let payload = if omitted == 0 {
+                &original
+            } else {
+                reduced = original.clone();
+                let fields = reduced.as_object_mut().unwrap();
+                for group in OPTIONAL.iter().filter(|g| omitted & **g as u8 != 0) {
+                    for key in group.keys() {
+                        fields.remove(*key);
+                    }
+                }
+                if let Some(capture) = &mut guard.capture {
+                    capture.prior_request_bodies.push(std::mem::replace(
+                        &mut capture.request_body,
+                        reduced.clone(),
+                    ));
+                }
+                &reduced
+            };
+            let response = self.post(payload).send().await?;
             guard.read_headers(&response);
             let code = response.status().as_u16();
             if code == 200 {
-                if rejected_controls.0 {
+                if diagnosed & OptionalFields::Template as u8 != 0 {
                     self.template_kwargs_rejected.store(true, Ordering::Relaxed);
                 }
-                if rejected_controls.1 {
+                if diagnosed & OptionalFields::Effort as u8 != 0 {
                     self.reasoning_effort_rejected
                         .store(true, Ordering::Relaxed);
                 }
+                if diagnosed & OptionalFields::NativeCapture as u8 != 0 {
+                    self.native_capture_rejected.store(true, Ordering::Relaxed);
+                }
                 return Ok(response);
             }
-            let fields = payload.as_object_mut().unwrap();
-            let grammar = ["response_format", "guided_choice", "grammar_budget"];
-            if matches!(code, 400 | 422) && grammar.iter().any(|k| fields.contains_key(*k)) {
-                for key in grammar {
-                    fields.remove(key);
-                }
-            } else if matches!(code, 400 | 422)
-                && !preserve_thinking
-                && (fields.contains_key("chat_template_kwargs")
-                    || fields.contains_key("reasoning_effort"))
-            {
-                rejected_controls = (
-                    fields.remove("chat_template_kwargs").is_some(),
-                    fields.remove("reasoning_effort").is_some(),
-                );
-            } else {
-                let message = response.text().await.unwrap_or_default();
-                return Err(anyhow!("HTTP {code}: {}", trunc(&message, 300)));
+            let message = response.text().await.unwrap_or_default();
+            let err = || anyhow!("HTTP {code}: {}", trunc(&message, 300));
+            if !matches!(code, 400 | 422) {
+                return Err(err());
             }
-            if let Some(capture) = &mut guard.capture {
-                capture.prior_request_bodies.push(std::mem::replace(
-                    &mut capture.request_body,
-                    payload.clone(),
-                ));
+            tried.push(omitted);
+            let named = unsupported_fields(&message);
+            if named & !available != 0 || named & omitted != 0 {
+                return Err(err());
             }
+            diagnosed |= named;
+            // Probe independent omissions before removing both thinking controls
+            // or all optional fields. Unspecified 400/422 errors never change the
+            // endpoint's remembered capabilities, even when a retry succeeds.
+            let thinking = OptionalFields::Template as u8 | OptionalFields::Effort as u8;
+            omitted = std::iter::once(diagnosed)
+                .chain(OPTIONAL.iter().map(|group| diagnosed | *group as u8))
+                .chain([diagnosed | (available & thinking), available])
+                .find(|mask| mask & !available == 0 && !tried.contains(mask))
+                .ok_or_else(err)?;
         }
     }
 
@@ -719,8 +858,8 @@ impl Endpoint {
             guard.capture = Some(OutputCapture::new(tl.next_capture_index(), payload.clone()));
         }
         let preserve_thinking = on_finish.is_some()
-            || self.sampling.0.contains_key("chat_template_kwargs")
-            || self.sampling.0.contains_key("reasoning_effort");
+            || spec.template_reasoning_effort.is_some()
+            || self.deterministic_seed.is_some();
         let resp = match self
             .post_with_fallback(payload, &mut guard, preserve_thinking)
             .await
@@ -780,7 +919,13 @@ impl Endpoint {
             out.latency_s = t0.elapsed().as_secs_f64();
             return guard.finish(stats, out);
         }
-        let mut body = resp.bytes_stream();
+        // Some servers close immediately after the final data line. Feed a
+        // delimiter at clean EOF so that line goes through the normal parser.
+        let mut body =
+            resp.bytes_stream()
+                .chain(futures::stream::iter([Ok(bytes::Bytes::from_static(
+                    b"\n",
+                ))]));
         let mut buf: Vec<u8> = Vec::with_capacity(8192);
         let mut saw_choice = false;
         'outer: while let Some(item) = body.next().await {

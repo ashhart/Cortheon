@@ -116,11 +116,11 @@ async fn optional_fields_fall_back_in_order_and_rejections_persist() {
         vec![
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                json!("schema unsupported"),
+                json!("response_format unsupported"),
             ),
             (
                 StatusCode::BAD_REQUEST,
-                json!("thinking switch unsupported"),
+                json!("chat_template_kwargs unsupported"),
             ),
             completion("7", "", "stop", 1),
             completion("8", "", "stop", 1),
@@ -294,7 +294,7 @@ async fn buffered_requests_and_results_match_the_upstream_python_client() {
     let replies = vec![
         (
             StatusCode::UNPROCESSABLE_ENTITY,
-            json!("schema unsupported"),
+            json!("response_format unsupported"),
         ),
         (
             StatusCode::BAD_REQUEST,
@@ -373,4 +373,161 @@ asyncio.run(main())
             stats.snapshot()
         ])
     );
+}
+
+fn dual_control_model() -> Value {
+    json!([{"id":"native","capabilities":{"thinking_switch":true,"reasoning_optional":false},
+            "reasoning":{"supported_efforts":["none"]}}])
+}
+
+#[tokio::test]
+async fn named_rejections_disable_only_the_unsupported_thinking_control() {
+    for (bad, good) in [
+        ("reasoning_effort", "chat_template_kwargs"),
+        ("chat_template_kwargs", "reasoning_effort"),
+    ] {
+        let (url, requests) = server(
+            dual_control_model(),
+            vec![
+                (
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    json!({"detail":[{"type":"extra_forbidden",
+                "loc":["body",bad],"msg":"Extra inputs are not permitted","input":good}]}),
+                ),
+                completion("7", "", "stop", 1),
+                completion("8", "", "stop", 1),
+            ],
+        )
+        .await;
+        let ep = Endpoint::connect(&url, None, None, false, 3., 1)
+            .await
+            .unwrap();
+        let spec = CallSpec {
+            enable_thinking: false,
+            ..Default::default()
+        };
+        for expected in ["7", "8"] {
+            let result = ep
+                .complete(&spec, "sample", &Timeline::new(), &Stats::default(), None)
+                .await;
+            assert_eq!(result.content, expected);
+        }
+        let bodies = requests.lock().unwrap();
+        assert!(!bodies[0][bad].is_null() && !bodies[0][good].is_null());
+        for body in &bodies[1..] {
+            assert!(body[bad].is_null());
+            assert_eq!(body[good], bodies[0][good]);
+        }
+    }
+}
+
+#[tokio::test]
+async fn opaque_errors_probe_independently_without_poisoning_later_requests() {
+    let (url, requests) = server(
+        dual_control_model(),
+        vec![
+            (StatusCode::BAD_REQUEST, json!("bad request")),
+            (StatusCode::BAD_REQUEST, json!("bad request")),
+            completion("7", "", "stop", 1),
+            completion("8", "", "stop", 1),
+        ],
+    )
+    .await;
+    let ep = Endpoint::connect(&url, None, None, false, 3., 1)
+        .await
+        .unwrap();
+    let spec = CallSpec {
+        enable_thinking: false,
+        ..Default::default()
+    };
+    for expected in ["7", "8"] {
+        assert_eq!(
+            ep.complete(&spec, "sample", &Timeline::new(), &Stats::default(), None)
+                .await
+                .content,
+            expected
+        );
+    }
+    let bodies = requests.lock().unwrap();
+    assert!(bodies[1]["chat_template_kwargs"].is_null());
+    assert_eq!(bodies[1]["reasoning_effort"], "none");
+    assert_eq!(bodies[2]["chat_template_kwargs"]["enable_thinking"], false);
+    assert!(bodies[2]["reasoning_effort"].is_null());
+    assert_eq!(bodies[3], bodies[0]);
+}
+
+#[tokio::test]
+async fn preserves_explicit_control_while_retrying_the_independent_automatic_control() {
+    let (url, requests) = server(
+        dual_control_model(),
+        vec![
+            (
+                StatusCode::BAD_REQUEST,
+                json!({"error":{"code":"unsupported_parameter","param":"chat_template_kwargs"}}),
+            ),
+            completion("7", "", "stop", 1),
+        ],
+    )
+    .await;
+    let mut ep = Endpoint::connect(&url, None, None, false, 3., 1)
+        .await
+        .unwrap();
+    ep.sampling = r#"{"reasoning_effort":"low"}"#.parse().unwrap();
+    let spec = CallSpec {
+        enable_thinking: false,
+        ..Default::default()
+    };
+    assert_eq!(
+        ep.complete(&spec, "sample", &Timeline::new(), &Stats::default(), None)
+            .await
+            .content,
+        "7"
+    );
+    let bodies = requests.lock().unwrap();
+    assert_eq!(bodies[1]["reasoning_effort"], "low");
+    assert!(bodies[1]["chat_template_kwargs"].is_null());
+}
+
+#[tokio::test]
+async fn generic_server_can_capture_output_without_llama_cpp_extensions() {
+    let (url, requests) = server(json!([{"id":"generic"}]), vec![
+        (StatusCode::BAD_REQUEST, json!({"error":{"message":"Unrecognized request argument supplied: return_tokens"}})),
+        completion("hello", "work", "stop", 2), completion("again", "", "stop", 1),
+    ]).await;
+    let mut ep = Endpoint::connect(&url, None, None, false, 3., 1)
+        .await
+        .unwrap();
+    ep.capture_output = true;
+    let tl = Timeline::new();
+    let stats = Stats::default();
+    for expected in ["hello", "again"] {
+        assert_eq!(
+            ep.complete(&CallSpec::default(), "capture", &tl, &stats, None)
+                .await
+                .content,
+            expected
+        );
+    }
+    let bodies = requests.lock().unwrap();
+    assert_eq!(bodies[0]["return_tokens"], true);
+    assert_eq!(bodies[0]["verbose"], true);
+    for request in &bodies[1..] {
+        assert!(request["return_tokens"].is_null() && request["verbose"].is_null());
+        assert_eq!(request["logprobs"], true);
+        assert_eq!(request["top_logprobs"], 1);
+    }
+    let capture: Value = serde_json::from_str(
+        &tl.events()
+            .into_iter()
+            .find(|e| e.ev == "req_output")
+            .unwrap()
+            .note,
+    )
+    .unwrap();
+    assert_eq!(capture["prior_request_bodies"], json!([bodies[0]]));
+    assert_eq!(capture["request_body"], bodies[1]);
+    assert_eq!(capture["content"], "hello");
+    assert_eq!(capture["reasoning"], "work");
+    assert!(capture["generated_token_ids"].is_null() && capture["token_id_source"].is_null());
+    assert_eq!(capture["server_usage"]["completion_tokens"], 2);
 }

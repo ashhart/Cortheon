@@ -1,7 +1,7 @@
 //! Run solver arms over problems and record per-problem results and client events.
 
 use crate::client::{Endpoint, Sampling, Stats};
-use crate::orchestrator::{solve_reasoning, try_majority_vote, Ctx};
+use crate::orchestrator::{majority_vote, solve_reasoning, Ctx};
 use crate::prompts::{AimeItem, SkillPack};
 use crate::timeline::{breakdown, Breakdown, Timeline};
 use crate::verifier::{VerifierConfig, VerifierPool};
@@ -169,7 +169,7 @@ pub async fn run_one_with_timeline(
             )
         }
         "maj" | "maj4_prose" | "maj8_prose" => {
-            let (p, meta) = try_majority_vote(ctx.clone(), &tl, &item.prompt, samples).await?;
+            let (p, meta) = majority_vote(ctx.clone(), &tl, &item.prompt, samples).await?;
             let detail = format!(
                 "maj{samples}_prose ({}/{samples} votes)",
                 meta["winner_count"]

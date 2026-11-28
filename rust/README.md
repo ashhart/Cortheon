@@ -1,6 +1,6 @@
 # Rust ReasonForge CLI
 
-`cortheon-rs` runs Cortheon's math-solving strategy and AIME voting from a standalone Tokio CLI. It streams completions from one or more OpenAI-compatible endpoints and assigns sample `i` to endpoint `i % endpoint_count`. Use endpoints that serve the same model. The ReasonForge arms read this checkout's prompt cards and reuse its Python answer extraction, symbolic equivalence checks and sandbox.
+`cortheon-rs` runs the Cortheon 2.3.1 ReasonForge strategy and AIME voting from a standalone Tokio CLI. It streams completions from one or more OpenAI-compatible endpoints and assigns sample `i` to endpoint `i % endpoint_count`. Use endpoints that serve the same model. The ReasonForge arms read this checkout's prompt cards and reuse its Python answer extraction, symbolic equivalence checks and sandbox.
 
 ## Build and test
 
@@ -15,6 +15,8 @@ cargo test --locked --manifest-path rust/Cargo.toml -- --test-threads=1
 ```
 
 The integration tests run both the Rust CLI and this checkout's Python reference implementation against local HTTP fixtures. They compare request bodies, predictions and grades for all six official AIME arms. Additional cases exercise Wave-2 and Wave-3 recovery, judging, progress events and client retries. The verifier tests execute known scripts through the Python sandbox. [Sandbox documentation](../SECURITY.md)
+
+CI also exercises the verifier worker from outside the checkout with the installed wheel. The Debian container checks the subprocess resource limits. A native Ubuntu job runs the same check with bubblewrap and verifies that the script has its own network namespace.
 
 ## Run a vote
 
@@ -60,10 +62,14 @@ For ordinary solver and baseline requests, the client uses the reported context 
 
 The CLI writes per-problem results to `rust_results.json` and timestamped client events to `rust_events.jsonl`. Choose separate `--out` and `--events` paths for each run you want to keep. Single questions have no reference answer and produce a null score. Token totals are null when a request lacks server-reported usage. The event log retains the usage that individual requests did report.
 
-`--progress-jsonl PATH` writes live ReasonForge events for the upstream progress renderer, with an `arm` and `problem_id` on each line. The result row also records whether the answer was verified and whether the solver recovered from disagreement. [Progress renderer](../flash_forge/progress.py)
+After each completed problem and arm, the CLI flushes its events and atomically replaces the results file with all completed rows. The top-level `complete` field becomes true after the last requested row. If a verifier fails, the CLI records a `problem_error` trace and exits with an error. Earlier rows remain available in the checkpoint.
+
+`--progress-jsonl PATH` writes live ReasonForge events for the upstream progress renderer, with an `arm` and `problem_id` on each line. A write failure produces an immediate warning. The solver finishes the benchmark and returns a nonzero status for the failed log. The result row also records whether the answer was verified and whether the solver recovered from disagreement. [Progress renderer](../flash_forge/progress.py)
 
 Rust's `wall_s` includes orchestration, verification and grading. Python's official ablation timer stops at the end of inference or solving, depending on the arm. Use matching start and stop events for timing comparisons.
 
 Cancellation latency measures the interval from consensus to the client dropping its last cancelled stream. `cancelled_stream_chunks` counts nonempty deltas already received on those streams. Server-side slot release, subsequent token generation and GPU idleness require separate server instrumentation.
 
-Use `run --help` for model selection, sampling and capture options. `--capture-output` includes prompts, model output and available reasoning in the event file. `CORTHEON_API_KEY` supplies endpoint authentication. If you move a built binary away from its checkout, supply `--cortheon-src` and `--worker-script` to locate the Python package and verifier worker. The packaged source includes the original [MIT license](LICENSE) and [derivative notice](NOTICE).
+Use `run --help` for model selection, sampling and capture options. `--capture-output` includes prompts, model output and available reasoning in the event file. `CORTHEON_API_KEY` supplies endpoint authentication.
+
+To run away from the checkout, keep the built binary and `rust/verifier/worker.py` together and install the wheel built from this revision into the worker's Python environment. The wheel contains the shared AIME grading code and protocol cards. Pass `--worker-script /path/to/worker.py` and set `CORTHEON_SRC` to the directory containing the installed `flash_forge` package. You can locate that directory with `python -c 'from pathlib import Path; import flash_forge; print(Path(flash_forge.__file__).resolve().parent.parent)'`. For dataset runs also pass `--dataset /path/to/aime_2025.json`. The packaged source includes the original [MIT license](LICENSE) and [derivative notice](NOTICE).
