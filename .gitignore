@@ -14,6 +14,8 @@ build/
 .flashforge/
 bench/results/
 bench/datasets/
+rust_events.jsonl
+rust_results.json
 .claude/
 .env
 .env.*
