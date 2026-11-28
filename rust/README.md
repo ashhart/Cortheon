@@ -14,7 +14,13 @@ cargo build --locked --release --manifest-path rust/Cargo.toml
 cargo test --locked --manifest-path rust/Cargo.toml -- --test-threads=1
 ```
 
-The integration tests run both the Rust CLI and this checkout's Python reference implementation against local HTTP fixtures. They compare request bodies, predictions and grades for all six official AIME arms. Additional cases exercise Wave-2 and Wave-3 recovery, judging, progress events and client retries. The verifier tests execute known scripts through the Python sandbox. [Sandbox documentation](../SECURITY.md)
+Required integration tests compare request bodies, predictions and grades against the current Python benchmark for four shared AIME arms (`vanilla_b1`, `maj4_prose`, `maj8_prose` and `pal_b1`). The voting and verifier tests also exercise early cancellation and script execution through the Python sandbox. [Sandbox documentation](../SECURITY.md)
+
+Upstream introduced ReasonForge v5 in Cortheon 2.4.0. The Rust solver still follows the 2.3.1 strategy. Two opt-in parity tests track the remaining differences against the checkout's Python solver, including its request payloads and progress events. Run both when working on v5 support. Differences currently cause these tests to fail.
+
+```sh
+cargo test --locked --manifest-path rust/Cargo.toml --test solver_parity reasonforge_v5 -- --ignored --test-threads=1
+```
 
 CI also exercises the verifier worker from outside the checkout with the installed wheel. The Debian container checks the subprocess resource limits. A native Ubuntu job runs the same check with bubblewrap and verifies that the script has its own network namespace.
 
@@ -54,7 +60,7 @@ rust/target/release/cortheon-rs run --endpoints http://127.0.0.1:8080/v1 \
 
 `maj_early` counts an answer only when the model ends normally with an `ANSWER: <integer>` line in the 0–999 range. Truncated answers abstain. A terminal choice can trigger cancellation immediately. Counted streams must then supply token usage and the SSE `[DONE]` marker. A malformed counted stream invalidates the trial and excludes it from scoring. The arm uses a distinct seed per sample and requires streaming.
 
-The single-sample and named majority controls use their specified widths even when mixed in one run. ReasonForge has four distinct Wave-1 roles. With `--n 8` it schedules those four, as the current Python solver does. Each row records its effective width in `samples`. The official comparison uses the benchmark defaults, including disabled episodic memory. [Python AIME runner](../bench/run_aime_ablation.py)
+The single-sample and named majority controls use their specified widths even when mixed in one run. The Rust solver has four distinct Wave-1 roles and schedules all four with `--n 8`. Each row records its effective width in `samples`. The AIME comparison uses the benchmark defaults, including disabled episodic memory. [Python AIME runner](../bench/run_aime_ablation.py)
 
 For ordinary solver and baseline requests, the client uses the reported context length and reasoning capabilities to choose a token budget. It can retry after a backend rejects optional fields, or after a reasoning-only response reaches its length limit. The strict ballot arm, an explicit `--max-tokens` cap and deterministic runs suppress that extra generation. All endpoints in a fan-out must report the same selected model ID.
 
