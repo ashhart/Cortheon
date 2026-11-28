@@ -178,6 +178,9 @@ export default function cortheonExtension(pi: any): void {
 			},
 			handler: async (args: string, ctx: any) => {
 				const raw = (args || "").trim();
+				// Read while ctx is active: in print/json mode (hasUI=false) the session ends right after the command,
+				// and any later ctx access throws "ctx is stale".
+				const hasUI = ctx?.hasUI === true;
 				if (!raw) {
 					ctx?.ui?.notify?.(
 						"Usage: /cortheon <question> | /cortheon build <task> | /cortheon clear",
@@ -228,17 +231,30 @@ export default function cortheonExtension(pi: any): void {
 						} else {
 							pi.sendMessage({ customType: "cortheon", display: true, content: handoff }, { triggerTurn: true });
 						}
-					} else {
+					} else if (hasUI) {
 						pi.sendMessage({
 							customType: "cortheon",
 							display: true,
 							content: fullMsg,
 						});
+					} else {
+						process.stdout.write(`${fullMsg}\n`);
 					}
-				} catch (e: any) {
-					ctx?.ui?.notify?.(`Cortheon failed: ${e?.message || e}`, "error");
+				} catch (e: unknown) {
+					const msg = `Cortheon failed: ${e instanceof Error ? e.message : String(e)}`;
+					if (hasUI) ctx?.ui?.notify?.(msg, "error");
+					else process.stderr.write(`${msg}\n`);
 				} finally {
-					setTimeout(() => ctx?.ui?.setWidget?.(WIDGET, undefined), 15_000);
+					if (hasUI) {
+						const clear = setTimeout(() => {
+							try {
+								ctx?.ui?.setWidget?.(WIDGET, undefined);
+							} catch {
+								// Session was replaced or reloaded within 15s; its widget is already gone.
+							}
+						}, 15_000);
+						clear.unref?.();
+					}
 				}
 			},
 		});
