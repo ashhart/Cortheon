@@ -1,0 +1,824 @@
+{
+  "dataset": "LiveCodeBench v6 Hard (32 paired AtCoder ABC Hard, oracle-free)",
+  "model": "glm-5.3-flash-tfq3",
+  "engine": "CodeForge v8 (Streaming Wave-1 Inline TIR Self-Repair + Stage-3.5 Sound-Oracle Brute-Force Differential Fuzzer & Minimal Counterexample Repair)",
+  "arms": [
+    "codeforge_v8"
+  ],
+  "range": {
+    "start": 0,
+    "end": 32,
+    "n": 32
+  },
+  "summary": {
+    "codeforge_v8": {
+      "passed": 23,
+      "total": 32,
+      "accuracy_pct": 71.88,
+      "wilson_ci_95_pct": [
+        54.63,
+        84.44
+      ],
+      "avg_wall_s": 244.93,
+      "avg_llm_calls": 8.28,
+      "avg_prompt_tokens": 10026.2,
+      "avg_completion_tokens": 15131.6,
+      "avg_reasoning_tokens": 4010.8,
+      "avg_total_tokens": 25157.8,
+      "total_wall_s": 7837.7,
+      "total_llm_calls": 265,
+      "total_tokens": 805050,
+      "v8_ce_rewrite_rescues": [
+        "abc393_e",
+        "abc398_d"
+      ],
+      "wave2_rate_pct": 34.4
+    }
+  },
+  "pairwise": {
+    "codeforge_v8_vs_vanilla": {
+      "baseline_k": 12,
+      "treatment_k": 23,
+      "n": 32,
+      "delta_pct": 34.38,
+      "n11": 12,
+      "fixed": 11,
+      "broken": 0,
+      "n00": 9,
+      "mcnemar_exact_p": 0.000977
+    },
+    "codeforge_v8_vs_best4_sample": {
+      "baseline_k": 18,
+      "treatment_k": 23,
+      "n": 32,
+      "delta_pct": 15.62,
+      "n11": 17,
+      "fixed": 6,
+      "broken": 1,
+      "n00": 8,
+      "mcnemar_exact_p": 0.125
+    },
+    "codeforge_v8_vs_codeforge_v6": {
+      "baseline_k": 16,
+      "treatment_k": 23,
+      "n": 32,
+      "delta_pct": 21.88,
+      "n11": 15,
+      "fixed": 8,
+      "broken": 1,
+      "n00": 8,
+      "mcnemar_exact_p": 0.039062
+    },
+    "codeforge_v8_vs_codeforge_v7": {
+      "baseline_k": 23,
+      "treatment_k": 23,
+      "n": 32,
+      "delta_pct": 0.0,
+      "n11": 22,
+      "fixed": 1,
+      "broken": 1,
+      "n00": 8,
+      "mcnemar_exact_p": 1.0
+    }
+  },
+  "results": {
+    "codeforge_v8": [
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc387_f",
+        "title": "Count Arrays",
+        "passed": true,
+        "detail": "AC 43/43 (2028ms)",
+        "wall_s": 198.14,
+        "stats": {
+          "calls": 7,
+          "prompt_tokens": 7049,
+          "completion_tokens": 15694,
+          "reasoning_tokens": 3408,
+          "cached_tokens": 0,
+          "total_tokens": 22743
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc388_g",
+        "title": "Simultaneous Kagamimochi 2",
+        "passed": true,
+        "detail": "AC 42/42 (674ms)",
+        "wall_s": 399.7,
+        "stats": {
+          "calls": 15,
+          "prompt_tokens": 25333,
+          "completion_tokens": 34374,
+          "reasoning_tokens": 9787,
+          "cached_tokens": 0,
+          "total_tokens": 59707
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "w3_fresh_alt",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc388_f",
+        "title": "Dangerous Sugoroku",
+        "passed": false,
+        "detail": "WA on case 39/43 (38/43): got='Yes' exp='No'",
+        "wall_s": 209.09,
+        "stats": {
+          "calls": 6,
+          "prompt_tokens": 4580,
+          "completion_tokens": 18144,
+          "reasoning_tokens": 3655,
+          "cached_tokens": 0,
+          "total_tokens": 22724
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "first_principles",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc388_e",
+        "title": "Simultaneous Kagamimochi",
+        "passed": true,
+        "detail": "AC 43/43 (689ms)",
+        "wall_s": 89.69,
+        "stats": {
+          "calls": 6,
+          "prompt_tokens": 6920,
+          "completion_tokens": 6687,
+          "reasoning_tokens": 2505,
+          "cached_tokens": 0,
+          "total_tokens": 13607
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc389_g",
+        "title": "Odd Even Graph",
+        "passed": false,
+        "detail": "RE on case 1/43 (0/43): IndexError: list index out of range",
+        "wall_s": 550.82,
+        "stats": {
+          "calls": 17,
+          "prompt_tokens": 33843,
+          "completion_tokens": 46844,
+          "reasoning_tokens": 9762,
+          "cached_tokens": 0,
+          "total_tokens": 80687
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "alt_algorithm",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc389_f",
+        "title": "Rated Range",
+        "passed": false,
+        "detail": "WA on case 1/43 (0/43): got='7\\n5\\n8' exp='6\\n6\\n8'",
+        "wall_s": 382.01,
+        "stats": {
+          "calls": 14,
+          "prompt_tokens": 28045,
+          "completion_tokens": 31626,
+          "reasoning_tokens": 8596,
+          "cached_tokens": 0,
+          "total_tokens": 59671
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "first_principles",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc389_e",
+        "title": "Square Price",
+        "passed": true,
+        "detail": "AC 42/42 (845ms)",
+        "wall_s": 204.73,
+        "stats": {
+          "calls": 6,
+          "prompt_tokens": 3614,
+          "completion_tokens": 18117,
+          "reasoning_tokens": 3655,
+          "cached_tokens": 0,
+          "total_tokens": 21731
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "first_principles",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc390_e",
+        "title": "Vitamin Balance",
+        "passed": true,
+        "detail": "AC 42/42 (1947ms)",
+        "wall_s": 52.28,
+        "stats": {
+          "calls": 5,
+          "prompt_tokens": 4212,
+          "completion_tokens": 3569,
+          "reasoning_tokens": 1732,
+          "cached_tokens": 0,
+          "total_tokens": 7781
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc390_g",
+        "title": "Permutation Concatenation",
+        "passed": false,
+        "detail": "WA on case 1/43 (0/43): got='7260' exp='1332'",
+        "wall_s": 294.26,
+        "stats": {
+          "calls": 18,
+          "prompt_tokens": 23041,
+          "completion_tokens": 23246,
+          "reasoning_tokens": 9092,
+          "cached_tokens": 0,
+          "total_tokens": 46287
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "w2_radically_simple",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc390_f",
+        "title": "Double Sum 3",
+        "passed": true,
+        "detail": "AC 43/43 (774ms)",
+        "wall_s": 220.47,
+        "stats": {
+          "calls": 9,
+          "prompt_tokens": 9814,
+          "completion_tokens": 20018,
+          "reasoning_tokens": 5008,
+          "cached_tokens": 0,
+          "total_tokens": 29832
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc391_f",
+        "title": "K",
+        "passed": true,
+        "detail": "AC 43/43 (5332ms)",
+        "wall_s": 155.42,
+        "stats": {
+          "calls": 6,
+          "prompt_tokens": 7148,
+          "completion_tokens": 9350,
+          "reasoning_tokens": 3320,
+          "cached_tokens": 0,
+          "total_tokens": 16498
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc391_e",
+        "title": "Hierarchical Majority Vote",
+        "passed": true,
+        "detail": "AC 42/42 (1069ms)",
+        "wall_s": 61.44,
+        "stats": {
+          "calls": 8,
+          "prompt_tokens": 7563,
+          "completion_tokens": 3948,
+          "reasoning_tokens": 1277,
+          "cached_tokens": 0,
+          "total_tokens": 11511
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc391_g",
+        "title": "Many LCS",
+        "passed": true,
+        "detail": "AC 43/43 (1704ms)",
+        "wall_s": 87.44,
+        "stats": {
+          "calls": 7,
+          "prompt_tokens": 6323,
+          "completion_tokens": 6898,
+          "reasoning_tokens": 3062,
+          "cached_tokens": 0,
+          "total_tokens": 13221
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc392_g",
+        "title": "Fine Triplets",
+        "passed": true,
+        "detail": "AC 43/43 (6361ms)",
+        "wall_s": 187.71,
+        "stats": {
+          "calls": 10,
+          "prompt_tokens": 10792,
+          "completion_tokens": 17342,
+          "reasoning_tokens": 943,
+          "cached_tokens": 0,
+          "total_tokens": 28134
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "first_principles",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc392_f",
+        "title": "Insert",
+        "passed": false,
+        "detail": "RE on case 17/42 (16/42): IndexError: list assignment index out of range",
+        "wall_s": 62.09,
+        "stats": {
+          "calls": 8,
+          "prompt_tokens": 6404,
+          "completion_tokens": 5040,
+          "reasoning_tokens": 2056,
+          "cached_tokens": 0,
+          "total_tokens": 11444
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc393_f",
+        "title": "Prefix LIS Query",
+        "passed": true,
+        "detail": "AC 42/42 (1565ms)",
+        "wall_s": 43.24,
+        "stats": {
+          "calls": 4,
+          "prompt_tokens": 3470,
+          "completion_tokens": 2608,
+          "reasoning_tokens": 833,
+          "cached_tokens": 0,
+          "total_tokens": 6078
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc393_e",
+        "title": "GCD of Subset",
+        "passed": true,
+        "detail": "AC 43/43 (7277ms)",
+        "wall_s": 181.37,
+        "stats": {
+          "calls": 7,
+          "prompt_tokens": 9073,
+          "completion_tokens": 11697,
+          "reasoning_tokens": 3497,
+          "cached_tokens": 0,
+          "total_tokens": 20770
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "v8_ce_rewrite",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc393_d",
+        "title": "Swap to Gather",
+        "passed": true,
+        "detail": "AC 43/43 (1080ms)",
+        "wall_s": 20.96,
+        "stats": {
+          "calls": 6,
+          "prompt_tokens": 4256,
+          "completion_tokens": 1122,
+          "reasoning_tokens": 102,
+          "cached_tokens": 0,
+          "total_tokens": 5378
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "alt_algorithm",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc394_f",
+        "title": "Alkane",
+        "passed": true,
+        "detail": "AC 43/43 (659ms)",
+        "wall_s": 702.31,
+        "stats": {
+          "calls": 15,
+          "prompt_tokens": 19787,
+          "completion_tokens": 37474,
+          "reasoning_tokens": 10344,
+          "cached_tokens": 0,
+          "total_tokens": 57261
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "w3_surgical_fix",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc394_g",
+        "title": "Dense Buildings",
+        "passed": false,
+        "detail": "WA on case 2/41 (1/41): got='1\\n0\\n1' exp='1\\n3\\n1'",
+        "wall_s": 590.83,
+        "stats": {
+          "calls": 10,
+          "prompt_tokens": 19200,
+          "completion_tokens": 27470,
+          "reasoning_tokens": 7453,
+          "cached_tokens": 0,
+          "total_tokens": 46670
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "w2_radically_simple",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc394_e",
+        "title": "Palindromic Shortest Path",
+        "passed": true,
+        "detail": "AC 42/42 (906ms)",
+        "wall_s": 216.09,
+        "stats": {
+          "calls": 7,
+          "prompt_tokens": 7960,
+          "completion_tokens": 6149,
+          "reasoning_tokens": 2590,
+          "cached_tokens": 0,
+          "total_tokens": 14109
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "first_principles",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc395_f",
+        "title": "Smooth Occlusion",
+        "passed": true,
+        "detail": "AC 44/44 (772ms)",
+        "wall_s": 242.12,
+        "stats": {
+          "calls": 7,
+          "prompt_tokens": 8088,
+          "completion_tokens": 9246,
+          "reasoning_tokens": 4047,
+          "cached_tokens": 0,
+          "total_tokens": 17334
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 4
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc395_e",
+        "title": "Flip Edge",
+        "passed": true,
+        "detail": "AC 44/44 (818ms)",
+        "wall_s": 62.08,
+        "stats": {
+          "calls": 5,
+          "prompt_tokens": 5630,
+          "completion_tokens": 2253,
+          "reasoning_tokens": 253,
+          "cached_tokens": 0,
+          "total_tokens": 7883
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 4
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc396_g",
+        "title": "Flip Row or Col",
+        "passed": true,
+        "detail": "AC 36/36 (1307ms)",
+        "wall_s": 332.0,
+        "stats": {
+          "calls": 8,
+          "prompt_tokens": 8215,
+          "completion_tokens": 16573,
+          "reasoning_tokens": 4557,
+          "cached_tokens": 0,
+          "total_tokens": 24788
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc396_f",
+        "title": "Rotated Inversions",
+        "passed": true,
+        "detail": "AC 43/43 (3210ms)",
+        "wall_s": 170.85,
+        "stats": {
+          "calls": 4,
+          "prompt_tokens": 2900,
+          "completion_tokens": 5167,
+          "reasoning_tokens": 1766,
+          "cached_tokens": 0,
+          "total_tokens": 8067
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "alt_algorithm",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc396_e",
+        "title": "Min of Restricted Sum",
+        "passed": false,
+        "detail": "WA on case 6/43 (5/43): got='0 26 6 1 20 1 20 10 16 5' exp='20 26 6 1 20 1 0 10 4 17'",
+        "wall_s": 130.76,
+        "stats": {
+          "calls": 4,
+          "prompt_tokens": 4090,
+          "completion_tokens": 4751,
+          "reasoning_tokens": 1163,
+          "cached_tokens": 0,
+          "total_tokens": 8841
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "radically_simple",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc397_d",
+        "title": "Cubes",
+        "passed": false,
+        "detail": "WA on case 42/43 (41/43): got='-1' exp='3 0'",
+        "wall_s": 48.53,
+        "stats": {
+          "calls": 4,
+          "prompt_tokens": 2335,
+          "completion_tokens": 1051,
+          "reasoning_tokens": 437,
+          "cached_tokens": 0,
+          "total_tokens": 3386
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc397_f",
+        "title": "Variety Split Hard",
+        "passed": true,
+        "detail": "AC 42/42 (1022ms)",
+        "wall_s": 272.44,
+        "stats": {
+          "calls": 5,
+          "prompt_tokens": 3777,
+          "completion_tokens": 10993,
+          "reasoning_tokens": 2495,
+          "cached_tokens": 0,
+          "total_tokens": 14770
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc397_g",
+        "title": "Maximize Distance",
+        "passed": false,
+        "detail": "WA on case 1/43 (0/43): got='2' exp='1'",
+        "wall_s": 756.65,
+        "stats": {
+          "calls": 11,
+          "prompt_tokens": 14469,
+          "completion_tokens": 40972,
+          "reasoning_tokens": 8860,
+          "cached_tokens": 0,
+          "total_tokens": 55441
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "w3_surgical_fix",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc397_e",
+        "title": "Path Decomposition of a Tree",
+        "passed": true,
+        "detail": "AC 42/42 (1275ms)",
+        "wall_s": 722.48,
+        "stats": {
+          "calls": 11,
+          "prompt_tokens": 10038,
+          "completion_tokens": 39012,
+          "reasoning_tokens": 8709,
+          "cached_tokens": 0,
+          "total_tokens": 49050
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "w3_fresh_alt",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 2
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc398_f",
+        "title": "ABCBA",
+        "passed": true,
+        "detail": "AC 43/43 (950ms)",
+        "wall_s": 64.75,
+        "stats": {
+          "calls": 9,
+          "prompt_tokens": 5033,
+          "completion_tokens": 2262,
+          "reasoning_tokens": 798,
+          "cached_tokens": 0,
+          "total_tokens": 7295
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "edge_skeptic",
+          "wave2": false,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      },
+      {
+        "arm": "codeforge_v8",
+        "pid": "abc398_d",
+        "title": "Bonfire",
+        "passed": true,
+        "detail": "AC 43/43 (816ms)",
+        "wall_s": 124.95,
+        "stats": {
+          "calls": 6,
+          "prompt_tokens": 7837,
+          "completion_tokens": 4514,
+          "reasoning_tokens": 2585,
+          "cached_tokens": 0,
+          "total_tokens": 12351
+        },
+        "extra": {
+          "routed_mode": "code",
+          "winner": "v8_ce_rewrite",
+          "wave2": true,
+          "rt_kills": 0,
+          "oracle_tests": 3
+        }
+      }
+    ]
+  }
+}

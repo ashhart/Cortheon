@@ -137,7 +137,15 @@ def test_v7_sample_first_all4_streaming_early_abort_cancels_lagging_slots(tmp_pa
 
     t0 = time.perf_counter()
     trace = asyncio.run(
-        solve_code(client, skills, mem, _STDIN_TWO_SAMPLES_PROBLEM, num_wave1_streams=4)  # type: ignore[arg-type]
+        solve_code(
+            client,  # type: ignore[arg-type]
+            skills,
+            mem,
+            _STDIN_TWO_SAMPLES_PROBLEM,
+            num_wave1_streams=4,
+            max_code_repairs=0,
+            enable_brute_fuzz=False,
+        )
     )
     elapsed = time.perf_counter() - t0
     mem.close()
@@ -202,6 +210,7 @@ def test_v7_external_test_code_streaming_early_abort_cancels_stragglers(tmp_path
             problem,
             num_wave1_streams=4,
             external_test_code=ext_tests,
+            max_code_repairs=0,
         )
     )
     elapsed = time.perf_counter() - t0
@@ -348,7 +357,15 @@ def test_v7_sample_first_zero_pass_triggers_wave2_graveyard_rescue(tmp_path: Pat
     mem = EpisodicMemory(db_path=tmp_path / "mem_t4.db")
     skills = SkillPack()
     trace = asyncio.run(
-        solve_code(client, skills, mem, _STDIN_TWO_SAMPLES_PROBLEM, num_wave1_streams=4)  # type: ignore[arg-type]
+        solve_code(
+            client,  # type: ignore[arg-type]
+            skills,
+            mem,
+            _STDIN_TWO_SAMPLES_PROBLEM,
+            num_wave1_streams=4,
+            max_code_repairs=0,
+            enable_brute_fuzz=False,
+        )
     )
     mem.close()
 
@@ -523,7 +540,17 @@ def test_v7_non_stdin_api_and_single_sample_keep_3impls_plus_spec_oracle(tmp_pat
         }
     )
     mem2 = EpisodicMemory(db_path=tmp_path / "mem_t6b.db")
-    trace_one = asyncio.run(solve_code(client_one, skills, mem2, _STDIN_ONE_SAMPLE_PROBLEM, num_wave1_streams=4))  # type: ignore[arg-type]
+    trace_one = asyncio.run(
+        solve_code(
+            client_one,  # type: ignore[arg-type]
+            skills,
+            mem2,
+            _STDIN_ONE_SAMPLE_PROBLEM,
+            num_wave1_streams=4,
+            max_code_repairs=0,
+            enable_brute_fuzz=False,
+        )
+    )
     mem2.close()
 
     assert trace_one.sample_first_mode is False
@@ -551,7 +578,15 @@ def test_v7_single_survivor_sample_first_and_batch_only_external_fallback(tmp_pa
     mem = EpisodicMemory(db_path=tmp_path / "mem_t7a.db")
     skills = SkillPack()
     trace_s = asyncio.run(
-        solve_code(client_single, skills, mem, _STDIN_TWO_SAMPLES_PROBLEM, num_wave1_streams=4)  # type: ignore[arg-type]
+        solve_code(
+            client_single,  # type: ignore[arg-type]
+            skills,
+            mem,
+            _STDIN_TWO_SAMPLES_PROBLEM,
+            num_wave1_streams=4,
+            max_code_repairs=0,
+            enable_brute_fuzz=False,
+        )
     )
     mem.close()
 

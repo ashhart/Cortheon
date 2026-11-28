@@ -148,7 +148,7 @@ def format_proxy_startup_banner(
     upstream_line = f"{upstream_url} (model={upstream_model})" if upstream_model else upstream_url
     lines = [
         bar,
-        "  Cortheon Universal Proxy v2.4.0",
+        "  Cortheon Universal Proxy v2.5.0",
         f"  Upstream    : {upstream_line}",
     ]
     if referee_url:
@@ -179,7 +179,7 @@ def create_app(
 ) -> FastAPI:
     forge_default: Optional[FlashForge] = None
     forge_deep: Optional[FlashForge] = None
-    cockpit_bus = CockpitBus(version="2.4.0")
+    cockpit_bus = CockpitBus(version="2.5.0")
 
     def _record_solve_to_cockpit(run_id: str, result: Any) -> None:
         try:
@@ -260,7 +260,7 @@ def create_app(
             forge_default = None
             forge_deep = None
 
-    app = FastAPI(title="Cortheon Universal Proxy", version="2.4.0", lifespan=lifespan)
+    app = FastAPI(title="Cortheon Universal Proxy", version="2.5.0", lifespan=lifespan)
     app.state.cockpit_bus = cockpit_bus
     app.include_router(create_cockpit_router(cockpit_bus, flywheel_path=flywheel_path))
 
@@ -270,7 +270,7 @@ def create_app(
         caps = await default_engine.client.probe()
         return {
             "status": "ok",
-            "version": "2.4.0",
+            "version": "2.5.0",
             "upstream": upstream_url,
             "upstream_model": caps.model_id,
             "referee_url": referee_url,

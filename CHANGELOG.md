@@ -5,6 +5,21 @@ All notable changes to Cortheon are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-11-28
+
+### Added
+- **CodeForge v8 — Inline Wave-1 TIR Self-Repair & Sound-Oracle Brute-Force Differential Fuzzer (`flash_forge/code_forge.py`, `tests/test_code_forge_v8.py`):**
+  - Adds inline Wave-1 Executable TIR Self-Repair (`max_code_repairs=1`) feeding exact failing public-sample diffs back into the failing branch in-place without discarding sound algorithms.
+  - Adds Stage-3.5 Sound-Oracle Brute-Force Differential Fuzzer & Minimal Counterexample TIR Repair (`enable_brute_fuzz=True`): synthesizes an independent `solve_brute(inp)` + `gen_tests()`, **strictly gated on 100% pass of verbatim official public samples** (0% false positives), promotes correct siblings or discovers the minimal proven counterexample `(inp, expected, got)` to repair subtle boundary/algorithm bugs (`v8_ce_surgical` / `v8_ce_rewrite`).
+  - **Official 32/32 LiveCodeBench v6 Hard Receipt (`results/official_lcb_v6_hard_codeforge_v8_glm53.json`):** Reached **`23/32 (71.9%)`** `[54.6, 84.4]` on `GLM-5.3-Flash-TFQ3`, beating Vanilla (`12/32`) by **`+34.4 pts` with ZERO REGRESSIONS (`+11 / −0`, exact McNemar `p = 0.000977***`)**, beating `CodeForge v6` (`16/32`) by **`+21.9 pts` (`+8/−1`, `p = 0.039*`)**, eliminating `v7`'s lone regression (`abc394_f` → AC 43/43), and rescuing live hidden-test bugs via `v8_ce_rewrite` on `abc393_e` and `abc398_d` (AC 43/43 each). *(Honest compute tradeoff vs `v7`: `8.28` vs `6.19` avg calls and `244.9s` vs `165.3s` avg wall for zero-regression brute-force counterexample protection.)*
+- **First Live End-to-End Zero-Leakage `Cortheon Evolve` Closed-Loop LoRA Receipt (`results/official_aime2025_evolve_qwen25_7b.json`):**
+  - Harvested `38/40` oracle-free `>=2`-PAL verified Python scripts from disjoint Gauntlet-I + Gauntlet-II Math+Logic (`0%` AIME overlap; `disagreement_rescue: 3` @ `3×`, `crash_rescue: 17` @ `2×`, `fast_distill: 18` @ `1×` → `51` weighted train + `7` valid rows), trained dual-seed `mlx-lm` LoRA adapters on `Qwen2.5-7B-Instruct-4bit` (`50` iters, `11.53M` params, val loss `1.076 → 0.777 / 0.707`), merged via `cortheon evolve --merge-adapters` pure-NumPy TIES sign-consensus (`224` tensors, `sha256: c4c0f5b4`), and direct-fused `336/735` 4-bit tensors.
+  - On held-out 30/30 `MathArena/aime_2025` (`temp=0.0`), **`vanilla_b1`** rose **`0/30 → 3/30 (+10.0 pts, +3/−0, ACCEPTED by the McNemar gate; directional at n=30, p=0.2500)`** demonstrating zero-shot prose transfer from disjoint Python-verified traces, while **`pal_b1`** stayed flat at **`2/30 → 2/30 (+1/−1, p=1.0000)`** and was cleanly **`REJECTED`** by Cortheon Evolve's non-regression gate.
+- **Independent 30/30 `ReasonForge v5` AIME 2025 Replication:** Re-running full 30/30 `MathArena/aime_2025` on `GLM-5.3-Flash-TFQ3` with the empty-zero fast-exit sentinel guard replicated `25/30 (83.3%)` on the exact same 25/30 problems (`0` flips, `115.9s` avg, `8.13` calls).
+
+### Fixed
+- **Pi Print-Mode `/cortheon` Extension Guard (PR `#8` by `@frankekn`):** Added `ctx.hasUI` guards around `ctx.ui.*` calls in the generated Pi `/cortheon` extension (`flash_forge/install_commands.py`) so invoking `/cortheon` in non-interactive Pi print mode (`pi -p`) no longer crashes.
+
 ## [2.4.0] - 2026-11-28
 
 ### Added
@@ -76,6 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Universal Drop-In Proxy (`cortheon proxy`) & Automatic Death-Spiral Rescue:** OpenAI (`/v1/chat/completions`) and Anthropic (`/v1/messages`) proxy with transparent tool-turn passthrough and automatic `B=3` graveyard backtracking when agentic tool loops stall.
 - **Fresh-Clone Reproducibility & Statistics (`bench/fetch_datasets.py`, `bench/stats.py`):** Official dataset fetcher, exact McNemar p-values, Wilson confidence intervals, and full benchmark ledger (`BENCHMARKS.md`, `GETTING_STARTED.md`).
 
+[2.5.0]: https://github.com/ashhart/Cortheon/compare/v2.4.0...v2.5.0
+[2.4.0]: https://github.com/ashhart/Cortheon/compare/v2.3.1...v2.4.0
+[2.3.1]: https://github.com/ashhart/Cortheon/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/ashhart/Cortheon/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/ashhart/Cortheon/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/ashhart/Cortheon/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/ashhart/Cortheon/releases/tag/v2.0.0

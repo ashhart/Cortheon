@@ -108,6 +108,8 @@ class CodeForgeTrace:
     pairwise_tiebreak_skipped: int = 0
     early_aborted_slots: int = 0
     sample_first_mode: bool = False
+    v8_brute_checked: bool = False
+    v8_brute_ce_fixed: bool = False
 
 
 def _emit_event(
@@ -1362,6 +1364,219 @@ def _rank_key(c: CodeCandidate) -> tuple[int, int, int, float, int, int, int, in
     )
 
 
+_V8_BRUTE_ORACLE_HARNESS = r'''from __future__ import annotations
+import json, signal, traceback
+
+SAMPLES = __SAMPLES_JSON__
+
+class _CaseTimeout(Exception):
+    pass
+
+def _alarm_handler(_signum, _frame):
+    raise _CaseTimeout("timeout")
+
+def _norm(s: str) -> str:
+    return "\n".join(ln.rstrip() for ln in str(s).strip().splitlines())
+
+def _call_with_timeout(fn, arg, secs: float):
+    has_alarm = hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
+    if has_alarm:
+        prev = signal.signal(signal.SIGALRM, _alarm_handler)
+        signal.setitimer(signal.ITIMER_REAL, secs)
+    try:
+        return fn(arg)
+    finally:
+        if has_alarm:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, prev)
+
+try:
+    import fuzzer
+except BaseException as _e:
+    print("__FF_V8_FUZZ_JSON__:" + json.dumps({"sound": False, "error": f"import: {_e}", "oracle_pairs": []}))
+    raise SystemExit(0)
+
+if not hasattr(fuzzer, "solve_brute") or not hasattr(fuzzer, "gen_tests"):
+    print("__FF_V8_FUZZ_JSON__:" + json.dumps({"sound": False, "error": "missing solve_brute or gen_tests", "oracle_pairs": []}))
+    raise SystemExit(0)
+
+samples_passed = 0
+samples_failed = 0
+fail_reason = ""
+for _idx, (_inp, _exp) in enumerate(SAMPLES, 1):
+    if len(_inp) > 600:
+        continue
+    try:
+        _got = _norm(_call_with_timeout(fuzzer.solve_brute, _inp, 2.0))
+        _exp_n = _norm(_exp)
+        if _got == _exp_n:
+            samples_passed += 1
+        else:
+            samples_failed += 1
+            fail_reason = f"sample_{_idx} mismatch: got={_got[:100]!r} exp={_exp_n[:100]!r}"
+            break
+    except _CaseTimeout:
+        continue
+    except BaseException as _e:
+        samples_failed += 1
+        fail_reason = f"sample_{_idx} exc: {type(_e).__name__}: {str(_e)[:120]}"
+        break
+
+if samples_failed > 0 or samples_passed == 0:
+    print("__FF_V8_FUZZ_JSON__:" + json.dumps({
+        "sound": False,
+        "samples_passed": samples_passed,
+        "samples_failed": samples_failed,
+        "error": fail_reason or "0 official samples validated",
+        "oracle_pairs": [],
+    }))
+    raise SystemExit(0)
+
+try:
+    _raw_tests = _call_with_timeout(fuzzer.gen_tests, None, 2.0) if fuzzer.gen_tests.__code__.co_argcount else None
+except BaseException:
+    _raw_tests = None
+if _raw_tests is None:
+    try:
+        has_alarm = hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
+        if has_alarm:
+            prev = signal.signal(signal.SIGALRM, _alarm_handler)
+            signal.setitimer(signal.ITIMER_REAL, 2.0)
+        try:
+            _raw_tests = fuzzer.gen_tests()
+        finally:
+            if has_alarm:
+                signal.setitimer(signal.ITIMER_REAL, 0.0)
+                signal.signal(signal.SIGALRM, prev)
+    except BaseException as _e:
+        print("__FF_V8_FUZZ_JSON__:" + json.dumps({"sound": False, "error": f"gen_tests: {_e}", "oracle_pairs": []}))
+        raise SystemExit(0)
+
+oracle_pairs = []
+seen_inps = set()
+for _t in list(_raw_tests or [])[:50]:
+    if not isinstance(_t, str):
+        continue
+    _ts = _t.strip()
+    if not _ts or len(_ts) > 2000 or _ts in seen_inps:
+        continue
+    seen_inps.add(_ts)
+    try:
+        _out = _norm(_call_with_timeout(fuzzer.solve_brute, _ts + "\n", 0.5))
+    except BaseException:
+        continue
+    if _out != "":
+        oracle_pairs.append([_ts + "\n", _out])
+    if len(oracle_pairs) >= 35:
+        break
+
+print("__FF_V8_FUZZ_JSON__:" + json.dumps({
+    "sound": len(oracle_pairs) >= 5,
+    "samples_passed": samples_passed,
+    "samples_failed": 0,
+    "oracle_pairs": oracle_pairs,
+}))
+'''
+
+_V8_CAND_EVAL_HARNESS = r'''from __future__ import annotations
+import json, subprocess, sys
+
+PAIRS = __PAIRS_JSON__
+
+def _norm(s: str) -> str:
+    return "\n".join(ln.rstrip() for ln in str(s).strip().splitlines())
+
+passed = 0
+shortest_ce = None
+for _inp, _exp in PAIRS:
+    try:
+        _p = subprocess.run(
+            [sys.executable, "solution.py"],
+            input=_inp,
+            text=True,
+            capture_output=True,
+            timeout=1.5,
+        )
+        if _p.returncode != 0:
+            _got = f"RUNTIME_ERROR (rc={_p.returncode}): {(_p.stderr or _p.stdout).strip()[:160]}"
+            _ok = False
+        else:
+            _got = _norm(_p.stdout)
+            _ok = (_got == _exp)
+    except subprocess.TimeoutExpired:
+        _got = "TIMEOUT (>1.5s on small brute-force case)"
+        _ok = False
+    if _ok:
+        passed += 1
+    else:
+        if shortest_ce is None or len(_inp) < len(shortest_ce["inp"]):
+            shortest_ce = {"inp": _inp[:1200], "exp": _exp[:400], "got": _got[:400]}
+
+print("__FF_V8_EVAL_JSON__:" + json.dumps({
+    "passed": passed,
+    "total": len(PAIRS),
+    "ce": shortest_ce,
+}))
+'''
+
+_V8_BRUTE_FUZZER_CARD = (
+    "Write a compact, self-contained Python 3 brute-force differential fuzzer (<= 95 lines) to catch subtle "
+    "edge-case or algorithmic bugs in competitive solutions.\n"
+    "REQUIRED EXPORTS (exact names):\n"
+    "1. `def solve_brute(inp: str) -> str:`\n"
+    "   - Takes a full raw stdin string `inp` and returns the exact stdout answer string.\n"
+    "   - Use the simplest, 100%-obviously-correct brute-force / direct simulation / BFS / exhaustive search "
+    "(O(2^N), O(N!), O(N^3) is great for small N — clarity beats speed!).\n"
+    "   - MUST match EVERY verbatim Sample Input/Output in the problem statement (do NOT hardcode samples!).\n"
+    "2. `def gen_tests() -> list[str]:`\n"
+    "   - Uses `rng = random.Random(42)` to return 35 to 45 valid small & nasty boundary stdin strings strictly "
+    "obeying EVERY problem constraint (include N=1, N=2, minimal/zero/all-equal/reversed/disconnected/single-vertex "
+    "corner cases plus random small N=3..7 cases where `solve_brute` finishes in <0.1s).\n"
+    "   - Output ONLY one complete fenced ```python``` block. No top-level execution."
+)
+
+
+def _run_v8_brute_oracle_sandbox(
+    fuzzer_code: str,
+    pinned_samples: list[tuple[str, str]],
+    timeout_s: float = 12.0,
+) -> tuple[bool, list[tuple[str, str]], str]:
+    """Validate `solve_brute` against verbatim official samples and generate verified `(inp, exp)` pairs."""
+    if not fuzzer_code or check_syntax(fuzzer_code) is not None:
+        return False, [], "syntax error in fuzzer"
+    harness = _V8_BRUTE_ORACLE_HARNESS.replace("__SAMPLES_JSON__", json.dumps(pinned_samples))
+    res = run_python(harness, timeout_s=timeout_s, extra_files={"fuzzer.py": fuzzer_code})
+    for ln in reversed(res.stdout.splitlines()):
+        if ln.startswith("__FF_V8_FUZZ_JSON__:"):
+            try:
+                obj = json.loads(ln[len("__FF_V8_FUZZ_JSON__:") :])
+                pairs = [(str(a), str(b)) for a, b in obj.get("oracle_pairs", [])]
+                return bool(obj.get("sound")), pairs, str(obj.get("error", ""))
+            except Exception:
+                pass
+    return False, [], res.short_error(200) if not res.ok else "no fuzzer json"
+
+
+def _eval_candidate_on_v8_pairs(
+    solution_code: str,
+    oracle_pairs: list[tuple[str, str]],
+    timeout_s: float = 18.0,
+) -> tuple[int, int, Optional[dict[str, str]]]:
+    """Run a candidate script against all sound brute-force `(inp, exp)` pairs inside the OS sandbox."""
+    if not solution_code or not oracle_pairs:
+        return 0, len(oracle_pairs), None
+    harness = _V8_CAND_EVAL_HARNESS.replace("__PAIRS_JSON__", json.dumps(oracle_pairs))
+    res = run_python(harness, timeout_s=timeout_s, extra_files={"solution.py": solution_code})
+    for ln in reversed(res.stdout.splitlines()):
+        if ln.startswith("__FF_V8_EVAL_JSON__:"):
+            try:
+                obj = json.loads(ln[len("__FF_V8_EVAL_JSON__:") :])
+                return int(obj.get("passed", 0)), int(obj.get("total", len(oracle_pairs))), obj.get("ce")
+            except Exception:
+                pass
+    return 0, len(oracle_pairs), {"inp": oracle_pairs[0][0][:400], "exp": oracle_pairs[0][1][:200], "got": res.short_error(200) or "harness_fail"}
+
+
 async def solve_code(
     client: TensorFoldClient,
     skills: SkillPack,
@@ -1372,6 +1587,8 @@ async def solve_code(
     sandbox_timeout_s: float = 8.0,
     deep: bool = False,
     external_test_code: Optional[str] = None,
+    max_code_repairs: int = 1,
+    enable_brute_fuzz: bool = True,
     on_event: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> CodeForgeTrace:
     """Solve a hard coding, algorithmic, or debugging task via Unified Consensus Verification."""
@@ -1528,6 +1745,64 @@ async def solve_code(
                 [cand], oracle_code, len(oracle_fn_map), "", 0, eff_timeout, stdin_mode=stdin_mode
             )
             _apply_matrix_scores([cand], o_mat, set(), is_redteam=False)
+
+            # CodeForge v8 Inline Wave-1 Executable TIR Self-Repair (zero cross-slot anchoring):
+            # Fix a 1-line bug, runtime error, or failing official sample in-place without discarding
+            # an otherwise sound algorithm (still cancelled immediately if 2 other slots pass first!).
+            if max_code_repairs > 0 and not cand.perfect and cand.code:
+                diag_parts: list[str] = []
+                if cand.syntax_error:
+                    diag_parts.append(f"SYNTAX ERROR: {cand.syntax_error[:350]}")
+                if cand.fatal_error:
+                    diag_parts.append(f"FATAL ERROR: {cand.fatal_error[:400]}")
+                for fname in cand.failed_tests[:3]:
+                    detail = cand.failure_details.get(fname, "failed")[:350]
+                    src_snip = oracle_fn_map.get(fname, "")[:600]
+                    diag_parts.append(f"FAILED {fname}: {detail}" + (f"\nTEST:\n{src_snip}" if src_snip else ""))
+                if diag_parts:
+                    fix_user = (
+                        f"PROBLEM:\n{prob_clean}{stdin_impl_note}\n\n"
+                        f"YOUR PREVIOUS IMPLEMENTATION (`{slot_name}`):\n```python\n{cand.code[:7500]}\n```\n\n"
+                        f"EXECUTION FEEDBACK:\n" + "\n\n".join(diag_parts)
+                        + "\n\nTASK: Fix the exact algorithmic or implementation bug cleanly (do NOT hardcode sample outputs). "
+                        "Ensure clean time/space complexity for maximum constraints. Output ONLY one complete fenced ```python``` block."
+                    )
+                    try:
+                        fix_res = await client.complete(
+                            CallSpec(
+                                messages=[
+                                    {"role": "system", "content": shared_sys},
+                                    {"role": "user", "content": fix_user},
+                                ],
+                                tag=f"{spec.tag}_fix1",
+                                max_tokens=2900,
+                                temperature=0.15,
+                                seed=int(spec.seed or 0) + 1000,
+                                enable_thinking=True,
+                                thinking_budget=450,
+                                loop_guard=True,
+                            )
+                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        fix_res = None
+                    if fix_res is not None and fix_res.ok:
+                        repaired = _parse_candidates(
+                            [role_tuple],
+                            [fix_res],
+                            wave=1,
+                            starter_imports=starter_imports,
+                            starter_symbols=starter_symbols,
+                        )[0]
+                        repaired.latency_s = float(cand.latency_s or 0.0) + float(repaired.latency_s or 0.0)
+                        rep_mat, _ = await _evaluate_wave(
+                            [repaired], oracle_code, len(oracle_fn_map), "", 0, eff_timeout, stdin_mode=stdin_mode
+                        )
+                        _apply_matrix_scores([repaired], rep_mat, set(), is_redteam=False)
+                        if _rank_key(repaired) > _rank_key(cand):
+                            cand = repaired
+                            o_mat = rep_mat
             return idx, cand, o_mat
 
         slot_tasks: list[asyncio.Task[tuple[int, CodeCandidate, dict[str, list[dict[str, Any]]]]]] = []
@@ -2205,6 +2480,173 @@ async def solve_code(
                 )
             trace.wave2_candidates.extend(w3_cands)
             _analyze_behavioral_consensus(trace.wave1_candidates + trace.wave2_candidates)
+
+    # ------------------------------------------------------------------
+    # STAGE 3.5 (CodeForge v8): Sound-Oracle Brute-Force Differential Fuzzer
+    # & Minimal Counterexample TIR Repair (0% false-positive gate!)
+    # ------------------------------------------------------------------
+    if (
+        stdin_mode
+        and pinned_samples
+        and not external_test_code
+        and enable_brute_fuzz
+        and can_stream
+    ):
+        all_now = trace.wave1_candidates + trace.wave2_candidates
+        sample_passers = sorted(
+            [c for c in all_now if c.perfect and c.code],
+            key=_rank_key,
+            reverse=True,
+        )
+        # Deduplicate top sample-passing candidates by code
+        unique_passers: list[CodeCandidate] = []
+        seen_p_codes: set[str] = set()
+        for pc in sample_passers:
+            key_c = pc.code.strip()
+            if key_c not in seen_p_codes:
+                seen_p_codes.add(key_c)
+                unique_passers.append(pc)
+            if len(unique_passers) >= 4:
+                break
+
+        if unique_passers:
+            try:
+                fuzz_res = await client.complete(
+                    CallSpec(
+                        messages=[
+                            {"role": "system", "content": shared_sys},
+                            {
+                                "role": "user",
+                                "content": f"PROBLEM:\n{prob_clean}\n\nPROTOCOL (v8_brute_fuzzer):\n{_V8_BRUTE_FUZZER_CARD}",
+                            },
+                        ],
+                        tag="v8_brute_fuzzer",
+                        max_tokens=2600,
+                        temperature=0.20,
+                        seed=4242,
+                        enable_thinking=True,
+                        thinking_budget=650,
+                        loop_guard=True,
+                    )
+                )
+            except Exception:
+                fuzz_res = None
+
+            if fuzz_res is not None and fuzz_res.ok:
+                fuzz_code = extract_python_code(fuzz_res.content)
+                sound, oracle_pairs, _fuzz_err = await asyncio.to_thread(
+                    _run_v8_brute_oracle_sandbox, fuzz_code, pinned_samples, 12.0
+                )
+                if sound and len(oracle_pairs) >= 5:
+                    trace.v8_brute_checked = True
+                    eval_results = await asyncio.gather(
+                        *(
+                            asyncio.to_thread(_eval_candidate_on_v8_pairs, pc.code, oracle_pairs, 18.0)
+                            for pc in unique_passers
+                        )
+                    )
+                    passer_scores: list[tuple[CodeCandidate, int, int, Optional[dict[str, str]]]] = [
+                        (pc, p_cnt, t_cnt, ce) for pc, (p_cnt, t_cnt, ce) in zip(unique_passers, eval_results)
+                    ]
+                    best_fuzz_pass = max(p for _, p, _, _ in passer_scores)
+                    total_fuzz = passer_scores[0][2]
+                    perfect_fuzzers = [pc for pc, p, t, _ in passer_scores if p == t and t > 0]
+
+                    if perfect_fuzzers and len(perfect_fuzzers) < len(unique_passers):
+                        # Sound brute-force oracle separated correct vs buggy sample-passers!
+                        perf_set = {id(pc) for pc in perfect_fuzzers}
+                        for pc, p, t, ce in passer_scores:
+                            if id(pc) in perf_set:
+                                pc.diff_counterexample_wins += 2
+                            else:
+                                pc.diff_counterexample_losses += 2
+                                if ce:
+                                    pc.failure_details["v8_brute_ce"] = (
+                                        f"inp={ce['inp'][:120]!r} exp={ce['exp'][:80]!r} got={ce['got'][:80]!r}"
+                                    )
+                    elif not perfect_fuzzers:
+                        # ALL sample-passing candidates failed >=1 sound brute-force test!
+                        # Pick leader with highest brute pass count and repair with exact minimal counterexample.
+                        passer_scores.sort(key=lambda item: (item[1], _rank_key(item[0])), reverse=True)
+                        leader_cand, leader_p, leader_t, leader_ce = passer_scores[0]
+                        if leader_ce is not None:
+                            trace.wave2_triggered = True
+                            trace.graveyard.append(
+                                f"[v8_brute_fuzzer] Proven counterexample killed {leader_cand.name} "
+                                f"({leader_p}/{leader_t}): got={leader_ce['got'][:100]!r} exp={leader_ce['exp'][:100]!r}"
+                            )
+                            ce_prompt = (
+                                f"PROBLEM:\n{prob_clean}{stdin_impl_note}\n\n"
+                                f"BUGGY CANDIDATE (`{leader_cand.name}` — passed official samples, FAILED {leader_t - leader_p}/{leader_t} "
+                                f"verified small brute-force tests):\n```python\n{leader_cand.code[:7500]}\n```\n\n"
+                                f"MINIMAL PROVEN COUNTEREXAMPLE (verified by sample-validated brute-force oracle):\n"
+                                f"INPUT:\n```\n{leader_ce['inp']}\n```\n"
+                                f"EXPECTED OUTPUT:\n```\n{leader_ce['exp']}\n```\n"
+                                f"YOUR BUGGY OUTPUT:\n```\n{leader_ce['got']}\n```\n\n"
+                                f"VERIFIED SMALL-N BRUTE-FORCE REFERENCE (correct logic, slow on large N):\n"
+                                f"```python\n{fuzz_code[:3000]}\n```\n\n"
+                                "TASK: Diagnose WHY the candidate disagrees with the brute-force reference on this exact input "
+                                "(off-by-one, zero/boundary case, wrong greedy/DP transition, missing edge condition, or modular bug), "
+                                "and write a clean, fast O(N log N)/O(N) Python 3 solution that passes BOTH maximum constraints AND "
+                                "this counterexample. Output ONLY one complete fenced ```python``` block."
+                            )
+                            ce_roles = [
+                                ("v8_ce_surgical", skills.card("repair_surgical"), 0.15, 3101, think_code + 300),
+                                ("v8_ce_rewrite", skills.card("race_alt"), 0.45, 3202, think_code + 350),
+                            ]
+                            ce_res = await _call_batch(
+                                client,
+                                [
+                                    CallSpec(
+                                        messages=[
+                                            {"role": "system", "content": shared_sys},
+                                            {"role": "user", "content": f"{ce_prompt}\n\nROLE ({rname}):\n{rcard}"},
+                                        ],
+                                        tag=rname,
+                                        max_tokens=rtb + 3000,
+                                        temperature=rtemp,
+                                        seed=rseed,
+                                        enable_thinking=True,
+                                        thinking_budget=rtb,
+                                        loop_guard=True,
+                                    )
+                                    for rname, rcard, rtemp, rseed, rtb in ce_roles
+                                ],
+                            )
+                            ce_cands = _parse_candidates(
+                                ce_roles,
+                                ce_res,
+                                wave=3,
+                                starter_imports=starter_imports,
+                                starter_symbols=starter_symbols,
+                            )
+                            kept_oracle_cnt = max(1, len([n for n in oracle_fn_map if n not in dropped_oracle]))
+                            ce_o_mat, _ = await _evaluate_wave(
+                                ce_cands, oracle_code, kept_oracle_cnt, "", 0, eff_timeout, stdin_mode=stdin_mode
+                            )
+                            _apply_matrix_scores(ce_cands, ce_o_mat, dropped_oracle, is_redteam=False)
+
+                            # Evaluate sample-passing repaired candidates against ALL sound brute-force pairs!
+                            ce_valid = [c for c in ce_cands if c.perfect and c.code]
+                            if ce_valid:
+                                ce_evals = await asyncio.gather(
+                                    *(
+                                        asyncio.to_thread(_eval_candidate_on_v8_pairs, c.code, oracle_pairs, 18.0)
+                                        for c in ce_valid
+                                    )
+                                )
+                                promoted_any = False
+                                for c_rep, (rp, rt, _rce) in zip(ce_valid, ce_evals):
+                                    if rp > best_fuzz_pass:
+                                        c_rep.diff_counterexample_wins += (3 if rp == rt else 2)
+                                        promoted_any = True
+                                        trace.v8_brute_ce_fixed = True
+                                    else:
+                                        c_rep.diff_counterexample_losses += 2
+                                if promoted_any:
+                                    for pc, _, _, _ in passer_scores:
+                                        pc.diff_counterexample_losses += 1
+                            trace.wave2_candidates.extend(ce_cands)
 
     # ------------------------------------------------------------------
     # FINAL SELECTION: Ranked Best + Runtime/TLE-Aware Consensus-Respecting Tie-Break

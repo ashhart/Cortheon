@@ -1,0 +1,979 @@
+{
+  "dataset": "MathArena/aime_2025",
+  "model": "Qwen2.5-7B-Instruct-4bit (mlx-community)",
+  "engine": "Cortheon Evolve v1 (Oracle-Free 3-Tier PAL Harvest -> Dual-Seed mlx-lm LoRA -> Pure-NumPy TIES Sign-Consensus .npz Soup -> Exact McNemar Gate)",
+  "zero_leakage_protocol": {
+    "train_source": "Gauntlet-I + Gauntlet-II Math & Logic (40 tasks, 0% overlap with MathArena/aime_2025)",
+    "harvest_teacher": "glm-5.3-flash-tfq3 (ReasonForge v5, strict >=2-PAL execution consensus, zero oracle)",
+    "harvest_summary": {
+      "tasks_attempted": 40,
+      "tasks_kept_verified": 38,
+      "by_tier": {
+        "disagreement_rescue": 3,
+        "crash_rescue": 17,
+        "fast_distill": 18
+      },
+      "total_weight": 61.0,
+      "train_unique": 31,
+      "train_weighted_rows": 51,
+      "valid_rows": 7
+    },
+    "eval_held_out": "MathArena/aime_2025 (30/30, deterministic temp=0.0, seed=42/101, never seen during harvest or training)"
+  },
+  "training": {
+    "framework": "mlx-lm 0.32.2 (Apple Silicon Metal GPU)",
+    "fine_tune_type": "lora",
+    "num_layers": 16,
+    "rank": 8,
+    "trainable_params": "11.534M / 7615.617M (0.151%)",
+    "iters": 50,
+    "batch_size": 2,
+    "learning_rate": 3e-05,
+    "mask_prompt": true,
+    "adapters": [
+      {
+        "name": "adapter_a50",
+        "seed": 42,
+        "val_loss_init": 1.076,
+        "val_loss_25": 0.777,
+        "val_loss_50": 0.836,
+        "train_loss_50": 0.303
+      },
+      {
+        "name": "adapter_b50",
+        "seed": 1337,
+        "val_loss_init": 1.076,
+        "val_loss_25": 0.707,
+        "val_loss_50": 0.758,
+        "train_loss_50": 0.319
+      }
+    ],
+    "ties_merge": {
+      "num_adapters": 2,
+      "num_tensors": 224,
+      "normalized_weights": [
+        0.5,
+        0.5
+      ],
+      "sign_consensus": true,
+      "trim_density": 0.7,
+      "sha256": "c4c0f5b408ef66084c9b43763f1718eab62b20486e18efd6bb431b2a4f3a9bab"
+    },
+    "fused_4bit_tensors_modified": "336 / 735"
+  },
+  "gates": {
+    "vanilla_b1": {
+      "accepted": true,
+      "reasons": [
+        "ACCEPTED: single_shot 0.0%->10.0% (+3/-0, p=0.2500)"
+      ],
+      "single_shot": {
+        "name": "single_shot",
+        "n": 30,
+        "base_passed": 0,
+        "cand_passed": 3,
+        "base_pct": 0.0,
+        "cand_pct": 10.0,
+        "delta_pct": 10.0,
+        "base_ci_95": [
+          0.0,
+          11.35
+        ],
+        "cand_ci_95": [
+          3.46,
+          25.62
+        ],
+        "n11": 0,
+        "n01_fixed": 3,
+        "n10_broken": 0,
+        "n00": 27,
+        "mcnemar_exact_p": 0.25
+      },
+      "verified": null,
+      "anchor_delta_pct": null,
+      "composite_score": 10.0
+    },
+    "pal_b1": {
+      "accepted": false,
+      "reasons": [
+        "single_shot net gain +0 < required +1 (+1/-1)"
+      ],
+      "single_shot": {
+        "name": "single_shot",
+        "n": 30,
+        "base_passed": 2,
+        "cand_passed": 2,
+        "base_pct": 6.67,
+        "cand_pct": 6.67,
+        "delta_pct": 0.0,
+        "base_ci_95": [
+          1.85,
+          21.32
+        ],
+        "cand_ci_95": [
+          1.85,
+          21.32
+        ],
+        "n11": 1,
+        "n01_fixed": 1,
+        "n10_broken": 1,
+        "n00": 27,
+        "mcnemar_exact_p": 1.0
+      },
+      "verified": null,
+      "anchor_delta_pct": null,
+      "composite_score": -6.6667
+    }
+  },
+  "honest_interpretation": "End-to-end live proof of Cortheon Evolve on Apple Silicon: training a 7B 4-bit model strictly on 38 oracle-free Python-verified scripts from a disjoint suite (Gauntlet-I+II) produced +10.0 pts zero-shot single-shot prose transfer on held-out official AIME 2025 (0/30 -> 3/30, +3/-0, ACCEPTED by the McNemar gate; directional at n=30 with exact p=0.2500), while single-shot PAL stayed flat at 2/30 -> 2/30 (+1/-1, p=1.0000) and was cleanly REJECTED by the non-regression gate.",
+  "results": {
+    "gen0_vanilla_b1": [
+      {
+        "id": "AIME25_01",
+        "expected": "70",
+        "predicted": "49",
+        "correct": false
+      },
+      {
+        "id": "AIME25_02",
+        "expected": "588",
+        "predicted": "216",
+        "correct": false
+      },
+      {
+        "id": "AIME25_03",
+        "expected": "16",
+        "predicted": "40",
+        "correct": false
+      },
+      {
+        "id": "AIME25_04",
+        "expected": "117",
+        "predicted": "168",
+        "correct": false
+      },
+      {
+        "id": "AIME25_05",
+        "expected": "279",
+        "predicted": "873",
+        "correct": false
+      },
+      {
+        "id": "AIME25_06",
+        "expected": "504",
+        "predicted": "432",
+        "correct": false
+      },
+      {
+        "id": "AIME25_07",
+        "expected": "821",
+        "predicted": "16",
+        "correct": false
+      },
+      {
+        "id": "AIME25_08",
+        "expected": "77",
+        "predicted": "0",
+        "correct": false
+      },
+      {
+        "id": "AIME25_09",
+        "expected": "62",
+        "predicted": "8",
+        "correct": false
+      },
+      {
+        "id": "AIME25_10",
+        "expected": "81",
+        "predicted": "78",
+        "correct": false
+      },
+      {
+        "id": "AIME25_11",
+        "expected": "259",
+        "predicted": "0",
+        "correct": false
+      },
+      {
+        "id": "AIME25_12",
+        "expected": "510",
+        "predicted": "The area of the finite region is \\((1875)/(4) = 468.75 = 468.75",
+        "correct": false
+      },
+      {
+        "id": "AIME25_13",
+        "expected": "204",
+        "predicted": "379",
+        "correct": false
+      },
+      {
+        "id": "AIME25_14",
+        "expected": "60",
+        "predicted": "81",
+        "correct": false
+      },
+      {
+        "id": "AIME25_15",
+        "expected": "735",
+        "predicted": "915",
+        "correct": false
+      },
+      {
+        "id": "AIME25_16",
+        "expected": "468",
+        "predicted": "1419",
+        "correct": false
+      },
+      {
+        "id": "AIME25_17",
+        "expected": "49",
+        "predicted": "67",
+        "correct": false
+      },
+      {
+        "id": "AIME25_18",
+        "expected": "82",
+        "predicted": "32",
+        "correct": false
+      },
+      {
+        "id": "AIME25_19",
+        "expected": "106",
+        "predicted": "97",
+        "correct": false
+      },
+      {
+        "id": "AIME25_20",
+        "expected": "336",
+        "predicted": "384",
+        "correct": false
+      },
+      {
+        "id": "AIME25_21",
+        "expected": "293",
+        "predicted": "73",
+        "correct": false
+      },
+      {
+        "id": "AIME25_22",
+        "expected": "237",
+        "predicted": "40959",
+        "correct": false
+      },
+      {
+        "id": "AIME25_23",
+        "expected": "610",
+        "predicted": "952",
+        "correct": false
+      },
+      {
+        "id": "AIME25_24",
+        "expected": "149",
+        "predicted": "40",
+        "correct": false
+      },
+      {
+        "id": "AIME25_25",
+        "expected": "907",
+        "predicted": "536",
+        "correct": false
+      },
+      {
+        "id": "AIME25_26",
+        "expected": "113",
+        "predicted": "316234143225",
+        "correct": false
+      },
+      {
+        "id": "AIME25_27",
+        "expected": "19",
+        "predicted": "46",
+        "correct": false
+      },
+      {
+        "id": "AIME25_28",
+        "expected": "248",
+        "predicted": "3",
+        "correct": false
+      },
+      {
+        "id": "AIME25_29",
+        "expected": "104",
+        "predicted": "49",
+        "correct": false
+      },
+      {
+        "id": "AIME25_30",
+        "expected": "240",
+        "predicted": "188",
+        "correct": false
+      }
+    ],
+    "gen1_vanilla_b1": [
+      {
+        "id": "AIME25_01",
+        "expected": "70",
+        "predicted": "49",
+        "correct": false,
+        "wall_s": 4.37,
+        "detail": "WRONG: got='49' expected='70'"
+      },
+      {
+        "id": "AIME25_02",
+        "expected": "588",
+        "predicted": "1104",
+        "correct": false,
+        "wall_s": 7.35,
+        "detail": "WRONG: got='1104' expected='588'"
+      },
+      {
+        "id": "AIME25_03",
+        "expected": "16",
+        "predicted": "756",
+        "correct": false,
+        "wall_s": 3.66,
+        "detail": "WRONG: got='756' expected='16'"
+      },
+      {
+        "id": "AIME25_04",
+        "expected": "117",
+        "predicted": "152",
+        "correct": false,
+        "wall_s": 6.69,
+        "detail": "WRONG: got='152' expected='117'"
+      },
+      {
+        "id": "AIME25_05",
+        "expected": "279",
+        "predicted": "-1065",
+        "correct": false,
+        "wall_s": 6.34,
+        "detail": "WRONG: got='-1065' expected='279'"
+      },
+      {
+        "id": "AIME25_06",
+        "expected": "504",
+        "predicted": "504",
+        "correct": true,
+        "wall_s": 8.17,
+        "detail": "OK (504)"
+      },
+      {
+        "id": "AIME25_07",
+        "expected": "821",
+        "predicted": "5",
+        "correct": false,
+        "wall_s": 8.2,
+        "detail": "WRONG: got='5' expected='821'"
+      },
+      {
+        "id": "AIME25_08",
+        "expected": "77",
+        "predicted": "7",
+        "correct": false,
+        "wall_s": 7.96,
+        "detail": "WRONG: got='7' expected='77'"
+      },
+      {
+        "id": "AIME25_09",
+        "expected": "62",
+        "predicted": "52",
+        "correct": false,
+        "wall_s": 10.57,
+        "detail": "WRONG: got='52' expected='62'"
+      },
+      {
+        "id": "AIME25_10",
+        "expected": "81",
+        "predicted": "116",
+        "correct": false,
+        "wall_s": 6.2,
+        "detail": "WRONG: got='116' expected='81'"
+      },
+      {
+        "id": "AIME25_11",
+        "expected": "259",
+        "predicted": "0",
+        "correct": false,
+        "wall_s": 4.85,
+        "detail": "WRONG: got='0' expected='259'"
+      },
+      {
+        "id": "AIME25_12",
+        "expected": "510",
+        "predicted": "226",
+        "correct": false,
+        "wall_s": 7.31,
+        "detail": "WRONG: got='226' expected='510'"
+      },
+      {
+        "id": "AIME25_13",
+        "expected": "204",
+        "predicted": "207",
+        "correct": false,
+        "wall_s": 7.26,
+        "detail": "WRONG: got='207' expected='204'"
+      },
+      {
+        "id": "AIME25_14",
+        "expected": "60",
+        "predicted": "84",
+        "correct": false,
+        "wall_s": 5.78,
+        "detail": "WRONG: got='84' expected='60'"
+      },
+      {
+        "id": "AIME25_15",
+        "expected": "735",
+        "predicted": "489",
+        "correct": false,
+        "wall_s": 7.38,
+        "detail": "WRONG: got='489' expected='735'"
+      },
+      {
+        "id": "AIME25_16",
+        "expected": "468",
+        "predicted": "Area",
+        "correct": false,
+        "wall_s": 17.15,
+        "detail": "WRONG: got='Area' expected='468'"
+      },
+      {
+        "id": "AIME25_17",
+        "expected": "49",
+        "predicted": "49",
+        "correct": true,
+        "wall_s": 6.09,
+        "detail": "OK (49)"
+      },
+      {
+        "id": "AIME25_18",
+        "expected": "82",
+        "predicted": "6",
+        "correct": false,
+        "wall_s": 3.81,
+        "detail": "WRONG: got='6' expected='82'"
+      },
+      {
+        "id": "AIME25_19",
+        "expected": "106",
+        "predicted": "106",
+        "correct": true,
+        "wall_s": 8.03,
+        "detail": "OK (106)"
+      },
+      {
+        "id": "AIME25_20",
+        "expected": "336",
+        "predicted": "384",
+        "correct": false,
+        "wall_s": 4.23,
+        "detail": "WRONG: got='384' expected='336'"
+      },
+      {
+        "id": "AIME25_21",
+        "expected": "293",
+        "predicted": "203",
+        "correct": false,
+        "wall_s": 4.99,
+        "detail": "WRONG: got='203' expected='293'"
+      },
+      {
+        "id": "AIME25_22",
+        "expected": "237",
+        "predicted": "32768",
+        "correct": false,
+        "wall_s": 4.41,
+        "detail": "WRONG: got='32768' expected='237'"
+      },
+      {
+        "id": "AIME25_23",
+        "expected": "610",
+        "predicted": "However, we need to count the values of \\( N \\) from 1 to 1000, so we need to consider the range of \\( N \\) for each \\( ",
+        "correct": false,
+        "wall_s": 17.35,
+        "detail": "WRONG: got='However, we need to count the values of \\\\( N \\\\) from 1 to 1000, so we need to consider the range of \\\\( N \\\\) for each \\\\( k \\\\). For \\\\( k = 0 \\\\), \\\\( N \\\\) ranges "
+      },
+      {
+        "id": "AIME25_24",
+        "expected": "149",
+        "predicted": "52",
+        "correct": false,
+        "wall_s": 9.9,
+        "detail": "WRONG: got='52' expected='149'"
+      },
+      {
+        "id": "AIME25_25",
+        "expected": "907",
+        "predicted": "705",
+        "correct": false,
+        "wall_s": 8.4,
+        "detail": "WRONG: got='705' expected='907'"
+      },
+      {
+        "id": "AIME25_26",
+        "expected": "113",
+        "predicted": "979507200",
+        "correct": false,
+        "wall_s": 2.78,
+        "detail": "WRONG: got='979507200' expected='113'"
+      },
+      {
+        "id": "AIME25_27",
+        "expected": "19",
+        "predicted": "50",
+        "correct": false,
+        "wall_s": 9.73,
+        "detail": "WRONG: got='50' expected='19'"
+      },
+      {
+        "id": "AIME25_28",
+        "expected": "248",
+        "predicted": "3",
+        "correct": false,
+        "wall_s": 9.02,
+        "detail": "WRONG: got='3' expected='248'"
+      },
+      {
+        "id": "AIME25_29",
+        "expected": "104",
+        "predicted": "276",
+        "correct": false,
+        "wall_s": 7.72,
+        "detail": "WRONG: got='276' expected='104'"
+      },
+      {
+        "id": "AIME25_30",
+        "expected": "240",
+        "predicted": "188",
+        "correct": false,
+        "wall_s": 8.33,
+        "detail": "WRONG: got='188' expected='240'"
+      }
+    ],
+    "gen0_pal_b1": [
+      {
+        "id": "AIME25_01",
+        "expected": "70",
+        "predicted": "0",
+        "correct": false
+      },
+      {
+        "id": "AIME25_02",
+        "expected": "588",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_03",
+        "expected": "16",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_04",
+        "expected": "117",
+        "predicted": "118",
+        "correct": false
+      },
+      {
+        "id": "AIME25_05",
+        "expected": "279",
+        "predicted": "279",
+        "correct": true
+      },
+      {
+        "id": "AIME25_06",
+        "expected": "504",
+        "predicted": "2*r_val**2 - 96*r_val + 2304",
+        "correct": false
+      },
+      {
+        "id": "AIME25_07",
+        "expected": "821",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_08",
+        "expected": "77",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_09",
+        "expected": "62",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_10",
+        "expected": "81",
+        "predicted": "76",
+        "correct": false
+      },
+      {
+        "id": "AIME25_11",
+        "expected": "259",
+        "predicted": "35",
+        "correct": false
+      },
+      {
+        "id": "AIME25_12",
+        "expected": "510",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_13",
+        "expected": "204",
+        "predicted": "176",
+        "correct": false
+      },
+      {
+        "id": "AIME25_14",
+        "expected": "60",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_15",
+        "expected": "735",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_16",
+        "expected": "468",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_17",
+        "expected": "49",
+        "predicted": "0",
+        "correct": false
+      },
+      {
+        "id": "AIME25_18",
+        "expected": "82",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_19",
+        "expected": "106",
+        "predicted": "106",
+        "correct": true
+      },
+      {
+        "id": "AIME25_20",
+        "expected": "336",
+        "predicted": "672",
+        "correct": false
+      },
+      {
+        "id": "AIME25_21",
+        "expected": "293",
+        "predicted": "1",
+        "correct": false
+      },
+      {
+        "id": "AIME25_22",
+        "expected": "237",
+        "predicted": "60671",
+        "correct": false
+      },
+      {
+        "id": "AIME25_23",
+        "expected": "610",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_24",
+        "expected": "149",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_25",
+        "expected": "907",
+        "predicted": "536",
+        "correct": false
+      },
+      {
+        "id": "AIME25_26",
+        "expected": "113",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_27",
+        "expected": "19",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_28",
+        "expected": "248",
+        "predicted": "",
+        "correct": false
+      },
+      {
+        "id": "AIME25_29",
+        "expected": "104",
+        "predicted": "0",
+        "correct": false
+      },
+      {
+        "id": "AIME25_30",
+        "expected": "240",
+        "predicted": "",
+        "correct": false
+      }
+    ],
+    "gen1_pal_b1": [
+      {
+        "id": "AIME25_01",
+        "expected": "70",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 1.85,
+        "detail": "empty (expected 70) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_02",
+        "expected": "588",
+        "predicted": "-288 + 250*sqrt(269)",
+        "correct": false,
+        "wall_s": 3.76,
+        "detail": "WRONG: got='-288 + 250*sqrt(269)' expected='588'"
+      },
+      {
+        "id": "AIME25_03",
+        "expected": "16",
+        "predicted": "271",
+        "correct": false,
+        "wall_s": 2.0,
+        "detail": "WRONG: got='271' expected='16'"
+      },
+      {
+        "id": "AIME25_04",
+        "expected": "117",
+        "predicted": "118",
+        "correct": false,
+        "wall_s": 2.22,
+        "detail": "WRONG: got='118' expected='117'"
+      },
+      {
+        "id": "AIME25_05",
+        "expected": "279",
+        "predicted": "279",
+        "correct": true,
+        "wall_s": 1.12,
+        "detail": "OK (279)"
+      },
+      {
+        "id": "AIME25_06",
+        "expected": "504",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 17.49,
+        "detail": "empty (expected 504) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_07",
+        "expected": "821",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 13.76,
+        "detail": "empty (expected 821) | err=TIMEOUT after 12.01s"
+      },
+      {
+        "id": "AIME25_08",
+        "expected": "77",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 2.42,
+        "detail": "empty (expected 77) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_09",
+        "expected": "62",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 3.94,
+        "detail": "empty (expected 62) | err=...(truncated)...\n sp.Matrix([x, y]))\n  File \"<home>"
+      },
+      {
+        "id": "AIME25_10",
+        "expected": "81",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 2.84,
+        "detail": "empty (expected 81) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_11",
+        "expected": "259",
+        "predicted": "1",
+        "correct": false,
+        "wall_s": 5.85,
+        "detail": "WRONG: got='1' expected='259'"
+      },
+      {
+        "id": "AIME25_12",
+        "expected": "510",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 17.44,
+        "detail": "empty (expected 510) | err=Script exited 0 but printed no ANSWER line (stdout='')"
+      },
+      {
+        "id": "AIME25_13",
+        "expected": "204",
+        "predicted": "757",
+        "correct": false,
+        "wall_s": 1.63,
+        "detail": "WRONG: got='757' expected='204'"
+      },
+      {
+        "id": "AIME25_14",
+        "expected": "60",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 16.29,
+        "detail": "empty (expected 60) | err=TIMEOUT after 12.00s"
+      },
+      {
+        "id": "AIME25_15",
+        "expected": "735",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 13.62,
+        "detail": "empty (expected 735) | err=TIMEOUT after 12.01s"
+      },
+      {
+        "id": "AIME25_16",
+        "expected": "468",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 2.74,
+        "detail": "empty (expected 468) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_17",
+        "expected": "49",
+        "predicted": "49",
+        "correct": true,
+        "wall_s": 1.73,
+        "detail": "OK (49)"
+      },
+      {
+        "id": "AIME25_18",
+        "expected": "82",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 3.17,
+        "detail": "empty (expected 82) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_19",
+        "expected": "106",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 2.13,
+        "detail": "empty (expected 106) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_20",
+        "expected": "336",
+        "predicted": "672",
+        "correct": false,
+        "wall_s": 2.93,
+        "detail": "WRONG: got='672' expected='336'"
+      },
+      {
+        "id": "AIME25_21",
+        "expected": "293",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 3.42,
+        "detail": "empty (expected 293) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_22",
+        "expected": "237",
+        "predicted": "60671",
+        "correct": false,
+        "wall_s": 3.21,
+        "detail": "WRONG: got='60671' expected='237'"
+      },
+      {
+        "id": "AIME25_23",
+        "expected": "610",
+        "predicted": "1000",
+        "correct": false,
+        "wall_s": 1.69,
+        "detail": "WRONG: got='1000' expected='610'"
+      },
+      {
+        "id": "AIME25_24",
+        "expected": "149",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 2.22,
+        "detail": "empty (expected 149) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_25",
+        "expected": "907",
+        "predicted": "536",
+        "correct": false,
+        "wall_s": 0.76,
+        "detail": "WRONG: got='536' expected='907'"
+      },
+      {
+        "id": "AIME25_26",
+        "expected": "113",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 1.95,
+        "detail": "empty (expected 113) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_27",
+        "expected": "19",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 4.3,
+        "detail": "empty (expected 19) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_28",
+        "expected": "248",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 14.17,
+        "detail": "empty (expected 248) | err=TIMEOUT after 12.01s"
+      },
+      {
+        "id": "AIME25_29",
+        "expected": "104",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 5.91,
+        "detail": "empty (expected 104) | err=Traceback (most recent call last):\n  File \"<sandbox_tmp>"
+      },
+      {
+        "id": "AIME25_30",
+        "expected": "240",
+        "predicted": "",
+        "correct": false,
+        "wall_s": 9.59,
+        "detail": "empty (expected 240) | err=...(truncated)...\n+ 3372)*(-k**4/432 + 6947*k**2/27 - 21352*k/3 + 11310080/27)/6 + (-k**3/27 + 1124*k - 939248/27)**2/16"
+      }
+    ]
+  }
+}

@@ -66,7 +66,7 @@ from .sandbox import (
     sandbox_backend,
 )
 
-_GUARD_VERSION = "2.4.0"
+_GUARD_VERSION = "2.5.0"
 _SARIF_SCHEMA_URI = "https://json.schemastore.org/sarif-2.1.0.json"
 _GIT_HOOK_MARKER = "# CORTHEON-GUARD-HOOK"
 _META_PREFIX = "__CORTHEON_GUARD_META__:"
