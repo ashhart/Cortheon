@@ -526,6 +526,100 @@ def test_client_generic_openai_reasoning_headroom_and_recovery():
     assert "chat_template_kwargs" not in p_next
 
 
+def test_client_probe_non_dict_capabilities_and_generic_dicts():
+    import asyncio
+    from flash_forge.client import CallSpec, TensorFoldClient
+
+    class _FakeResp:
+        def __init__(self, body: dict):
+            self._body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._body
+
+    class _FakeHttp:
+        def __init__(self, body: dict):
+            self._body = body
+
+        async def get(self, url):
+            return _FakeResp(self._body)
+
+    # 1. OpenAI-compatible backend returning capabilities as a list (e.g. LM Studio / Ollama / llama.cpp)
+    c_list = TensorFoldClient(base_url="http://127.0.0.1:11234/v1")
+    c_list._http = _FakeHttp({
+        "data": [
+            {
+                "id": "qwen3-coder-30b",
+                "owned_by": "local",
+                "context_length": 65536,
+                "capabilities": ["completion", "tools", "thinking"],
+                "reasoning": True,
+                "meta": None,
+            }
+        ]
+    })  # type: ignore[assignment]
+    caps_list = asyncio.run(c_list.probe())
+    assert caps_list.model_id == "qwen3-coder-30b"
+    assert caps_list.context_length == 65536
+    assert c_list._is_tensorfold is False
+    assert caps_list.structures is True
+    assert caps_list.reasoning is True
+    assert caps_list.thinking_budget is False
+    assert caps_list.supported_efforts == []
+    payload = c_list._build_payload(CallSpec(messages=[{"role": "user", "content": "hi"}], enable_thinking=False))
+    assert "cortheon" not in payload
+
+    # 2. Generic backend returning a non-TensorFold capabilities dict
+    c_generic_dict = TensorFoldClient(base_url="http://127.0.0.1:11234/v1")
+    c_generic_dict._http = _FakeHttp({
+        "data": [
+            {
+                "id": "mistral-small",
+                "owned_by": "mistral",
+                "max_model_len": 131072,
+                "capabilities": {"completion_chat": True, "function_calling": True, "vision": False},
+                "reasoning": None,
+            }
+        ]
+    })  # type: ignore[assignment]
+    caps_generic = asyncio.run(c_generic_dict.probe())
+    assert c_generic_dict._is_tensorfold is False
+    assert caps_generic.structures is True
+    assert caps_generic.context_length == 131072
+    assert caps_generic.supported_efforts == []
+
+    # 3. TensorFold native backend with TensorFold capability dict still detected properly
+    c_tf = TensorFoldClient(base_url="http://127.0.0.1:8080/v1")
+    c_tf._http = _FakeHttp({
+        "data": [
+            {
+                "id": "glm-5.3-flash",
+                "owned_by": "tensorfold",
+                "context_length": 131072,
+                "capabilities": {
+                    "structures": True,
+                    "thinking_budget": True,
+                    "reasoning": True,
+                    "prompt_cache": True,
+                    "loop_guard": True,
+                },
+                "reasoning": {"supported_efforts": ["low", "medium", "high"]},
+            }
+        ]
+    })  # type: ignore[assignment]
+    caps_tf = asyncio.run(c_tf.probe())
+    assert c_tf._is_tensorfold is True
+    assert caps_tf.structures is True
+    assert caps_tf.thinking_budget is True
+    assert caps_tf.prompt_cache is True
+    assert caps_tf.supported_efforts == ["low", "medium", "high"]
+    tf_payload = c_tf._build_payload(CallSpec(messages=[{"role": "user", "content": "hi"}], enable_thinking=True))
+    assert tf_payload["cortheon"] is False
+
+
 def test_reason_format_gate_and_trailing_prose_strip():
     from flash_forge.reason_forge import _answer_satisfies_prompt_format
 

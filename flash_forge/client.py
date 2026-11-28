@@ -20,6 +20,20 @@ _REASONING_MODEL_ID_RE = re.compile(
 )
 
 
+_TENSORFOLD_CAP_KEYS = frozenset(
+    {
+        "structures",
+        "thinking_budget",
+        "reasoning_optional",
+        "thinking_switch",
+        "loop_guard",
+        "answer_limit",
+        "prompt_cache",
+        "decides",
+    }
+)
+
+
 def _looks_like_reasoning_model(model_id: str) -> bool:
     """Heuristic prior for reasoning models on generic OpenAI-compatible backends
     that omit TensorFold's `/v1/models` capability metadata.
@@ -181,31 +195,46 @@ class TensorFoldClient:
                 if item.get("id") == self.requested_model:
                     entry = item
                     break
-        caps_raw = entry.get("capabilities", {})
-        reasoning_info = entry.get("reasoning", {})
+        caps_raw = entry.get("capabilities")
+        caps_dict = caps_raw if isinstance(caps_raw, dict) else {}
+        caps_list = {str(x).lower() for x in caps_raw if isinstance(x, str)} if isinstance(caps_raw, list) else set()
+        reasoning_raw = entry.get("reasoning")
+        reasoning_info = reasoning_raw if isinstance(reasoning_raw, dict) else {}
         # Detect whether backend is TensorFold native vs generic OpenAI-compatible (Ollama/vLLM/llama.cpp/LM Studio)
-        is_tensorfold = bool(caps_raw) or (entry.get("owned_by") == "tensorfold")
-        meta = entry.get("meta") or {}
+        is_tensorfold = (entry.get("owned_by") == "tensorfold") or bool(caps_dict.keys() & _TENSORFOLD_CAP_KEYS)
+        meta_raw = entry.get("meta")
+        meta = meta_raw if isinstance(meta_raw, dict) else {}
         ctx_len = int(
             entry.get("context_length")
             or entry.get("max_model_len")
             or meta.get("n_ctx")
             or 32768
         )
+        efforts_raw = reasoning_info.get("supported_efforts")
+        supported_efforts = [str(e) for e in efforts_raw] if isinstance(efforts_raw, (list, tuple)) else []
+        reasoning_flag = (
+            bool(caps_dict.get("reasoning", False))
+            if is_tensorfold
+            else (
+                bool(caps_dict.get("reasoning", False))
+                or (reasoning_raw is True)
+                or bool(caps_list & {"reasoning", "thinking"})
+            )
+        )
         self._caps = ModelCapabilities(
             model_id=entry["id"],
             context_length=ctx_len,
-            structures=bool(caps_raw.get("structures", False)) if is_tensorfold else True,
-            thinking_budget=bool(caps_raw.get("thinking_budget", False)),
-            reasoning=bool(caps_raw.get("reasoning", False)),
-            reasoning_optional=bool(caps_raw.get("reasoning_optional", True)),
-            thinking_switch=bool(caps_raw.get("thinking_switch", False)),
-            loop_guard=bool(caps_raw.get("loop_guard", False)),
-            answer_limit=bool(caps_raw.get("answer_limit", False)),
-            prompt_cache=bool(caps_raw.get("prompt_cache", False)),
-            logprobs=bool(caps_raw.get("logprobs", False)),
-            decides=bool(caps_raw.get("decides", False)),
-            supported_efforts=list(reasoning_info.get("supported_efforts", [])),
+            structures=bool(caps_dict.get("structures", False)) if is_tensorfold else True,
+            thinking_budget=bool(caps_dict.get("thinking_budget", False)) if is_tensorfold else False,
+            reasoning=reasoning_flag,
+            reasoning_optional=bool(caps_dict.get("reasoning_optional", True)) if is_tensorfold else True,
+            thinking_switch=bool(caps_dict.get("thinking_switch", False)) if is_tensorfold else False,
+            loop_guard=bool(caps_dict.get("loop_guard", False)) if is_tensorfold else False,
+            answer_limit=bool(caps_dict.get("answer_limit", False)) if is_tensorfold else False,
+            prompt_cache=bool(caps_dict.get("prompt_cache", False)) if is_tensorfold else False,
+            logprobs=bool(caps_dict.get("logprobs", False)) or ("logprobs" in caps_list),
+            decides=bool(caps_dict.get("decides", False)) if is_tensorfold else False,
+            supported_efforts=supported_efforts,
         )
         self._is_tensorfold = is_tensorfold
         return self._caps
