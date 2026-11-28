@@ -27,10 +27,11 @@ Per-problem token-, call-, and latency-logged ablation across all 30 official AI
 | `pal_b1` | `8/30` (**26.7%**) `[14.2, 44.5]` | `19.4s` | `1.00` | `1,425` | `196` | `0.0386*` | `0.0215*` | `0.0034**` |
 | **`cortheon_w1`** | `19/30` (**63.3%**) `[45.5, 78.1]` | **`63.4s`** | `4.07` | **`6,547`** | `1,013` | `0.5078` | `0.4531` | `1.0000` |
 | **`cortheon_full`** *(effort=low)* | `21/30` (**70.0%**) `[52.1, 83.3]` | `147.9s` | `6.23` | `14,396` | `2,592` | `0.2266` | `0.2266` | `0.7744` |
-| **`cortheon_full`** *(default `tb=700/950`)* | `24/30` (**80.0%**) `[62.7, 90.5]` | `175.8s` | `7.20` | `13,700` | — | `0.0386*` | `0.0574` | `0.1797` |
+| **`cortheon_full`** *(v2 default `tb=700/950`)* | `24/30` (**80.0%**) `[62.7, 90.5]` | `175.8s` | `7.20` | `13,700` | — | `0.0386*` | `0.0574` | `0.1797` |
+| **`reasonforge_v5`** *(Fast Pair + TIR Self-Repair)* | **`25/30` (`83.3%`)** `[66.4, 92.7]` | **`107.8s`** | **`7.67`** | `15,721` | `2,759` | **`0.0117*`** | **`0.0117*`** | `0.1094` |
 
 - `cortheon_w1` matches `Maj@8` (`19/30`) at **0.49× tokens** (`6,547` vs `13,314`) and **1.74× faster wall time** (`63.4s` vs `110.0s`), while outperforming same-token `Maj@4` (`6,504` tok) by `+10.0` points.
-- `Maj@8` still suffers correlated prose collapses (`7/8` wrong on `AIME25_27`/`29`, `6/8` on `AIME25_14`, `5/8` on `AIME25_18`), whereas default `cortheon_full` reaches `24/30` at `~1.03×` `Maj@8` tokens (`+7/−2` over `Maj@8`, catching `AIME25_18` and `AIME25_27`).
+- **`ReasonForge v5`** ([`results/official_aime2025_reasonforge_v5_glm53.json`](results/official_aime2025_reasonforge_v5_glm53.json)) combines a 2-call Stage-1A fast pair (`pal_exact` + `pal_skeptic`, clearing easy problems in `2.4–12.2s`), zero-anchoring inline **Executable TIR Self-Repair** (fixing syntax/import/range errors in-place without leaking other branches' answers), dynamic sandbox package awareness, bounded-range format gating, and strictly unanchored 50-digit `mpmath`/`numpy` Wave-2/Wave-3 verification: reaching **`25/30 (83.3%)`** at **`107.8s` avg (`1.63×` faster than `v2`'s `175.8s`)**, beating `vanilla_b1` and `Maj@4` by **`+30.0 pts` (`+10/−1`, `p = 0.0117*`)**, beating `cortheon_w1` with **zero regressions (`+6/−0`, `p = 0.0313*`)**, and beating `Maj@8` by **`+20.0 pts` (`+8/−2`)** at faster wall-clock (`107.8s` vs `110.0s`) and fewer calls (`7.67` vs `8.00`).
 
 ### 1b. Live 30/30 `SpecVerify` Ablation on Official `MathArena/aime_2025` (`inkling-2-mini` → `glm-5.3-flash-tfq3`)
 

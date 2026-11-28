@@ -66,7 +66,7 @@ from .sandbox import (
     sandbox_backend,
 )
 
-_GUARD_VERSION = "2.3.1"
+_GUARD_VERSION = "2.4.0"
 _SARIF_SCHEMA_URI = "https://json.schemastore.org/sarif-2.1.0.json"
 _GIT_HOOK_MARKER = "# CORTHEON-GUARD-HOOK"
 _META_PREFIX = "__CORTHEON_GUARD_META__:"
@@ -1272,18 +1272,21 @@ def _run_go_reproducer_in_sandbox(
         "GOCACHE": "{TMPDIR}/gocache",
         "GOTMPDIR": "{TMPDIR}",
         "GOPROXY": "off",
+        # Keep cold stdlib compilation under POSIX RLIMIT_CPU (summed across threads)
+        "GOMAXPROCS": "1",
     }
     if not (wt_resolved / "go.sum").is_file():
         extra_env["GOPATH"] = "{TMPDIR}/gopath"
     if not (wt_resolved / "go.mod").is_file():
         extra_env["GO111MODULE"] = "off"
 
+    go_timeout_s = max(float(timeout_s), 45.0)
     repro_path.write_text(reproducer_code, encoding="utf-8")
     try:
         res = _run_command_in_os_sandbox(
             [go_bin, "test", "-v", "-count=1", "."],
             cwd=pkg_dir,
-            timeout_s=timeout_s,
+            timeout_s=go_timeout_s,
             extra_env=extra_env,
         )
     finally:

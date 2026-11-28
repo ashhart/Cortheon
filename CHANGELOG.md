@@ -5,6 +5,21 @@ All notable changes to Cortheon are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-11-28
+
+### Added
+- **ReasonForge v5 — Fast Pair, Zero-Anchoring Executable TIR Self-Repair & 50-Digit Numerical Wave 2/3 (`flash_forge/reason_forge.py`):**
+  - **2-Call Fast Pair Stage 1A (`pal_exact` + `pal_skeptic`)** with full Stage-1B completion (`pal_alt_z3` + `analytical`) whenever Stage 1A does not reach consensus, plus streaming early-abort across Wave 1, Wave 2, and Wave 3.
+  - **Zero-Anchoring Executable TIR Self-Repair (`max_pal_repairs=1`, `2` in Wave-3 0-PAL rescue):** Feeds a failing script's *own* sanitized stdout/stderr/format-gate rejection back into a fast surgical debug turn (`tb=450`) without ever leaking other slots' answers—rescuing 1-line typos, missing-package imports, timeouts, and out-of-range answers in-place.
+  - **Dynamic Sandbox Package Awareness, Bounded-Range Format Gate & Empty-Zero Sentinel Guard:** Probes installed scientific packages at load time (preventing `ModuleNotFoundError: scipy/shapely`), enforces prompt-stated integer/remainder bounds, rejects rambling prose dumps in `extract_answer_from_prose`, and prevents `sum([]) == 0` empty-search false consensus on non-remainder problems.
+  - **Strictly Unanchored Wave-2/Wave-3 Numerical Verification + 1-Call Executable Arbiter:** Unlocks 50-digit `mpmath`/`numpy` coordinate/optimization/radical-snap verification on nonlinear Olympiad problems and replaces 3-call blind text `pairwise_vote` with a 1-call `reason_exec_arbiter` (with TIR repair).
+  - **Official 30/30 AIME 2025 Benchmark Receipt (`results/official_aime2025_reasonforge_v5_glm53.json`):** New all-time `GLM-5.3-Flash-TFQ3` record of **`25/30 (83.3%)`** `[66.4, 92.7]` at **`107.8s` avg (`1.63×` faster than `v2`'s `175.8s`)**, beating `vanilla_b1` and `Maj@4` by **`+30.0 pts` (`+10/−1`, `p = 0.0117*`)**, beating `cortheon_w1` with **zero regressions (`+6/−0`, `p = 0.0313*`)**, and beating `Maj@8` by **`+20.0 pts` (`+8/−2`)** at lower wall time (`107.8s` vs `110.0s`) and fewer calls (`7.67` vs `8.00`).
+- **Cortheon Evolve — Oracle-Free Closed-Loop Self-Improvement (`flash_forge/evolve.py`, `cortheon evolve`):**
+  - 3-tier execution-verified contrastive curriculum weighting (`disagreement_rescue=3.0`, `crash_rescue=2.0`, `fast_distill=1.0`, unverified dropped), exact self-contained dual-regime McNemar promotion/rollback gate (`single_shot` + `verified` + `anchor`), pure-NumPy shape-verified TIES sign-consensus `.npz` adapter merging with SHA-256 audit, and persistent `EvolutionLedger`.
+
+### Fixed
+- **Linux CI Cold Go Compilation Timeout (`flash_forge/guard.py`):** Added `GOMAXPROCS=1` and a `45s` floor in `_run_go_reproducer_in_sandbox` so multi-core cold Go stdlib compilation never exhausts thread-summed `RLIMIT_CPU` on GitHub Actions runners.
+
 ## [2.3.1] - 2026-11-27
 
 ### Added

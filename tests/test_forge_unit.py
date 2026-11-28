@@ -687,7 +687,7 @@ def test_reason_wave1_early_abort_cancels_stragglers(tmp_path: Path):
     class _FakeClient:
         async def complete(self, spec):
             seen_efforts[spec.tag] = spec.reasoning_effort
-            if spec.tag in ("w1_pal_exact", "w1_pal_alt_z3"):
+            if spec.tag in ("w1_pal_exact", "w1_pal_skeptic"):
                 await asyncio.sleep(0.02)
                 return CompletionResult(
                     content="```python\nassert 2 + 2 == 4\nprint('ANSWER: 208')\n```",
@@ -730,8 +730,9 @@ def test_reason_wave1_early_abort_cancels_stragglers(tmp_path: Path):
     assert trace.final_answer == "208"
     assert trace.verified is True
     assert trace.wave2_triggered is False
-    assert set(cancelled_tags) == {"w1_pal_skeptic", "w1_analytical"}
-    assert "w1_pal_exact" in seen_efforts and "w1_pal_alt_z3" in seen_efforts
+    # ReasonForge v4 Fast Pair: w1_pal_exact + w1_pal_skeptic agree -> slots 3 & 4 are never launched!
+    assert set(seen_efforts.keys()) == {"w1_pal_exact", "w1_pal_skeptic"}
+    assert cancelled_tags == []
 
 
 def test_proxy_tool_turn_passthrough(monkeypatch):

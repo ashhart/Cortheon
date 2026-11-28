@@ -1,6 +1,6 @@
 """Cortheon — Unified Consensus & Verification Runtime for Frozen Local Models."""
 
-__version__ = "2.3.1"
+__version__ = "2.4.0"
 
 from flash_forge.client import CompletionResult, ModelCapabilities, TensorFoldClient
 from flash_forge.code_forge import CodeCandidate, CodeForgeTrace
@@ -8,6 +8,20 @@ from flash_forge.dev_agent import DevForgeResult, run_dev_forge
 from flash_forge.engine import FlashForge as Cortheon
 from flash_forge.engine import ForgeConfig as CortheonConfig
 from flash_forge.engine import ForgeResult as CortheonResult
+from flash_forge.evolve import (
+    AdapterMergeAudit,
+    CurriculumSummary,
+    EvolutionLedger,
+    GateConfig,
+    GateDecision,
+    WeightedExample,
+    build_weighted_curriculum,
+    evaluate_generation_gate,
+    export_weighted_curriculum,
+    merge_adapter_weights,
+    merge_npz_adapters,
+    run_evolution_loop,
+)
 from flash_forge.guard import GuardReport, ProvenBug, format_guard_sarif, install_git_hook, run_guard
 from flash_forge.integrations import install_commands, install_mcp
 from flash_forge.reason_forge import ReasonForgeTrace
@@ -73,4 +87,16 @@ __all__ = [
     "ReplicaResult",
     "create_app",
     "run_showdown",
+    "AdapterMergeAudit",
+    "CurriculumSummary",
+    "EvolutionLedger",
+    "GateConfig",
+    "GateDecision",
+    "WeightedExample",
+    "build_weighted_curriculum",
+    "evaluate_generation_gate",
+    "export_weighted_curriculum",
+    "merge_adapter_weights",
+    "merge_npz_adapters",
+    "run_evolution_loop",
 ]

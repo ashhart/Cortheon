@@ -1,23 +1,33 @@
 """Neuro-Symbolic Parallel Reasoning Forge (Math, Probability, Combinatorics, Logic, CSP).
 
-Exploits Qwen3.8-Flash-Next's deduplicated B=2..16 MoE batching + Python/SymPy/Z3 sandbox:
-  Wave 1 (B=4 parallel over shared cached prefix):
-    - pal_exact:    Exact Python (Fraction / sympy / math) + small-case checks
-    - pal_alt_z3:   Independent method (Z3 SMT / brute-force enumeration / DP)
+ReasonForge v4 — Pareto-dominant verification speed, cost, and Olympiad accuracy:
+  Stage 1A (B=2 Fast Pair over shared cached prefix):
+    - pal_exact:    Exact Python (Fraction / sympy / math / z3)
     - pal_skeptic:  Trap-hunter script asserting EVERY problem constraint individually
-    - analytical:   Pure closed-form derivation (catches huge-N formulas where brute-force times out)
-  Sandbox Execution & Canonical Equivalence Clustering:
-    - Normalizes Fraction / SymPy / LaTeX / int / float / tuples / booleans
-  Wave 2 (Conditional — fires automatically on ANY disagreement or script failure):
-    - Clean-context hard reset + Graveyard of failed scripts/disagreements
-    - B=3 Disagreement Falsifiers (small-N oracle, constraint-by-constraint re-reader, fresh Z3/SymPy arbiter)
-  Final Verified Adjudication + Clean Answer Synthesis
+    -> Instant 2-call exit when both verified scripts agree identically.
+  Stage 1B (Conditional B=2 Full Wave-1 Completion — fires only when Stage 1A does not agree):
+    - pal_alt_z3:   Independent method (Z3 SMT / brute-force enumeration / DP)
+    - analytical:   Pure closed-form derivation (catches huge-N formulas & synthetic geometry)
+    -> Streaming early-abort cancels analytical if pal_alt_z3 confirms a single Stage-1A PAL.
+  Stage 2 (Conditional Streaming Wave 2 — fires on disagreement, single uncorroborated PAL, or 0 PAL):
+    - falsifier_bruteforce: Differential falsifier against competing Wave-1 candidates + graveyard
+    - falsifier_reread:     Strictly UNANCHORED constraint-by-constraint clean-room verifier
+    - falsifier_numeric_z3: Strictly UNANCHORED Z3/SymPy + 50-digit mpmath/numpy numerical
+                            coordinate/optimization/root-finding/recurrence-pattern solver
+    -> Streaming early-abort cancels lagging slot(s) on 2 Wave-2 PAL consensus (or unanchored single-PAL match).
+  Stage 3 (Conditional Streaming Wave 3 — ONLY when 0 valid PALs across Wave 1 & Wave 2):
+    - w3_pal_numeric_exact: Dedicated 50-digit mpmath/numpy solver (banned from slow symbolic solve)
+    - w3_analytical_deep_a: Clean-room rigorous IMO/Putnam proof (zero graveyard pollution)
+    - w3_analytical_deep_b: Clean-room independent alternative mathematical proof
+    -> Streaming early-abort cancels the lagging 3rd slot as soon as ANY 2 agree.
+  Stage 4 (Conditional 1-call Executable Verification Arbiter on close ties).
 """
 
 from __future__ import annotations
 
 import ast
 import asyncio
+import importlib.util
 import math
 import re
 import time
@@ -126,6 +136,16 @@ def extract_answer_from_stdout(stdout: str) -> str:
     return ""
 
 
+def _looks_like_concise_answer(val: str) -> bool:
+    """Reject rambling multi-sentence prose accidentally matched after 'ANSWER:'."""
+    s = val.strip()
+    if not s or len(s) > 80 or "?" in s:
+        return False
+    if len(s.split()) > 6:
+        return False
+    return True
+
+
 def extract_answer_from_prose(text: str) -> str:
     if not text:
         return ""
@@ -133,16 +153,20 @@ def extract_answer_from_prose(text: str) -> str:
     lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
     for ln in reversed(lines):
         val = _match_answer_line(ln)
-        if val:
+        if val and _looks_like_concise_answer(val):
             return val
-    # Also scan inline **ANSWER: ...** anywhere near end of prose
-    inline = re.findall(r"(?:FINAL[_\s]*)?ANSWER\s*[:=]\s*([^\n\*`]+)", text, re.IGNORECASE)
-    if inline:
-        return _strip_md_wrappers(inline[-1])
-    # Next prefer last \boxed{...}
+    # Next prefer last \boxed{...} (cleaner than inline 'answer:' inside rambling scratchpad)
     boxed = _BOXED_RE.findall(text)
     if boxed:
-        return boxed[-1].strip()
+        for b in reversed(boxed):
+            if _looks_like_concise_answer(b):
+                return b.strip()
+    # Also scan inline **ANSWER: ...** anywhere near end of prose
+    inline = re.findall(r"(?:FINAL[_\s]*)?ANSWER\s*[:=]\s*([^\n\*`]+)", text, re.IGNORECASE)
+    for cand in reversed(inline):
+        cleaned = _strip_md_wrappers(cand)
+        if _looks_like_concise_answer(cleaned):
+            return cleaned
     return ""
 
 
@@ -364,18 +388,150 @@ def _has_executable_assert(code: str) -> bool:
 
 
 _INT_EXPECTED_RE = re.compile(
-    r"(?:ANSWER\s*[:=]\s*<\s*int(?:eger)?\s*>|exact\s+integer|is\s+an\s+integer\b|integer\s+from\s+\d+\s+to\s+\d+)",
+    r"(?:"
+    r"ANSWER\s*[:=]\s*<\s*int(?:eger)?\s*>"
+    r"|exact\s+integer"
+    r"|is\s+an\s+integer\b"
+    r"|integer\s+from\s+\d+\s+to\s+\d+"
+    r"|remainder\s+when\b.{0,120}\bdivided\s+by\s+\d+"
+    r"|greatest\s+(?:possible\s+)?(?:positive\s+)?integer"
+    r"|least\s+(?:possible\s+)?(?:positive\s+)?integer"
+    r"|smallest\s+(?:possible\s+)?(?:positive\s+)?integer"
+    r"|largest\s+(?:possible\s+)?(?:positive\s+)?integer"
+    r"|sum\s+of\s+all\s+(?:possible\s+)?(?:positive\s+)?integers"
+    r"|relatively\s+prime\s+positive\s+integers.{0,120}\b(?:find|compute|determine)\s+[a-z]\s*\+\s*[a-z]\b"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+
+_COUNT_INT_RE = re.compile(r"(?:\bfind\s+the\s+number\s+of\b|\bhow\s+many\b)", re.IGNORECASE)
+_NON_INT_PROMPT_RE = re.compile(
+    r"(?:\bprobability\b|\bexpected\b|\baverage\b|\bfraction\b|\brational\b|\bdecimal\b|\bratio\b|\bpercentage\b)",
     re.IGNORECASE,
 )
 
+_MULTI_VALUE_PROMPT_RE = re.compile(
+    r"(?:ordered\s+pair|tuple|list\s+of|comma[- ]separated|all\s+values\s+of|coordinates\s+of|two\s+numbers|space[- ]separated)",
+    re.IGNORECASE,
+)
+
+_MULTI_NUM_GARBAGE_RE = re.compile(r"^-?\d+(?:\.\d+)?(?:\s+-?\d+(?:\.\d+)?)+$")
+
+
+_INT_RANGE_RE = re.compile(
+    r"integer\s*(?:\(\s*(-?\d+)\s*(?:to|\.\.|-)\s*(-?\d+)\s*\)|from\s+(-?\d+)\s+to\s+(-?\d+)|between\s+(-?\d+)\s+and\s+(-?\d+))",
+    re.IGNORECASE,
+)
+_REMAINDER_MOD_RE = re.compile(
+    r"remainder\s+when\b.{0,120}\bdivided\s+by\s+(\d+)",
+    re.IGNORECASE | re.DOTALL,
+)
+_SANDBOX_PATH_RE = re.compile(r"(?:/Users/[^\s'\"]+|/private/var/[^\s'\"]+|/tmp/[^\s'\"]+|/home/[^\s'\"]+)")
+
+
+def _sandbox_package_guidance() -> str:
+    """Detect installed scientific Python packages once so PAL scripts never crash on missing imports."""
+    checked = ("sympy", "z3", "numpy", "mpmath", "scipy", "shapely", "cvxpy", "networkx")
+    avail: list[str] = []
+    missing: list[str] = []
+    for pkg in checked:
+        if importlib.util.find_spec(pkg) is not None:
+            avail.append(pkg)
+        else:
+            missing.append(pkg)
+    msg = f"Python 3 stdlib (fractions, itertools, math, decimal, random)"
+    if avail:
+        msg += ", " + ", ".join(avail)
+    if missing:
+        msg += f". NOT installed (do NOT import): {', '.join(missing)}"
+    return msg
+
+
+_SANDBOX_PKG_HINT = _sandbox_package_guidance()
+
+
+def _sanitize_sandbox_diag(text: str, limit: int = 700) -> str:
+    """Strip local host paths and truncate sandbox stdout/stderr cleanly for TIR repair."""
+    if not text:
+        return ""
+    cleaned = _SANDBOX_PATH_RE.sub("<sandbox>", text.strip())
+    if len(cleaned) > limit:
+        return "...(truncated)...\n" + cleaned[-limit:]
+    return cleaned
+
+
+def _extract_int_bounds(problem: str) -> Optional[tuple[int, int]]:
+    """Extract explicit inclusive integer bounds [lo, hi] stated in the prompt, if any."""
+    lo: Optional[int] = None
+    hi: Optional[int] = None
+    for m in _INT_RANGE_RE.finditer(problem):
+        vals = [g for g in m.groups() if g is not None]
+        if len(vals) == 2:
+            a, b = int(vals[0]), int(vals[1])
+            if a <= b:
+                lo = a if lo is None else max(lo, a)
+                hi = b if hi is None else min(hi, b)
+    for m in _REMAINDER_MOD_RE.finditer(problem):
+        mod = int(m.group(1))
+        if mod >= 2:
+            lo = 0 if lo is None else max(lo, 0)
+            hi = (mod - 1) if hi is None else min(hi, mod - 1)
+    if lo is not None and hi is not None and lo <= hi:
+        return (lo, hi)
+    return None
+
+
+def _format_rejection_reason(problem: str, norm_answer: str) -> str:
+    """Return an empty string if norm_answer satisfies prompt format/range, else a concise reason."""
+    if not norm_answer:
+        return "empty answer"
+    cleaned = norm_answer.strip()
+    if cleaned.lower() in {"nan", "inf", "-inf", "+inf", "none", "null"}:
+        return f"invalid non-finite/null value {cleaned!r}"
+    if not _looks_like_concise_answer(cleaned) and not re.fullmatch(r"-?\d+(?:/\d+)?", cleaned):
+        return "output looks like rambling prose instead of a concise exact value"
+    # Reject accidental multi-number stdout dumps like "7 0.44239822567..." unless prompt expects multiple values
+    if _MULTI_NUM_GARBAGE_RE.fullmatch(cleaned) and not _MULTI_VALUE_PROMPT_RE.search(problem):
+        return f"multi-number stdout dump {cleaned!r}; print a single exact value"
+    expects_int = bool(
+        _INT_EXPECTED_RE.search(problem)
+        or (_COUNT_INT_RE.search(problem) and not _NON_INT_PROMPT_RE.search(problem))
+    )
+    if expects_int:
+        if not re.fullmatch(r"-?\d+", cleaned):
+            return f"expected an exact integer, got {cleaned!r}"
+        bounds = _extract_int_bounds(problem)
+        if bounds is not None:
+            v = int(cleaned)
+            if v < bounds[0] or v > bounds[1]:
+                return f"integer {v} is outside the required range [{bounds[0]}, {bounds[1]}]"
+    return ""
+
 
 def _answer_satisfies_prompt_format(problem: str, norm_answer: str) -> bool:
-    """Reject blatantly format-invalid answers (e.g. unsimplified radicals when prompt demands an integer)."""
-    if not norm_answer:
-        return False
-    if _INT_EXPECTED_RE.search(problem):
-        return bool(re.fullmatch(r"-?\d+", norm_answer.strip()))
-    return True
+    """Reject blatantly format-invalid or out-of-range answers (never rejecting exact 25-digit rationals)."""
+    return _format_rejection_reason(problem, norm_answer) == ""
+
+
+def _non_anchoring_error_hint(err: str) -> str:
+    """Extract a compact error class/hint with ALL multi-digit numbers stripped so follow-up slots never anchor."""
+    if not err:
+        return ""
+    s = err.strip()
+    if s.startswith("TIMEOUT"):
+        return "TIMEOUT (avoid slow brute-force loops or symbolic sympy.solve; use exact DP, Z3, or 50-digit mpmath/numpy)"
+    lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
+    tail = lines[-1] if lines else s
+    if tail.startswith("AssertionError"):
+        return "AssertionError (constraint check failed)"
+    m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception))\b", tail)
+    if m:
+        return m.group(1)
+    if "no ANSWER line" in s:
+        return "Missing `ANSWER: <value>` stdout line"
+    if "No valid Python" in s:
+        return "Missing fenced ```python``` code block"
+    return "Runtime/format failure"
 
 
 def _branch_weight(o: BranchOutcome) -> float:
@@ -471,6 +627,63 @@ def _slot_done_payload(
     }
 
 
+_W2_UNANCHORED_REREAD_CARD = (
+    "Solve this problem completely fresh from first principles by re-reading EVERY sentence carefully.\n"
+    "Rules:\n"
+    "- Quote each constraint as a `# C1: ...`, `# C2: ...` comment in Python so you cannot miss a subtle word "
+    "('at least' vs 'exactly', 'next to two other', inclusive vs exclusive, ordered vs unordered, 2x symmetry).\n"
+    "- Write a clean, exact Python verification script (`int`, `fractions.Fraction`, `sympy`, `math`, `itertools`, or `z3`) "
+    "that checks EVERY quoted constraint `# C1..Ck` with explicit `assert` statements.\n"
+    "- Keep code compact (<85 lines). Print `VERIFIED`, then print `ANSWER: <exact_value>` on the LAST line of stdout.\n"
+    "- Output ONLY one complete fenced ```python``` block."
+)
+
+_W2_NUMERIC_Z3_CARD = (
+    "Discard prior derivations and solve this problem cleanly from scratch using the fastest reliable tool "
+    "in our sandbox (`z3`, `sympy`, `fractions.Fraction`, `numpy`, `mpmath` — NOTE: `scipy` is NOT installed!).\n"
+    "Rules:\n"
+    "- Discrete / logic / LP / minimax / scheduling / exact combinatorics: use `z3` (`z3.Int`/`z3.Real`/`z3.Optimize()`) "
+    "or exact DP / `Fraction` / `sympy.Matrix`.\n"
+    "- Continuous geometry, coordinate placement, extrema/optimization, nonlinear/radical equations (`m + n*sqrt(p)`), "
+    "or polynomial roots: DO NOT hang in symbolic `sympy.solve()`! Solve numerically to 40-50 digits with `mpmath` "
+    "(`mpmath.mp.dps = 50`, `mpmath.findroot`, `mpmath.polyroots`, or pure-Python Weiszfeld / Nelder-Mead / grid-refine), "
+    "verify residuals < 1e-25, snap to the exact integer / `Fraction` / `m + n*sqrt(p)` (via `mpmath.identify` or small-integer "
+    "search checking residual < 1e-20), and verify all equations.\n"
+    "- Geometric probability / expected values: compute exact pairwise expectation AND cross-check with a fast seeded "
+    "`random.Random(42)` simulation (30000-50000 trials) to catch 2x symmetry/ordering mistakes.\n"
+    "- Huge-index recurrences (e.g. n=2025): compute small exact `Fraction` terms k=1..10 first, discover & assert the "
+    "exact closed-form / modular recurrence, then evaluate at large n.\n"
+    "- Print `VERIFIED`, then print `ANSWER: <exact_value>` on the LAST line of stdout. Output ONLY one fenced ```python``` block."
+)
+
+_W3_NUMERIC_EXACT_CARD = (
+    "Prior symbolic or brute-force Python scripts failed or timed out. Solve this problem in a SHORT (<75 lines), "
+    "ultra-fast numerical-verification Python script (`mpmath` with `mp.mp.dps = 50`, `numpy`, `fractions.Fraction`, `random`).\n"
+    "CRITICAL RULES:\n"
+    "- NEVER call slow symbolic `sympy.solve()` on nonlinear/geometry/radical systems and NEVER write huge brute-force loops.\n"
+    "- NEVER `import scipy` (not installed — write 10 lines of pure Python / `mpmath` / `numpy` instead).\n"
+    "- For geometry / optimization / roots: place coordinates numerically to 40-50 digits in `mpmath`, verify EVERY length/angle/equation "
+    "residual < 1e-25, then snap the target quantity to exact integer / `Fraction` / `m + n*sqrt(p)` (residual < 1e-20).\n"
+    "- For expected values / probability: combine exact symmetry/linearity of expectation with a fast `random.Random(42)` cross-check.\n"
+    "- For huge-index recurrences: compute k=1..12 in exact `Fraction` to uncover & assert the closed form / period mod M.\n"
+    "- Print `VERIFIED`, then print `ANSWER: <exact_value>` on the LAST line of stdout. Output ONLY one fenced ```python``` block."
+)
+
+_W3_ANALYTICAL_DEEP_A_CARD = (
+    "Solve this problem completely from first principles with a rigorous step-by-step mathematical proof "
+    "(synthetic geometry, algebra, number theory, or combinatorics — do NOT write a script).\n"
+    "- Check every constraint, boundary condition, symmetry factor, and arithmetic calculation twice.\n"
+    "- End with `ANSWER: <exact_value>`."
+)
+
+_W3_ANALYTICAL_DEEP_B_CARD = (
+    "Solve this problem independently via an ALTERNATIVE mathematical approach (e.g. coordinate/trigonometric/algebraic "
+    "if the obvious route is synthetic, or generating functions/bijection/linearity of expectation if obvious route is casework).\n"
+    "- Explicitly check for off-by-2 symmetry, ordered-vs-unordered double-counting, and arithmetic slips.\n"
+    "- End with `ANSWER: <exact_value>`."
+)
+
+
 async def solve_reasoning(
     client: TensorFoldClient,
     skills: SkillPack,
@@ -481,9 +694,19 @@ async def solve_reasoning(
     sandbox_timeout_s: float = 20.0,
     deep: bool = False,
     enable_wave2: bool = True,
+    max_pal_repairs: int = 1,
     on_event: Optional[Callable[[dict[str, Any]], None]] = None,
 ) -> ReasonForgeTrace:
-    """Solve a hard math, logic, combinatorics, probability, or constraint problem."""
+    """Solve a hard math, logic, combinatorics, probability, or constraint problem.
+
+    ReasonForge v5 combines:
+      1. Fast Pair Stage 1A (`pal_exact` + `pal_skeptic`) with inline zero-anchoring Executable TIR
+         Self-Repair (1 surgical REPL debug turn when a script crashes or violates prompt range).
+      2. Full Stage 1B Wave-1 completion (`pal_alt_z3` + `analytical`) whenever Stage 1A does not agree.
+      3. Streaming Wave-2 & Wave-3 early-abort with anti-anchoring + 50-digit `mpmath`/`numpy`
+         numerical coordinate/optimization verification + multi-turn REPL repair on 0-PAL problems.
+      4. 1-call Executable Verification Arbiter (with TIR self-repair) on close ties.
+    """
     t0 = time.perf_counter()
     trace = ReasonForgeTrace()
 
@@ -491,52 +714,207 @@ async def solve_reasoning(
     if lessons_block:
         trace.lessons_used = lessons_block.count("\n- [")
 
-    # Shared cached prefix across ALL Wave-1 streams so TensorFold's 16 GiB prompt cache hits!
+    # Shared cached prefix across PAL streams so prompt cache hits cleanly!
     shared_sys = (
-        "You are a precision reasoning engine running inside a verified neuro-symbolic sandbox "
-        "with Python 3, sympy, z3, fractions, itertools, math, and numpy available.\n"
+        "You are a precision reasoning engine running inside a verified neuro-symbolic sandbox.\n"
+        f"Environment: {_SANDBOX_PKG_HINT}.\n"
         "Never guess arithmetic, combinatorics, or constraint satisfaction in prose when Python can compute and verify it exactly."
     )
     if lessons_block:
         shared_sys += "\n\n" + lessons_block
+
+    math_sys = "You are an IMO/Putnam gold-medalist mathematician. Be rigorous, concise, and exact."
 
     exemplar_block = skills.match_exemplars("pal_verify", problem, limit=1)
     shared_user_prefix = f"PROBLEM:\n{problem.strip()}"
     if exemplar_block:
         shared_user_prefix += f"\n\n{exemplar_block}"
 
-    # Wave 1: Role-seeded parallel streams (B=4; skip serial warm_prefix RTT which thrashes hybrid SSM cache!)
-    # Keep PAL thinking crisp (tb=700) without forcing low-effort truncation on hard Olympiad math;
-    # Wave-1 streaming early-abort handles the latency win cleanly once 2 independent PALs agree!
+    # Keep battle-tested v2 cards 100% unmodified in Wave 1!
     think_pal = 1200 if deep else 700
     think_ana = 2000 if deep else 1300
     pal_effort = None
 
     wave1_roles = [
         ("pal_exact", "pal", skills.card("pal_exact"), 0.25, 101, think_pal),
-        ("pal_alt_z3", "pal", skills.card("pal_alt_z3"), 0.60, 202, think_pal),
         ("pal_skeptic", "pal", skills.card("pal_skeptic"), 0.45, 303, think_pal),
+        ("pal_alt_z3", "pal", skills.card("pal_alt_z3"), 0.60, 202, think_pal),
         ("analytical", "analytical", skills.card("reason_analytical"), 0.40, 404, think_ana),
-    ][:num_wave1_streams]
+    ][: max(1, num_wave1_streams)]
 
-    specs: list[CallSpec] = []
-    for name, kind, card_text, temp, seed, t_budget in wave1_roles:
-        specs.append(
-            CallSpec(
-                messages=[
-                    {"role": "system", "content": shared_sys},
-                    {"role": "user", "content": f"{shared_user_prefix}\n\nPROTOCOL ({name}):\n{card_text}"},
-                ],
-                tag=f"w1_{name}",
-                max_tokens=t_budget + 2000,
-                temperature=temp,
-                seed=seed,
-                enable_thinking=True,
-                thinking_budget=t_budget,
-                reasoning_effort=pal_effort,
-                loop_guard=True,
-            )
+    def _make_w1_spec(
+        name: str, kind: str, card_text: str, temp: float, seed: int, t_budget: int, extra_note: str = ""
+    ) -> CallSpec:
+        user_content = f"{shared_user_prefix}\n\nPROTOCOL ({name}):\n{card_text}"
+        if extra_note:
+            user_content += f"\n\n{extra_note}"
+        return CallSpec(
+            messages=[
+                {"role": "system", "content": shared_sys},
+                {"role": "user", "content": user_content},
+            ],
+            tag=f"w1_{name}",
+            max_tokens=t_budget + 2000,
+            temperature=temp,
+            seed=seed,
+            enable_thinking=True,
+            thinking_budget=t_budget,
+            reasoning_effort=pal_effort,
+            loop_guard=True,
         )
+
+    def _is_valid_pal(o: Optional[BranchOutcome]) -> bool:
+        return bool(
+            o is not None
+            and o.kind == "pal"
+            and o.exec_result
+            and o.exec_result.ok
+            and not o.error
+            and o.norm_answer
+            and _answer_satisfies_prompt_format(problem, o.norm_answer)
+        )
+
+    def _is_valid_any(o: Optional[BranchOutcome]) -> bool:
+        if o is None or not o.norm_answer or not _answer_satisfies_prompt_format(problem, o.norm_answer):
+            return False
+        if o.kind == "pal":
+            return _is_valid_pal(o)
+        return not o.error
+
+    async def _repair_pal_outcome_inplace(
+        out: BranchOutcome,
+        *,
+        base_tag: str,
+        exec_timeout_s: float,
+        max_repairs: int,
+        seed: int,
+    ) -> int:
+        """Interactive zero-anchoring TIR REPL debug loop: feeds ONLY this script's own code +
+        sanitized stdout/stderr/format-rejection back to fix 1-line Python bugs, missing packages,
+        timeouts, or out-of-range answers without discarding sound mathematical models."""
+        extra_tok = 0
+        for attempt in range(1, max(0, max_repairs) + 1):
+            if _is_valid_pal(out):
+                break
+            # Build concise, path-scrubbed sandbox diagnostic (never leaks another slot's answer!)
+            diag_parts: list[str] = []
+            if out.error:
+                diag_parts.append(f"ERROR:\n{_sanitize_sandbox_diag(out.error, 700)}")
+            if out.exec_result and out.exec_result.stdout.strip():
+                diag_parts.append(f"STDOUT:\n{_sanitize_sandbox_diag(out.exec_result.stdout, 700)}")
+            if out.norm_answer:
+                rej = _format_rejection_reason(problem, out.norm_answer)
+                if rej:
+                    diag_parts.append(f"FORMAT/RANGE CHECK FAILED: {rej}")
+            diag_block = "\n\n".join(diag_parts) if diag_parts else "Execution failed with no output."
+
+            if out.code:
+                fix_user = (
+                    f"PROBLEM:\n{problem.strip()}\n\n"
+                    f"YOUR PREVIOUS PYTHON SCRIPT:\n```python\n{out.code[:2800]}\n```\n\n"
+                    f"SANDBOX FEEDBACK:\n{diag_block}\n\n"
+                    "TASK: Fix the exact bug, missing import, timeout, or format/range error cleanly.\n"
+                    f"- Environment: {_SANDBOX_PKG_HINT}.\n"
+                    "- If the script timed out in slow symbolic `sympy.solve()` or huge loops, switch to fast "
+                    "50-digit `mpmath`/`numpy` numerical solving (snap to exact integer/radical and verify residuals < 1e-20) or exact DP.\n"
+                    "- If STDOUT already printed intermediate numbers, use them to fix the final step cleanly.\n"
+                    "- Print `ANSWER: <exact_value>` on the LAST line of stdout. Output ONLY one complete fenced ```python``` block."
+                )
+            else:
+                fix_user = (
+                    f"PROBLEM:\n{problem.strip()}\n\n"
+                    "SANDBOX FEEDBACK: No fenced ```python``` code block was extracted from your previous reply.\n"
+                    f"TASK: Write a concise (<70 lines) Python script ({_SANDBOX_PKG_HINT}) computing and verifying "
+                    "the exact answer. Print `ANSWER: <exact_value>` on the LAST line of stdout. Output ONLY one fenced ```python``` block."
+                )
+
+            fix_tb = 450 if attempt == 1 else 650
+            fix_res = await client.complete(
+                CallSpec(
+                    messages=[
+                        {"role": "system", "content": shared_sys},
+                        {"role": "user", "content": fix_user},
+                    ],
+                    tag=f"{base_tag}_fix{attempt}",
+                    max_tokens=fix_tb + 2000,
+                    temperature=0.15 if attempt == 1 else 0.30,
+                    seed=seed + 1000 * attempt,
+                    enable_thinking=True,
+                    thinking_budget=fix_tb,
+                    reasoning_effort=pal_effort,
+                    loop_guard=True,
+                )
+            )
+            extra_tok += int(getattr(fix_res, "completion_tokens", 0) or 0)
+            out.latency_s += float(fix_res.latency_s or 0.0)
+            if not fix_res.ok:
+                break
+            repaired = BranchOutcome(
+                name=out.name,
+                wave=out.wave,
+                kind="pal",
+                raw_content=fix_res.content,
+                reasoning=fix_res.reasoning,
+                latency_s=out.latency_s,
+                error=fix_res.raw_error or "",
+            )
+            await asyncio.to_thread(_execute_pal_outcome, repaired, exec_timeout_s)
+            # Adopt repaired attempt if it became valid OR produced fresher code/diagnostics for a 2nd turn
+            if _is_valid_pal(repaired) or repaired.code:
+                out.raw_content = repaired.raw_content
+                out.reasoning = repaired.reasoning
+                out.code = repaired.code
+                out.exec_result = repaired.exec_result
+                out.raw_answer = repaired.raw_answer
+                out.norm_answer = repaired.norm_answer
+                out.verified_constraints = repaired.verified_constraints
+                out.error = repaired.error
+        return extra_tok
+
+    async def _run_single_slot(
+        idx: int,
+        name: str,
+        kind: str,
+        wave: int,
+        spec: CallSpec,
+        exec_timeout_s: float,
+        *,
+        repairs: Optional[int] = None,
+    ) -> tuple[int, BranchOutcome, int, float]:
+        slot_t0 = time.perf_counter()
+        res = await client.complete(spec)
+        tok = int(getattr(res, "completion_tokens", 0) or 0)
+        out = BranchOutcome(
+            name=name,
+            wave=wave,
+            kind=kind,
+            raw_content=res.content,
+            reasoning=res.reasoning,
+            latency_s=res.latency_s,
+            error=res.raw_error or "",
+        )
+        if res.ok:
+            if kind == "pal":
+                await asyncio.to_thread(_execute_pal_outcome, out, exec_timeout_s)
+                n_rep = max_pal_repairs if repairs is None else repairs
+                if n_rep > 0 and not _is_valid_pal(out):
+                    tok += await _repair_pal_outcome_inplace(
+                        out,
+                        base_tag=spec.tag,
+                        exec_timeout_s=exec_timeout_s,
+                        max_repairs=n_rep,
+                        seed=int(spec.seed or 0) + idx + 1,
+                    )
+            else:
+                raw_ans = extract_answer_from_prose(res.content)
+                out.raw_answer = raw_ans
+                out.norm_answer = normalize_answer(raw_ans)
+        slot_elapsed = max(time.perf_counter() - slot_t0, float(out.latency_s or 0.0))
+        return idx, out, tok, slot_elapsed
+
+    def _is_suspect_empty_zero(ans: str) -> bool:
+        """Guard against `sum([]) == 0` empty-search false consensus on non-remainder prompts."""
+        return ans == "0" and not bool(_REMAINDER_MOD_RE.search(problem))
 
     _emit(
         on_event,
@@ -544,55 +922,34 @@ async def solve_reasoning(
             "engine": "reason",
             "event": "start",
             "mode": "reason",
-            "streams": len(specs),
+            "streams": len(wave1_roles),
         },
     )
 
     ordered_outcomes: list[Optional[BranchOutcome]] = [None] * len(wave1_roles)
-    if callable(getattr(client, "complete", None)):
-        # True streaming Wave-1 early-abort: run each slot + sandbox immediately on completion
-        # and cancel lagging GPU requests the instant 2 independent PAL scripts agree!
-        async def _run_w1_slot(
-            idx: int, name: str, kind: str, spec: CallSpec
-        ) -> tuple[int, BranchOutcome, int, float]:
-            slot_t0 = time.perf_counter()
-            res = await client.complete(spec)
-            tok = int(getattr(res, "completion_tokens", 0) or 0)
-            out = BranchOutcome(
-                name=name,
-                wave=1,
-                kind=kind,
-                raw_content=res.content,
-                reasoning=res.reasoning,
-                latency_s=res.latency_s,
-                error=res.raw_error or "",
+    has_complete = callable(getattr(client, "complete", None))
+
+    if has_complete:
+        # Stage 1A: Fast Pair (pal_exact + pal_skeptic) -> instant 2-call exit on verified agreement!
+        pair_count = min(2, len(wave1_roles))
+        pair_tasks = [
+            asyncio.create_task(
+                _run_single_slot(
+                    i,
+                    wave1_roles[i][0],
+                    wave1_roles[i][1],
+                    1,
+                    _make_w1_spec(*wave1_roles[i]),
+                    sandbox_timeout_s,
+                )
             )
-            if res.ok:
-                if kind == "pal":
-                    await asyncio.to_thread(_execute_pal_outcome, out, sandbox_timeout_s)
-                else:
-                    raw_ans = extract_answer_from_prose(res.content)
-                    out.raw_answer = raw_ans
-                    out.norm_answer = normalize_answer(raw_ans)
-            slot_elapsed = max(time.perf_counter() - slot_t0, float(out.latency_s or 0.0))
-            return idx, out, tok, slot_elapsed
-
-        slot_tasks: list[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = [
-            asyncio.create_task(_run_w1_slot(i, name, kind, spec))
-            for i, ((name, kind, _, _, _, _), spec) in enumerate(zip(wave1_roles, specs))
+            for i in range(pair_count)
         ]
-        pal_verified_so_far: list[BranchOutcome] = []
-        early_aborted = False
-
-        pending: set[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = set(slot_tasks)
+        pending_1a: set[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = set(pair_tasks)
         try:
-            while pending:
-                done_set, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-                completed_batch: list[tuple[int, BranchOutcome, int, float]] = [
-                    done_task.result() for done_task in done_set
-                ]
-                completed_batch.sort(key=lambda item: item[0])
-                for idx, out, tok, slot_elapsed in completed_batch:
+            while pending_1a:
+                done_set, pending_1a = await asyncio.wait(pending_1a, return_when=asyncio.FIRST_COMPLETED)
+                for idx, out, tok, slot_elapsed in sorted((t.result() for t in done_set), key=lambda item: item[0]):
                     ordered_outcomes[idx] = out
                     _emit(
                         on_event,
@@ -606,52 +963,123 @@ async def solve_reasoning(
                             wave=1,
                         ),
                     )
-                    if (
-                        out.kind == "pal"
-                        and out.norm_answer
-                        and _answer_satisfies_prompt_format(problem, out.norm_answer)
-                    ):
-                        pal_verified_so_far.append(out)
-
-                if pending and pal_verified_so_far:
-                    clusters_now = _cluster_answers(pal_verified_so_far)
-                    if clusters_now and len(clusters_now[0][1]) >= 2:
-                        top_ans = clusters_now[0][0]
-                        ana_contradicts = any(
-                            o is not None
-                            and o.kind == "analytical"
-                            and o.norm_answer
-                            and not _answers_equivalent(o.norm_answer, top_ans)
-                            for o in ordered_outcomes
-                        )
-                        if not ana_contradicts or len(clusters_now[0][1]) >= 3:
-                            # 2 independent verified PAL scripts agree (with no analytical contradiction) -> cancel lagging GPU slots!
-                            early_aborted = True
-                            n_cancelled = len(pending)
-                            for lag in pending:
-                                lag.cancel()
-                            _emit(
-                                on_event,
-                                {
-                                    "engine": "reason",
-                                    "event": "early_abort",
-                                    "cancelled": n_cancelled,
-                                    "elapsed_s": round(time.perf_counter() - t0, 2),
-                                    "consensus_answer": top_ans,
-                                    "reason": f"{len(clusters_now[0][1])}/{len(specs)} PAL consensus",
-                                },
-                            )
-                            break
-            if early_aborted and pending:
-                await asyncio.gather(*pending, return_exceptions=True)
         except BaseException:
-            for lag in pending:
-                lag.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
+            for t in pending_1a:
+                t.cancel()
+            if pending_1a:
+                await asyncio.gather(*pending_1a, return_exceptions=True)
             raise
+
+        valid_1a = [o for o in ordered_outcomes[:pair_count] if _is_valid_pal(o)]
+        clusters_1a = _cluster_answers(valid_1a)
+
+        if len(valid_1a) >= 2 and len(clusters_1a) == 1 and not _is_suspect_empty_zero(clusters_1a[0][0]):
+            skipped = len(wave1_roles) - pair_count
+            if skipped > 0:
+                _emit(
+                    on_event,
+                    {
+                        "engine": "reason",
+                        "event": "early_abort",
+                        "cancelled": skipped,
+                        "elapsed_s": round(time.perf_counter() - t0, 2),
+                        "consensus_answer": clusters_1a[0][0],
+                        "reason": f"2/{len(wave1_roles)} PAL consensus",
+                    },
+                )
+        elif len(wave1_roles) > pair_count:
+            # Stage 1B: Complete v2's full Wave-1 quartet (pal_alt_z3 + analytical in parallel!)
+            # Pass ONLY non-anchoring sandbox crash classes to pal_alt_z3 when Stage 1A had a crash.
+            failed_1a = [o for o in ordered_outcomes[:pair_count] if o is not None and not _is_valid_pal(o)]
+            pitfalls = [_non_anchoring_error_hint(o.error) for o in failed_1a if o.error]
+            pitfalls = [p for p in dict.fromkeys(pitfalls) if p]
+            pal_note = (
+                f"[Sandbox pitfall to avoid: {'; '.join(pitfalls[:2])}]"
+                if pitfalls
+                else ""
+            )
+            rem_tasks = [
+                asyncio.create_task(
+                    _run_single_slot(
+                        i,
+                        wave1_roles[i][0],
+                        wave1_roles[i][1],
+                        1,
+                        _make_w1_spec(
+                            *wave1_roles[i],
+                            extra_note=(pal_note if wave1_roles[i][1] == "pal" else ""),
+                        ),
+                        sandbox_timeout_s,
+                    )
+                )
+                for i in range(pair_count, len(wave1_roles))
+            ]
+            pending_1b: set[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = set(rem_tasks)
+            pal_so_far = list(valid_1a)
+            try:
+                while pending_1b:
+                    done_set, pending_1b = await asyncio.wait(pending_1b, return_when=asyncio.FIRST_COMPLETED)
+                    for idx, out, tok, slot_elapsed in sorted((t.result() for t in done_set), key=lambda x: x[0]):
+                        ordered_outcomes[idx] = out
+                        _emit(
+                            on_event,
+                            _slot_done_payload(
+                                engine="reason",
+                                slot=idx + 1,
+                                out=out,
+                                problem=problem,
+                                elapsed_s=slot_elapsed,
+                                tokens=tok,
+                                wave=1,
+                            ),
+                        )
+                        if _is_valid_pal(out):
+                            pal_so_far.append(out)
+
+                    # Streaming early-abort in Stage 1B: ONLY when we now have 2 agreeing valid PALs,
+                    # ZERO competing PALs, and NO analytical contradiction!
+                    if pending_1b and pal_so_far:
+                        cl_now = _cluster_answers(pal_so_far)
+                        if (
+                            len(cl_now) == 1
+                            and len(cl_now[0][1]) >= 2
+                            and not _is_suspect_empty_zero(cl_now[0][0])
+                        ):
+                            top_ans = cl_now[0][0]
+                            ana_contradicts = any(
+                                o is not None
+                                and o.kind == "analytical"
+                                and _is_valid_any(o)
+                                and not _answers_equivalent(o.norm_answer, top_ans)
+                                for o in ordered_outcomes
+                            )
+                            if not ana_contradicts or len(cl_now[0][1]) >= 3:
+                                n_cancel = len(pending_1b)
+                                for lag in pending_1b:
+                                    lag.cancel()
+                                _emit(
+                                    on_event,
+                                    {
+                                        "engine": "reason",
+                                        "event": "early_abort",
+                                        "cancelled": n_cancel,
+                                        "elapsed_s": round(time.perf_counter() - t0, 2),
+                                        "consensus_answer": top_ans,
+                                        "reason": f"{len(cl_now[0][1])}/{len(wave1_roles)} PAL consensus",
+                                    },
+                                )
+                                await asyncio.gather(*pending_1b, return_exceptions=True)
+                                pending_1b.clear()
+                                break
+            except BaseException:
+                for lag in pending_1b:
+                    lag.cancel()
+                if pending_1b:
+                    await asyncio.gather(*pending_1b, return_exceptions=True)
+                raise
     else:
         # Batch fallback path for custom clients implementing only `.batch()`
+        specs = [_make_w1_spec(*r) for r in wave1_roles]
         w1_t0 = time.perf_counter()
         w1_results = await client.batch(specs) if specs else []
         pal_w1_jobs: list[BranchOutcome] = []
@@ -710,264 +1138,509 @@ async def solve_reasoning(
             )
         trace.wave1_outcomes.append(out_i)
 
-    # Evaluate Wave 1 consensus (filtering out blatantly format-invalid outputs)
-    valid_pal_w1 = [
-        o for o in trace.wave1_outcomes
-        if o.kind == "pal" and o.norm_answer and _answer_satisfies_prompt_format(problem, o.norm_answer)
-    ]
-    all_valid_w1 = [
-        o for o in trace.wave1_outcomes
-        if o.norm_answer and _answer_satisfies_prompt_format(problem, o.norm_answer)
-    ]
+    # Evaluate Wave-1 consensus (100% battle-tested v2 calibration gate!)
+    valid_pal_w1 = [o for o in trace.wave1_outcomes if _is_valid_pal(o)]
+    all_valid_w1 = [o for o in trace.wave1_outcomes if _is_valid_any(o)]
     pal_clusters = _cluster_answers(valid_pal_w1)
     all_clusters = _cluster_answers(all_valid_w1)
 
-    # Strong consensus condition:
-    # - At least 2 independent executable PAL scripts succeeded AND ALL succeeded PAL scripts agree,
-    # - AND analytical stream (if it produced an answer) does not contradict them (or 3/3 PAL scripts agree!).
     need_wave2 = False
+    w2_mode = ""
     if len(valid_pal_w1) == 0:
         need_wave2 = True
+        w2_mode = "zero_pal"
         trace.wave2_reason = "All Wave-1 Python verification scripts failed or timed out"
     elif len(pal_clusters) > 1:
         need_wave2 = True
+        w2_mode = "disagreement"
         summary = ", ".join(f"{ans} ({len(ms)})" for ans, ms in pal_clusters)
         trace.wave2_reason = f"PAL script disagreement: {summary}"
     elif len(valid_pal_w1) == 1:
-        # Only 1 script succeeded — check if analytical agrees
         if len(all_clusters) != 1 or len(all_valid_w1) < 2:
             need_wave2 = True
+            w2_mode = "single_pal"
             trace.wave2_reason = "Only 1 PAL script succeeded without independent corroboration"
     elif len(pal_clusters) == 1 and len(all_clusters) > 1 and len(valid_pal_w1) < 3:
-        # 2 PAL scripts agreed, analytical disagreed — double-check in Wave 2!
         need_wave2 = True
+        w2_mode = "disagreement"
         trace.wave2_reason = (
             f"PAL ({pal_clusters[0][0]}) disagreed with analytical stream; running falsifier"
         )
+    elif (
+        len(pal_clusters) == 1
+        and _is_suspect_empty_zero(pal_clusters[0][0])
+        and not any(
+            o.kind == "analytical" and _is_valid_any(o) and o.norm_answer == "0"
+            for o in trace.wave1_outcomes
+        )
+    ):
+        need_wave2 = True
+        w2_mode = "disagreement"
+        trace.wave2_reason = "Suspect empty-search zero (0) without analytical confirmation; running falsifier"
 
-    # Record graveyard tombstones for failed/conflicting Wave-1 attempts
+    # Record graveyard tombstones ONLY for real failures (skip early-abort placeholders)
     for o in trace.wave1_outcomes:
-        if o.error:
+        if o.error and o.error != "cancelled_early_consensus":
             trace.graveyard.append(f"[{o.name}] FAILED: {o.error[:240]}")
 
-    # Wave 2: Clean-Context Disagreement Falsifier + Hard Reset (B=3 parallel)
+    # Stage 2: Streaming Wave-2 Falsifiers (1 Differential + 2 STRICTLY UNANCHORED!)
+    _UNANCHORED_W2_ROLES = {"falsifier_reread", "falsifier_numeric_z3"}
     if need_wave2 and enable_wave2:
         trace.wave2_triggered = True
+        w2_limit = 2 if num_wave1_streams <= 2 else 3
+        w2_tb = 1150 if deep else 900
+
         conflict_lines: list[str] = []
         for rep, members in all_clusters:
             names = ", ".join(m.name for m in members)
-            sample_snip = ""
-            for m in members:
-                if m.code:
-                    sample_snip = m.code[:700]
-                    break
+            sample_snip = next((m.code[:750] for m in members if m.code), "")
             conflict_lines.append(
                 f"Candidate Answer = {rep} (from: {names})\n"
                 + (f"Excerpt of method:\n```python\n{sample_snip}\n```" if sample_snip else "")
             )
         graveyard_text = "\n".join(trace.graveyard) if trace.graveyard else "(none)"
-        dossier = (
+        diff_dossier = (
             f"PROBLEM:\n{problem.strip()}\n\n"
             f"WAVE-1 STATUS: {trace.wave2_reason}\n\n"
             f"COMPETING CANDIDATES:\n" + ("\n---\n".join(conflict_lines) if conflict_lines else "(none succeeded)")
             + f"\n\nGRAVEYARD (DO NOT REPEAT THESE BUGS):\n{graveyard_text}"
         )
 
-        w2_tb = 1100 if deep else 650
-        w2_roles = [
-            ("falsifier_bruteforce", skills.card("falsifier_bruteforce"), 0.25, 505, w2_tb),
-            ("falsifier_reread", skills.card("falsifier_reread"), 0.45, 606, w2_tb),
-            ("falsifier_z3_sympy", skills.card("falsifier_z3_sympy"), 0.40, 707, w2_tb),
+        non_anchor_hints = [
+            _non_anchoring_error_hint(o.error)
+            for o in trace.wave1_outcomes
+            if o.error and o.error != "cancelled_early_consensus"
         ]
-        w2_specs = [
-            CallSpec(
-                messages=[
-                    {"role": "system", "content": shared_sys},
-                    {"role": "user", "content": f"{dossier}\n\nPROTOCOL ({name}):\n{card_text}"},
-                ],
-                tag=f"w2_{name}",
-                max_tokens=tb + 2200,
-                temperature=temp,
-                seed=seed,
-                enable_thinking=True,
-                thinking_budget=tb,
-                reasoning_effort=pal_effort,
-                loop_guard=True,
-            )
-            for name, card_text, temp, seed, tb in w2_roles
+        non_anchor_hints = [h for h in dict.fromkeys(non_anchor_hints) if h]
+        clean_pitfall_note = (
+            "\n\n[Sandbox pitfalls to avoid: " + " | ".join(non_anchor_hints[:2]) + "]"
+            if non_anchor_hints
+            else ""
+        )
+
+        w2_candidates: list[tuple[str, str, CallSpec]] = [
+            (
+                "falsifier_bruteforce",
+                "pal",
+                CallSpec(
+                    messages=[
+                        {"role": "system", "content": shared_sys},
+                        {
+                            "role": "user",
+                            "content": f"{diff_dossier}\n\nPROTOCOL (falsifier_bruteforce):\n{skills.card('falsifier_bruteforce')}",
+                        },
+                    ],
+                    tag="w2_falsifier_bruteforce",
+                    max_tokens=w2_tb + 2200,
+                    temperature=0.25,
+                    seed=505,
+                    enable_thinking=True,
+                    thinking_budget=w2_tb,
+                    reasoning_effort=pal_effort,
+                    loop_guard=True,
+                ),
+            ),
+            (
+                "falsifier_reread",
+                "pal",
+                CallSpec(
+                    messages=[
+                        {"role": "system", "content": shared_sys},
+                        {
+                            "role": "user",
+                            "content": f"{shared_user_prefix}{clean_pitfall_note}\n\nPROTOCOL (falsifier_reread):\n{_W2_UNANCHORED_REREAD_CARD}",
+                        },
+                    ],
+                    tag="w2_falsifier_reread",
+                    max_tokens=w2_tb + 2200,
+                    temperature=0.45,
+                    seed=606,
+                    enable_thinking=True,
+                    thinking_budget=w2_tb,
+                    reasoning_effort=pal_effort,
+                    loop_guard=True,
+                ),
+            ),
+            (
+                "falsifier_numeric_z3",
+                "pal",
+                CallSpec(
+                    messages=[
+                        {"role": "system", "content": shared_sys},
+                        {
+                            "role": "user",
+                            "content": f"{shared_user_prefix}{clean_pitfall_note}\n\nPROTOCOL (falsifier_numeric_z3):\n{_W2_NUMERIC_Z3_CARD}",
+                        },
+                    ],
+                    tag="w2_falsifier_numeric_z3",
+                    max_tokens=w2_tb + 2200,
+                    temperature=0.40,
+                    seed=707,
+                    enable_thinking=True,
+                    thinking_budget=w2_tb,
+                    reasoning_effort=pal_effort,
+                    loop_guard=True,
+                ),
+            ),
         ]
+        w2_role_specs = w2_candidates[:w2_limit]
+
         _emit(
             on_event,
             {
                 "engine": "reason",
                 "event": "wave2_start",
                 "reason": trace.wave2_reason,
-                "streams": len(w2_specs),
+                "streams": len(w2_role_specs),
             },
         )
-        w2_t0 = time.perf_counter()
-        w2_results = await client.batch(w2_specs)
-        pal_w2_jobs: list[BranchOutcome] = []
-        w2_batch_outcomes: list[BranchOutcome] = []
-        for (name, _, _, _, _), res in zip(w2_roles, w2_results):
-            out = BranchOutcome(
-                name=name,
-                wave=2,
-                kind="pal",
-                raw_content=res.content,
-                reasoning=res.reasoning,
-                latency_s=res.latency_s,
-                error=res.raw_error or "",
-            )
-            if res.ok:
-                pal_w2_jobs.append(out)
-            w2_batch_outcomes.append(out)
-            trace.wave2_outcomes.append(out)
-        if pal_w2_jobs:
-            await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s + 4.0) for o in pal_w2_jobs))
-        w2_elapsed = time.perf_counter() - w2_t0
-        for w2_idx, (out, res) in enumerate(zip(w2_batch_outcomes, w2_results), start=1):
-            if out.error:
-                trace.graveyard.append(f"[{out.name}] FAILED: {out.error[:240]}")
-            exec_s = float(out.exec_result.elapsed_s) if out.exec_result else 0.0
-            slot_elapsed = (float(out.latency_s or 0.0) + exec_s) or w2_elapsed
-            _emit(
-                on_event,
-                _slot_done_payload(
-                    engine="reason",
-                    slot=w2_idx,
-                    out=out,
-                    problem=problem,
-                    elapsed_s=slot_elapsed,
-                    tokens=int(getattr(res, "completion_tokens", 0) or 0),
-                    wave=2,
-                ),
-            )
 
-        # Conditional Wave-3 Hybrid Repair + High-Effort Analytical Consensus (B=3, ONLY when 0 valid PALs!)
-        valid_pal_so_far = [
-            o
-            for o in (trace.wave1_outcomes + trace.wave2_outcomes)
-            if o.kind == "pal"
-            and o.exec_result
-            and o.exec_result.ok
-            and o.norm_answer
-            and _answer_satisfies_prompt_format(problem, o.norm_answer)
-        ]
-        if not valid_pal_so_far:
-            closest_pal = next(
-                (o for o in reversed(trace.wave2_outcomes + trace.wave1_outcomes) if o.kind == "pal" and o.code),
-                None,
-            )
-            w3_dossier = (
-                f"PROBLEM:\n{problem.strip()}\n\n"
-                "CRITICAL: Wave-1 and Wave-2 Python scripts failed or produced format-invalid output.\n"
-                "GRAVEYARD OF PRIOR ATTEMPTS:\n" + "\n".join(trace.graveyard[-6:])
-                + (
-                    f"\n\nCLOSEST SCRIPT (`{closest_pal.name}`):\n```python\n{closest_pal.code[:2200]}\n```"
-                    if closest_pal
-                    else ""
+        w2_ordered: list[Optional[BranchOutcome]] = [None] * len(w2_role_specs)
+        if has_complete:
+            w2_tasks = [
+                asyncio.create_task(
+                    _run_single_slot(i, name, kind, 2, spec, sandbox_timeout_s + 4.0)
                 )
-            )
-            w3_roles = [
-                (
-                    "w3_pal_z3_exact",
-                    "pal",
-                    "Write a SHORT (<55 lines), rock-solid `z3` (`z3.Optimize()` with `z3.Real`/`z3.Int`) OR `sympy` "
-                    "script directly modeling the equations/constraints (or clean coordinate/numerical verification snapped to exact answer). "
-                    "Print `ANSWER: <exact_value>` on the last line. Output ONLY one ```python``` block.",
-                    0.20,
-                    808,
-                    1000,
-                ),
-                (
-                    "w3_analytical_deep_a",
-                    "analytical",
-                    "Solve this problem completely from first principles with rigorous step-by-step mathematical proof "
-                    "(synthetic geometry, algebra, number theory, or combinatorics — do NOT write a broken script). "
-                    "Verify every step, symmetry factor, and arithmetic calculation twice. End with `ANSWER: <exact_value>`.",
-                    0.25,
-                    909,
-                    1800,
-                ),
-                (
-                    "w3_analytical_deep_b",
-                    "analytical",
-                    "Solve this problem independently via an ALTERNATIVE mathematical approach (e.g., coordinate/trigonometric/algebraic "
-                    "if the obvious route is synthetic, or vice versa). Double-check for off-by-2 symmetry or counting traps. "
-                    "End with `ANSWER: <exact_value>`.",
-                    0.55,
-                    1010,
-                    1800,
-                ),
+                for i, (name, kind, spec) in enumerate(w2_role_specs)
             ]
-            w3_specs = [
-                CallSpec(
-                    messages=[
-                        {"role": "system", "content": shared_sys if kind == "pal" else "You are an IMO/Putnam gold-medalist mathematician. Be rigorous and exact."},
-                        {"role": "user", "content": f"{w3_dossier}\n\nPROTOCOL ({name}):\n{card_text}"},
-                    ],
-                    tag=name,
-                    max_tokens=8192 if kind == "analytical" else tb + 2200,
-                    temperature=temp,
-                    seed=seed,
-                    enable_thinking=True,
-                    thinking_budget=tb,
-                    loop_guard=True,
-                )
-                for name, kind, card_text, temp, seed, tb in w3_roles
-            ]
-            w3_t0 = time.perf_counter()
-            w3_results = await client.batch(w3_specs)
-            pal_w3_jobs: list[BranchOutcome] = []
-            w3_batch_outcomes: list[BranchOutcome] = []
-            for (name, kind, _, _, _, _), res in zip(w3_roles, w3_results):
+            pending_w2: set[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = set(w2_tasks)
+            w2_valid_pals: list[BranchOutcome] = []
+            try:
+                while pending_w2:
+                    done_set, pending_w2 = await asyncio.wait(pending_w2, return_when=asyncio.FIRST_COMPLETED)
+                    for idx, out, tok, slot_elapsed in sorted((t.result() for t in done_set), key=lambda x: x[0]):
+                        w2_ordered[idx] = out
+                        if out.error:
+                            trace.graveyard.append(f"[{out.name}] FAILED: {out.error[:240]}")
+                        _emit(
+                            on_event,
+                            _slot_done_payload(
+                                engine="reason",
+                                slot=idx + 1,
+                                out=out,
+                                problem=problem,
+                                elapsed_s=slot_elapsed,
+                                tokens=tok,
+                                wave=2,
+                            ),
+                        )
+                        if _is_valid_pal(out):
+                            w2_valid_pals.append(out)
+
+                    if not pending_w2 or not w2_valid_pals:
+                        continue
+
+                    w2_abort_ans: Optional[str] = None
+                    w2_abort_reason = ""
+                    w2_cl = _cluster_answers(w2_valid_pals)
+
+                    if w2_cl and len(w2_cl[0][1]) >= 2:
+                        w2_abort_ans = w2_cl[0][0]
+                        w2_abort_reason = f"2/{len(w2_role_specs)} Wave-2 PAL consensus"
+                    elif (
+                        w2_mode == "single_pal"
+                        and len(w2_cl) == 1
+                        and any(
+                            p.name in _UNANCHORED_W2_ROLES
+                            and _answers_equivalent(p.norm_answer, valid_pal_w1[0].norm_answer)
+                            for p in w2_valid_pals
+                        )
+                    ):
+                        # Only abort single-PAL escalation if no Wave-1 analytical contradicts it!
+                        w1_ana_contradicts = any(
+                            o.kind == "analytical"
+                            and _is_valid_any(o)
+                            and not _answers_equivalent(o.norm_answer, valid_pal_w1[0].norm_answer)
+                            for o in trace.wave1_outcomes
+                        )
+                        if not w1_ana_contradicts:
+                            w2_abort_ans = valid_pal_w1[0].norm_answer
+                            w2_abort_reason = "2 independent unanchored PALs agreed in Wave 2"
+
+                    if w2_abort_ans is not None:
+                        n_cancel = len(pending_w2)
+                        for lag in pending_w2:
+                            lag.cancel()
+                        _emit(
+                            on_event,
+                            {
+                                "engine": "reason",
+                                "event": "early_abort",
+                                "cancelled": n_cancel,
+                                "elapsed_s": round(time.perf_counter() - t0, 2),
+                                "consensus_answer": w2_abort_ans,
+                                "reason": w2_abort_reason,
+                            },
+                        )
+                        await asyncio.gather(*pending_w2, return_exceptions=True)
+                        pending_w2.clear()
+                        break
+            except BaseException:
+                for lag in pending_w2:
+                    lag.cancel()
+                if pending_w2:
+                    await asyncio.gather(*pending_w2, return_exceptions=True)
+                raise
+        else:
+            w2_t0 = time.perf_counter()
+            w2_results = await client.batch([spec for _, _, spec in w2_role_specs])
+            pal_w2_jobs: list[BranchOutcome] = []
+            for idx, ((name, kind, _), res) in enumerate(zip(w2_role_specs, w2_results)):
                 out = BranchOutcome(
                     name=name,
-                    wave=3,
+                    wave=2,
                     kind=kind,
                     raw_content=res.content,
                     reasoning=res.reasoning,
                     latency_s=res.latency_s,
                     error=res.raw_error or "",
                 )
-                if res.ok:
-                    if kind == "pal":
-                        pal_w3_jobs.append(out)
-                    else:
-                        raw_ans = extract_answer_from_prose(res.content)
-                        out.raw_answer = raw_ans
-                        out.norm_answer = normalize_answer(raw_ans)
-                w3_batch_outcomes.append(out)
-                trace.wave2_outcomes.append(out)
-            if pal_w3_jobs:
-                await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s + 6.0) for o in pal_w3_jobs))
-            w3_elapsed = time.perf_counter() - w3_t0
-            for w3_idx, (out, res) in enumerate(zip(w3_batch_outcomes, w3_results), start=1):
+                if res.ok and kind == "pal":
+                    pal_w2_jobs.append(out)
+                w2_ordered[idx] = out
+            if pal_w2_jobs:
+                await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s + 4.0) for o in pal_w2_jobs))
+            w2_elapsed = time.perf_counter() - w2_t0
+            for idx, (out, res) in enumerate(zip(w2_ordered, w2_results), start=1):
+                if out is None:
+                    continue
+                if out.error:
+                    trace.graveyard.append(f"[{out.name}] FAILED: {out.error[:240]}")
                 exec_s = float(out.exec_result.elapsed_s) if out.exec_result else 0.0
-                slot_elapsed = (float(out.latency_s or 0.0) + exec_s) or w3_elapsed
+                slot_elapsed = (float(out.latency_s or 0.0) + exec_s) or w2_elapsed
                 _emit(
                     on_event,
                     _slot_done_payload(
                         engine="reason",
-                        slot=w3_idx,
+                        slot=idx,
                         out=out,
                         problem=problem,
                         elapsed_s=slot_elapsed,
                         tokens=int(getattr(res, "completion_tokens", 0) or 0),
-                        wave=3,
+                        wave=2,
                     ),
                 )
 
-    # Final Weighted Adjudication across all executed & verified branches
-    combined = trace.wave1_outcomes + trace.wave2_outcomes
-    valid_all = [o for o in combined if o.norm_answer and _answer_satisfies_prompt_format(problem, o.norm_answer)]
-    if not valid_all:
-        valid_all = [o for o in combined if o.norm_answer]
-    clusters = _cluster_answers(valid_all)
+        for out in w2_ordered:
+            if out is not None:
+                trace.wave2_outcomes.append(out)
 
-    if not clusters:
-        # Last-resort clean extraction from best raw output (works with AND without JSON grammar!)
+        # Stage 3 (ONLY when 0 valid PALs across BOTH Wave 1 & Wave 2):
+        # Streaming B=3 (50-digit mpmath/numpy numeric solver + 2 clean-room deep IMO proofs) with early-abort!
+        valid_pal_after_w2 = [o for o in (trace.wave1_outcomes + trace.wave2_outcomes) if _is_valid_pal(o)]
+        if not valid_pal_after_w2:
+            w3_tb_pal = 1200 if deep else 1000
+            w3_tb_deep = 2200 if deep else 1800
+            w3_pitfalls = [
+                _non_anchoring_error_hint(o.error)
+                for o in (trace.wave1_outcomes + trace.wave2_outcomes)
+                if o.error and o.error != "cancelled_early_consensus"
+            ]
+            w3_pitfalls = [h for h in dict.fromkeys(w3_pitfalls) if h]
+            w3_pitfall_note = (
+                "\n\n[Prior failure modes to avoid: " + " | ".join(w3_pitfalls[:3]) + "]"
+                if w3_pitfalls
+                else ""
+            )
+            w3_role_specs: list[tuple[str, str, CallSpec]] = [
+                (
+                    "w3_pal_numeric_exact",
+                    "pal",
+                    CallSpec(
+                        messages=[
+                            {"role": "system", "content": shared_sys},
+                            {
+                                "role": "user",
+                                "content": f"PROBLEM:\n{problem.strip()}{w3_pitfall_note}\n\nPROTOCOL (w3_pal_numeric_exact):\n{_W3_NUMERIC_EXACT_CARD}",
+                            },
+                        ],
+                        tag="w3_pal_numeric_exact",
+                        max_tokens=w3_tb_pal + 2400,
+                        temperature=0.20,
+                        seed=808,
+                        enable_thinking=True,
+                        thinking_budget=w3_tb_pal,
+                        loop_guard=True,
+                    ),
+                ),
+                (
+                    "w3_analytical_deep_a",
+                    "analytical",
+                    CallSpec(
+                        messages=[
+                            {"role": "system", "content": math_sys},
+                            {
+                                "role": "user",
+                                "content": f"PROBLEM:\n{problem.strip()}\n\nPROTOCOL (w3_analytical_deep_a):\n{_W3_ANALYTICAL_DEEP_A_CARD}",
+                            },
+                        ],
+                        tag="w3_analytical_deep_a",
+                        max_tokens=4096,
+                        temperature=0.20,
+                        seed=909,
+                        enable_thinking=True,
+                        thinking_budget=w3_tb_deep,
+                        loop_guard=True,
+                    ),
+                ),
+                (
+                    "w3_analytical_deep_b",
+                    "analytical",
+                    CallSpec(
+                        messages=[
+                            {"role": "system", "content": math_sys},
+                            {
+                                "role": "user",
+                                "content": f"PROBLEM:\n{problem.strip()}\n\nPROTOCOL (w3_analytical_deep_b):\n{_W3_ANALYTICAL_DEEP_B_CARD}",
+                            },
+                        ],
+                        tag="w3_analytical_deep_b",
+                        max_tokens=4096,
+                        temperature=0.55,
+                        seed=1010,
+                        enable_thinking=True,
+                        thinking_budget=w3_tb_deep,
+                        loop_guard=True,
+                    ),
+                ),
+            ]
+            w3_ordered: list[Optional[BranchOutcome]] = [None] * len(w3_role_specs)
+            if has_complete:
+                w3_pal_repairs = max(max_pal_repairs, 2) if max_pal_repairs > 0 else 0
+                w3_tasks = [
+                    asyncio.create_task(
+                        _run_single_slot(
+                            i,
+                            name,
+                            kind,
+                            3,
+                            spec,
+                            sandbox_timeout_s + 6.0,
+                            repairs=(w3_pal_repairs if kind == "pal" else 0),
+                        )
+                    )
+                    for i, (name, kind, spec) in enumerate(w3_role_specs)
+                ]
+                pending_w3: set[asyncio.Task[tuple[int, BranchOutcome, int, float]]] = set(w3_tasks)
+                w3_done_valid: list[BranchOutcome] = []
+                try:
+                    while pending_w3:
+                        done_set, pending_w3 = await asyncio.wait(pending_w3, return_when=asyncio.FIRST_COMPLETED)
+                        for idx_3, out_3, tok_3, el_3 in sorted((t.result() for t in done_set), key=lambda x: x[0]):
+                            w3_ordered[idx_3] = out_3
+                            _emit(
+                                on_event,
+                                _slot_done_payload(
+                                    engine="reason",
+                                    slot=idx_3 + 1,
+                                    out=out_3,
+                                    problem=problem,
+                                    elapsed_s=el_3,
+                                    tokens=tok_3,
+                                    wave=3,
+                                ),
+                            )
+                            if _is_valid_any(out_3):
+                                w3_done_valid.append(out_3)
+                        if pending_w3 and len(w3_done_valid) >= 2:
+                            w3_cl = _cluster_answers(w3_done_valid)
+                            if w3_cl and len(w3_cl[0][1]) >= 2:
+                                n_cancel = len(pending_w3)
+                                for lag in pending_w3:
+                                    lag.cancel()
+                                _emit(
+                                    on_event,
+                                    {
+                                        "engine": "reason",
+                                        "event": "early_abort",
+                                        "cancelled": n_cancel,
+                                        "elapsed_s": round(time.perf_counter() - t0, 2),
+                                        "consensus_answer": w3_cl[0][0],
+                                        "reason": "2/3 Wave-3 consensus",
+                                    },
+                                )
+                                await asyncio.gather(*pending_w3, return_exceptions=True)
+                                pending_w3.clear()
+                                break
+                except BaseException:
+                    for lag in pending_w3:
+                        lag.cancel()
+                    if pending_w3:
+                        await asyncio.gather(*pending_w3, return_exceptions=True)
+                    raise
+            else:
+                w3_res = await client.batch([spec for _, _, spec in w3_role_specs])
+                pal_w3_jobs: list[BranchOutcome] = []
+                for idx_3, ((name, kind, _), res) in enumerate(zip(w3_role_specs, w3_res)):
+                    out_3 = BranchOutcome(
+                        name=name,
+                        wave=3,
+                        kind=kind,
+                        raw_content=res.content,
+                        reasoning=res.reasoning,
+                        latency_s=res.latency_s,
+                        error=res.raw_error or "",
+                    )
+                    if res.ok:
+                        if kind == "pal":
+                            pal_w3_jobs.append(out_3)
+                        else:
+                            raw_a = extract_answer_from_prose(res.content)
+                            out_3.raw_answer = raw_a
+                            out_3.norm_answer = normalize_answer(raw_a)
+                    w3_ordered[idx_3] = out_3
+                if pal_w3_jobs:
+                    await asyncio.gather(*(asyncio.to_thread(_execute_pal_outcome, o, sandbox_timeout_s + 6.0) for o in pal_w3_jobs))
+                for idx_3, (out_3, res) in enumerate(zip(w3_ordered, w3_res), start=1):
+                    if out_3 is None:
+                        continue
+                    _emit(
+                        on_event,
+                        _slot_done_payload(
+                            engine="reason",
+                            slot=idx_3,
+                            out=out_3,
+                            problem=problem,
+                            elapsed_s=float(out_3.latency_s or 0.0),
+                            tokens=int(getattr(res, "completion_tokens", 0) or 0),
+                            wave=3,
+                        ),
+                    )
+
+            for out_3 in w3_ordered:
+                if out_3 is not None:
+                    trace.wave2_outcomes.append(out_3)
+
+    # Final Weighted Adjudication across all executed & verified branches
+    def _score_all() -> tuple[list[BranchOutcome], list[tuple[float, int, str, list[BranchOutcome]]]]:
+        combined_now = trace.wave1_outcomes + trace.wave2_outcomes
+        valid_now = [o for o in combined_now if _is_valid_any(o)]
+        if not valid_now:
+            valid_now = [
+                o for o in combined_now
+                if o.norm_answer and _looks_like_concise_answer(o.norm_answer)
+            ]
+        cl_now = _cluster_answers(valid_now)
+        scored: list[tuple[float, int, str, list[BranchOutcome]]] = []
+        for rep, members in cl_now:
+            total_w = sum(_branch_weight(m) for m in members)
+            pal_count = sum(1 for m in members if _is_valid_pal(m))
+            w2_pal = sum(1 for m in members if m.wave == 2 and _is_valid_pal(m))
+            unanchored_pal = sum(
+                1 for m in members if m.name in _UNANCHORED_W2_ROLES and _is_valid_pal(m)
+            )
+            if w2_pal >= 2:
+                total_w += 3.5
+            if unanchored_pal >= 1:
+                total_w += 0.35
+            scored.append((total_w, pal_count, rep, members))
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return valid_now, scored
+
+    valid_all, scored_clusters = _score_all()
+
+    if not scored_clusters:
+        combined = trace.wave1_outcomes + trace.wave2_outcomes
         best_raw = max(combined, key=lambda o: len(o.raw_content), default=None)
         extract_prompt = (
             f"PROBLEM:\n{problem.strip()}\n\n"
@@ -1003,68 +1676,86 @@ async def solve_reasoning(
         )
         return trace
 
-    # Score every equivalence cluster
-    scored_clusters: list[tuple[float, int, str, list[BranchOutcome]]] = []
-    for rep, members in clusters:
-        total_w = sum(_branch_weight(m) for m in members)
-        pal_count = sum(1 for m in members if m.kind == "pal" and m.exec_result and m.exec_result.ok)
-        # Bonus for Wave-2 falsifier agreement (explicitly resolved Wave-1 bug!)
-        w2_pal = sum(1 for m in members if m.wave == 2 and m.exec_result and m.exec_result.ok)
-        if w2_pal >= 2:
-            total_w += 3.5
-        scored_clusters.append((total_w, pal_count, rep, members))
-
-    scored_clusters.sort(key=lambda x: (x[0], x[1]), reverse=True)
-
     winner_w, winner_pals, winner_ans, winner_members = scored_clusters[0]
 
-    # Trigger order-swapped pairwise + deep audit when top clusters are close, OR when an
-    # uncorroborated single PAL script (pal_count == 1) disagrees with an analytical/other cluster!
+    # Stage 4 (conditional, 1 SINGLE call): Executable Verification Arbiter when top 2 clusters are close!
     close_margin = 2.25 if winner_pals <= 1 else 1.5
-    if len(scored_clusters) >= 2 and (scored_clusters[0][0] - scored_clusters[1][0]) <= close_margin:
+    if (
+        enable_wave2
+        and has_complete
+        and len(scored_clusters) >= 2
+        and (scored_clusters[0][0] - scored_clusters[1][0]) <= close_margin
+    ):
         ans_a, mem_a = scored_clusters[0][2], scored_clusters[0][3]
         ans_b, mem_b = scored_clusters[1][2], scored_clusters[1][3]
-        code_a = next((m.code for m in mem_a if m.code), mem_a[0].raw_content)[:2500]
-        code_b = next((m.code for m in mem_b if m.code), mem_b[0].raw_content)[:2500]
-        p_ab = (
+        code_a = next((m.code for m in mem_a if m.code), mem_a[0].raw_content)[:2200]
+        code_b = next((m.code for m in mem_b if m.code), mem_b[0].raw_content)[:2200]
+        arb_prompt = (
             f"PROBLEM:\n{problem.strip()}\n\n"
             f"CANDIDATE A (Answer: {ans_a}):\n{code_a}\n\n"
             f"CANDIDATE B (Answer: {ans_b}):\n{code_b}\n\n"
-            "Which candidate faithfully models EVERY word and constraint of the problem with no bug? Reply A or B."
+            "Compare Candidate A and Candidate B against EVERY word and constraint in the problem. "
+            "Check for off-by-1, 2x symmetry/double-counting, or missed edge conditions. "
+            "If verifiable computationally (exact Python or 50-digit `mpmath`/`numpy` — no `scipy`), output a short "
+            "fenced ```python``` script printing `ANSWER: <exact_value>`; otherwise give a crisp derivation ending with "
+            "`WINNER: A` or `WINNER: B` and `ANSWER: <exact_value>`."
         )
-        p_ba = (
-            f"PROBLEM:\n{problem.strip()}\n\n"
-            f"CANDIDATE A (Answer: {ans_b}):\n{code_b}\n\n"
-            f"CANDIDATE B (Answer: {ans_a}):\n{code_a}\n\n"
-            "Which candidate faithfully models EVERY word and constraint of the problem with no bug? Reply A or B."
-        )
-        vote = await client.pairwise_vote(p_ab, p_ba, tag_prefix="reason_judge")
-        if vote == "TIE":
-            # Thinking-enabled deep audit when fast 0-think pairwise judge ties!
-            audit = await client.complete(
-                CallSpec(
-                    messages=[
-                        {"role": "system", "content": "Compare Candidate A and Candidate B line by line against every single clue/constraint in the problem. End with WINNER: A or WINNER: B."},
-                        {"role": "user", "content": p_ab},
-                    ],
-                    tag="reason_judge_audit",
-                    max_tokens=1400,
-                    temperature=0.0,
-                    enable_thinking=True,
-                    thinking_budget=700,
-                    loop_guard=True,
-                )
+        arb_res = await client.complete(
+            CallSpec(
+                messages=[
+                    {"role": "system", "content": shared_sys},
+                    {"role": "user", "content": arb_prompt},
+                ],
+                tag="reason_exec_arbiter",
+                max_tokens=3200,
+                temperature=0.0,
+                seed=909,
+                enable_thinking=True,
+                thinking_budget=1200,
+                loop_guard=True,
             )
-            txt = audit.content.upper()
-            if "WINNER: B" in txt:
-                vote = "B"
-            elif "WINNER: A" in txt:
-                vote = "A"
-        if vote == "B":
-            winner_ans, winner_members = ans_b, mem_b
-            trace.consensus_type = "pairwise_tiebreak_B"
+        )
+        arb_out = BranchOutcome(
+            name="reason_exec_arbiter",
+            wave=3,
+            kind="pal",
+            raw_content=arb_res.content if arb_res.ok else "",
+            reasoning=arb_res.reasoning if arb_res.ok else "",
+            latency_s=arb_res.latency_s,
+            error=arb_res.raw_error or "",
+        )
+        if arb_res.ok:
+            code_arb = extract_python_code(arb_res.content)
+            if code_arb:
+                await asyncio.to_thread(_execute_pal_outcome, arb_out, sandbox_timeout_s)
+                if max_pal_repairs > 0 and not _is_valid_pal(arb_out):
+                    await _repair_pal_outcome_inplace(
+                        arb_out,
+                        base_tag="reason_exec_arbiter",
+                        exec_timeout_s=sandbox_timeout_s,
+                        max_repairs=max_pal_repairs,
+                        seed=1909,
+                    )
+            else:
+                arb_out.kind = "analytical"
+                raw_arb = extract_answer_from_prose(arb_res.content)
+                arb_out.raw_answer = raw_arb
+                arb_out.norm_answer = normalize_answer(raw_arb)
+        trace.wave2_outcomes.append(arb_out)
+
+        if _is_valid_any(arb_out):
+            valid_all, scored_clusters = _score_all()
+            winner_w, winner_pals, winner_ans, winner_members = scored_clusters[0]
+            trace.consensus_type = (
+                "exec_arbiter_pal" if _is_valid_pal(arb_out) else "exec_arbiter_proof"
+            )
         else:
-            trace.consensus_type = "pairwise_tiebreak_A"
+            txt_u = (arb_res.content or "").upper()
+            if "WINNER: B" in txt_u:
+                winner_ans, winner_members = ans_b, mem_b
+                trace.consensus_type = "exec_arbiter_B"
+            else:
+                trace.consensus_type = "exec_arbiter_A"
     else:
         if trace.wave2_triggered:
             trace.consensus_type = f"wave2_verified ({winner_pals} PAL)"
@@ -1074,14 +1765,13 @@ async def solve_reasoning(
             trace.consensus_type = f"wave1_consensus ({winner_pals} PAL)"
 
     # Detect whether Wave 2 genuinely recovered from a Wave-1 failure or disagreement
-    w1_first_pal = next((o.norm_answer for o in trace.wave1_outcomes if o.kind == "pal" and o.norm_answer), "")
+    w1_first_pal = next((o.norm_answer for o in trace.wave1_outcomes if _is_valid_pal(o)), "")
     if trace.wave2_triggered and (not w1_first_pal or not _answers_equivalent(w1_first_pal, winner_ans)):
         trace.recovered_from_disagreement = True
 
-    # Pick cleanest explanation / supporting script from winning cluster
     best_member = sorted(winner_members, key=lambda m: (m.wave, 1 if m.verified_constraints else 0), reverse=True)[0]
     stdout_preview = (best_member.exec_result.stdout.strip() if best_member.exec_result else "")[:800]
-    trace.verified = any(m.kind == "pal" and m.exec_result and m.exec_result.ok for m in winner_members)
+    trace.verified = any(_is_valid_pal(m) for m in winner_members)
     trace.final_answer = winner_ans
     trace.final_explanation = (
         f"Verified Answer: **{winner_ans}**\n\n"

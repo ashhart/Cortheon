@@ -76,24 +76,36 @@ def test_reason_forge_analytical_first_no_nameerror_and_disable_wave2(tmp_path: 
     class _FakeClient:
         async def complete(self, spec: CallSpec) -> CompletionResult:
             seen_tags.append(spec.tag)
-            if spec.tag == "w1_analytical":
-                # Finishes FIRST with a contradicting prose answer!
-                await asyncio.sleep(0.005)
+            if spec.tag == "w1_pal_exact":
+                await asyncio.sleep(0.01)
                 return CompletionResult(
-                    content="ANSWER: 999",
+                    content="```python\nassert 10 * 7 == 70\nprint('ANSWER: 70')\n```",
                     reasoning="",
                     finish_reason="stop",
                     prompt_tokens=100,
                     completion_tokens=40,
                     reasoning_tokens=10,
                     cached_tokens=0,
-                    latency_s=0.005,
+                    latency_s=0.01,
                     tag=spec.tag,
                 )
-            if spec.tag in ("w1_pal_exact", "w1_pal_alt_z3"):
+            if spec.tag == "w1_pal_alt_z3":
+                await asyncio.sleep(0.015)
+                return CompletionResult(
+                    content="```python\nraise ValueError('boom')\n```",
+                    reasoning="",
+                    finish_reason="stop",
+                    prompt_tokens=100,
+                    completion_tokens=40,
+                    reasoning_tokens=10,
+                    cached_tokens=0,
+                    latency_s=0.015,
+                    tag=spec.tag,
+                )
+            if spec.tag == "w1_pal_skeptic":
                 await asyncio.sleep(0.02)
                 return CompletionResult(
-                    content="```python\nassert 10 * 7 == 70\nprint('ANSWER: 70')\n```",
+                    content="```python\nraise RuntimeError('still failing')\n```",
                     reasoning="",
                     finish_reason="stop",
                     prompt_tokens=100,
@@ -103,17 +115,17 @@ def test_reason_forge_analytical_first_no_nameerror_and_disable_wave2(tmp_path: 
                     latency_s=0.02,
                     tag=spec.tag,
                 )
-            # 3rd PAL fails -> normally triggers Wave 2 because analytical contradicted 2 PALs
-            await asyncio.sleep(0.04)
+            # w1_analytical disagrees -> would trigger Wave 2 unless enable_wave2=False
+            await asyncio.sleep(0.005)
             return CompletionResult(
-                content="```python\nraise ValueError('boom')\n```",
+                content="ANSWER: 999",
                 reasoning="",
                 finish_reason="stop",
                 prompt_tokens=100,
                 completion_tokens=40,
                 reasoning_tokens=10,
                 cached_tokens=0,
-                latency_s=0.04,
+                latency_s=0.005,
                 tag=spec.tag,
             )
 

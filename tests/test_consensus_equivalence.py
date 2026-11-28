@@ -261,13 +261,12 @@ def test_extract_answer_from_stdout_accepts_clean_bare_final_value():
 
 
 def test_prompt_format_gate_enforces_integer_when_requested():
-    prompts = [
+    unbounded_prompts = [
         "Find N. End with ANSWER: <int>.",
         "Compute the exact integer value of S.",
-        "The answer is an integer from 000 to 999.",
         "Give the result. Output ANSWER: <integer>.",
     ]
-    for p in prompts:
+    for p in unbounded_prompts:
         assert _answer_satisfies_prompt_format(p, "42") is True
         assert _answer_satisfies_prompt_format(p, "-7") is True
         assert _answer_satisfies_prompt_format(p, "0") is True
@@ -275,6 +274,14 @@ def test_prompt_format_gate_enforces_integer_when_requested():
         assert _answer_satisfies_prompt_format(p, "3.14") is False
         assert _answer_satisfies_prompt_format(p, "sqrt(2)") is False
         assert _answer_satisfies_prompt_format(p, "") is False
+
+    bounded_p = "The answer is an integer from 000 to 999."
+    assert _answer_satisfies_prompt_format(bounded_p, "42") is True
+    assert _answer_satisfies_prompt_format(bounded_p, "0") is True
+    assert _answer_satisfies_prompt_format(bounded_p, "999") is True
+    assert _answer_satisfies_prompt_format(bounded_p, "-7") is False
+    assert _answer_satisfies_prompt_format(bounded_p, "1000") is False
+    assert _answer_satisfies_prompt_format(bounded_p, "3/4") is False
 
 
 def test_prompt_format_gate_allows_non_integers_for_open_prompts():

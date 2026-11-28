@@ -135,7 +135,7 @@ def test_reason_wave1_streaming_early_abort_events_and_rendering(tmp_path: Path)
                 completion_tokens=420,
                 latency_s=0.12,
             )
-        if spec.tag == "w1_pal_alt_z3":
+        if spec.tag == "w1_pal_skeptic":
             await asyncio.sleep(0.03)
             return _mk_res(
                 "```python\nans = sum(7 for _ in range(10))\nassert ans > 0\nprint('ANSWER:', ans)\n```",
@@ -169,7 +169,9 @@ def test_reason_wave1_streaming_early_abort_events_and_rendering(tmp_path: Path)
     assert trace.final_answer == "70"
     assert trace.verified is True
     assert trace.wave2_triggered is False
-    assert set(cancelled_tags) == {"w1_pal_skeptic", "w1_analytical"}
+    # ReasonForge v4 Fast Pair: pal_exact + pal_skeptic agree -> slots 3 & 4 are skipped completely!
+    assert cancelled_tags == []
+    assert [s.tag for s in client.seen_specs] == ["w1_pal_exact", "w1_pal_skeptic"]
 
     event_names = [e["event"] for e in events]
     assert event_names[0] == "start"
@@ -178,7 +180,7 @@ def test_reason_wave1_streaming_early_abort_events_and_rendering(tmp_path: Path)
 
     abort_idx = event_names.index("early_abort")
     slot_done_before_abort = [e for e in events[:abort_idx] if e["event"] == "slot_done"]
-    assert len(slot_done_before_abort) >= 2
+    assert len(slot_done_before_abort) == 2
     assert all(e["engine"] == "reason" for e in events)
 
     start_ev = events[0]
@@ -187,7 +189,7 @@ def test_reason_wave1_streaming_early_abort_events_and_rendering(tmp_path: Path)
     for ev in slot_done_before_abort:
         assert ev["ok"] is True
         assert ev["answer"] == "70"
-        assert ev["role"] in {"pal_exact", "pal_alt_z3"}
+        assert ev["role"] in {"pal_exact", "pal_skeptic"}
         assert isinstance(ev["slot"], int) and ev["slot"] >= 1
         assert isinstance(ev["elapsed_s"], float)
         assert ev["tokens"] in {420, 610}
@@ -196,7 +198,7 @@ def test_reason_wave1_streaming_early_abort_events_and_rendering(tmp_path: Path)
     abort_ev = events[abort_idx]
     assert abort_ev["cancelled"] == 2
     assert abort_ev["consensus_answer"] == "70"
-    assert "2/4 PAL consensus" in abort_ev["reason"]
+    assert "PAL consensus" in abort_ev["reason"]
     assert isinstance(abort_ev["elapsed_s"], float)
 
     done_ev = events[-1]
@@ -250,8 +252,8 @@ def test_reason_wave1_batch_fallback_emits_slot_done(tmp_path: Path):
     assert event_names == ["start", "slot_done", "slot_done", "slot_done", "slot_done", "done"]
     assert [e["role"] for e in events if e["event"] == "slot_done"] == [
         "pal_exact",
-        "pal_alt_z3",
         "pal_skeptic",
+        "pal_alt_z3",
         "analytical",
     ]
     _assert_all_events_render_cleanly(events)
@@ -267,13 +269,15 @@ def test_reason_wave2_escalation_emits_wave2_start_and_slot_done(tmp_path: Path)
         if spec.tag == "w1_pal_alt_z3":
             await asyncio.sleep(0.015)
             return _mk_res("```python\nprint('ANSWER: 20')\n```", tag=spec.tag, completion_tokens=110)
-        if spec.tag == "w1_pal_skeptic":
+        if spec.tag.startswith("w1_pal_skeptic"):
             await asyncio.sleep(0.02)
             return _mk_res("```python\nraise ZeroDivisionError('bad denom')\n```", tag=spec.tag, completion_tokens=120)
         if spec.tag == "w1_analytical":
             await asyncio.sleep(0.02)
             return _mk_res("Analytical derivation gives ANSWER: 20", tag=spec.tag, completion_tokens=200)
-        # Wave 2 falsifiers all agree on 20
+        if spec.tag == "w2_analytical_deep":
+            return _mk_res("Analytical derivation gives ANSWER: 20", tag=spec.tag, completion_tokens=200)
+        # Wave 2 PAL falsifiers agree on 20
         return _mk_res(
             "```python\nans = 4 * 5\nassert ans == 20\nprint('ANSWER:', ans)\n```",
             tag=spec.tag,
@@ -310,8 +314,8 @@ def test_reason_wave2_escalation_emits_wave2_start_and_slot_done(tmp_path: Path)
     w1_slots = [e for e in events[:w2_idx] if e["event"] == "slot_done"]
     w2_slots = [e for e in events[w2_idx + 1 :] if e["event"] == "slot_done"]
 
+    # ReasonForge v4 completes all 4 Wave-1 roles on disagreement before escalating to Wave 2!
     assert len(w1_slots) == 4
-    # Confirm failing Wave-1 script is reported with ok=False
     skeptic_ev = next(e for e in w1_slots if e["role"] == "pal_skeptic")
     assert skeptic_ev["ok"] is False
     assert skeptic_ev["summary"]
@@ -321,12 +325,13 @@ def test_reason_wave2_escalation_emits_wave2_start_and_slot_done(tmp_path: Path)
     assert w2_start_ev["streams"] == 3
     assert w2_start_ev["reason"] == trace.wave2_reason
 
-    assert len(w2_slots) == 3
-    assert {e["role"] for e in w2_slots} == {
+    # Streaming Wave-2 early-abort stops as soon as 2 falsifiers agree (2 or 3 slots completed)
+    assert 2 <= len(w2_slots) <= 3
+    assert {e["role"] for e in w2_slots}.issubset({
         "falsifier_bruteforce",
         "falsifier_reread",
-        "falsifier_z3_sympy",
-    }
+        "falsifier_numeric_z3",
+    })
     assert all(e["ok"] is True and e["answer"] == "20" for e in w2_slots)
 
     rendered = _assert_all_events_render_cleanly(events)

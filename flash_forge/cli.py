@@ -16,6 +16,15 @@ from .dev_agent import run_dev_forge
 from .doctor import format_doctor_report, run_doctor
 from .duel import DUEL_PRESETS, run_duel
 from .engine import FlashForge, ForgeConfig
+from .evolve import (
+    GateConfig,
+    evaluate_generation_gate,
+    export_weighted_curriculum,
+    format_curriculum_plan,
+    format_gate_decision,
+    load_outcomes_from_eval_json,
+    merge_npz_adapters,
+)
 from .flywheel import export_dpo_jsonl, export_sft_jsonl, format_export_summary, harvest_from_results_dir
 from .guard import (
     SUPPORTED_RUNNERS,
@@ -36,7 +45,7 @@ from .skill_loader import SkillPack
 from .spec_verify import solve_spec_verify
 from .think_forge import ThinkForgeTrace
 
-_VERSION = "2.3.1"
+_VERSION = "2.4.0"
 
 _STREAMS_HELP = (
     "Parallel verification streams (2, 4, or 8): "
@@ -220,10 +229,98 @@ def main(argv: Optional[list[str]] = None) -> None:
     p_sft.add_argument("--datasets-dir", default="bench/datasets", help="Optional dataset dir for prompt joining")
     p_sft.add_argument("--out", required=True, help="Output SFT JSONL path")
 
+    p_evo = sub.add_parser(
+        "evolve",
+        help="Cortheon Evolve: oracle-free weighted curriculum builder, dual-regime McNemar gate, and sign-consensus adapter soup",
+    )
+    p_evo.add_argument("--results-dir", default="results", help="Directory containing Cortheon result JSONs")
+    p_evo.add_argument("--flywheel-log", default=None, help="Optional live flywheel.jsonl path")
+    p_evo.add_argument("--datasets-dir", default="bench/datasets", help="Optional dataset dir for prompt joining")
+    p_evo.add_argument("--out-dir", default="evolve_out", help="Output directory for weighted DPO/SFT curriculum")
+    p_evo.add_argument("--gate-base", default=None, help="Baseline eval JSON for dual-regime statistical gating")
+    p_evo.add_argument("--gate-cand", default=None, help="Candidate eval JSON for dual-regime statistical gating")
+    p_evo.add_argument("--gate-arm", default=None, help="Optional arm name if eval JSON is multi-arm")
+    p_evo.add_argument("--gate-verified-base", default=None, help="Optional verified-consensus baseline JSON")
+    p_evo.add_argument("--gate-verified-cand", default=None, help="Optional verified-consensus candidate JSON")
+    p_evo.add_argument("--min-gain", type=int, default=1, help="Minimum net single-shot problems fixed (default: 1)")
+    p_evo.add_argument("--max-regressions", type=int, default=2, help="Maximum allowed single-shot regressions (default: 2)")
+    p_evo.add_argument("--merge-adapters", nargs="+", default=None, help="Two or more .npz adapter files to merge")
+    p_evo.add_argument("--weights", nargs="+", type=float, default=None, help="Optional weights matching --merge-adapters")
+    p_evo.add_argument("--no-sign-consensus", action="store_true", help="Use plain weighted average instead of sign-consensus")
+    p_evo.add_argument("--trim-density", type=float, default=1.0, help="Fraction of top-magnitude weights kept per tensor (0, 1]")
+    p_evo.add_argument("--out", default=None, help="Output .npz path when using --merge-adapters")
+    p_evo.add_argument("--json", dest="as_json", action="store_true")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "mcp":
         run_stdio_server(default_url=args.url, api_key=args.api_key, model=args.model)
+        return
+
+    if args.cmd == "evolve":
+        if args.merge_adapters:
+            if not args.out:
+                raise SystemExit("`cortheon evolve --merge-adapters` requires `--out merged.npz`")
+            audit = merge_npz_adapters(
+                [Path(p) for p in args.merge_adapters],
+                Path(args.out),
+                weights=args.weights,
+                sign_consensus=not args.no_sign_consensus,
+                trim_density=args.trim_density,
+            )
+            if args.as_json:
+                print(json.dumps(audit.to_dict(), indent=2))
+            else:
+                print(
+                    f"[Cortheon Evolve] Merged {audit.num_adapters} adapters ({audit.num_tensors} tensors, "
+                    f"weights={audit.normalized_weights}, sign_consensus={audit.sign_consensus}) -> {audit.out_path}\n"
+                    f"  sha256: {audit.sha256}"
+                )
+            return
+
+        if args.gate_base and args.gate_cand:
+            base_s = load_outcomes_from_eval_json(Path(args.gate_base), arm=args.gate_arm)
+            cand_s = load_outcomes_from_eval_json(Path(args.gate_cand), arm=args.gate_arm)
+            base_v = (
+                load_outcomes_from_eval_json(Path(args.gate_verified_base), arm=args.gate_arm)
+                if args.gate_verified_base
+                else None
+            )
+            cand_v = (
+                load_outcomes_from_eval_json(Path(args.gate_verified_cand), arm=args.gate_arm)
+                if args.gate_verified_cand
+                else None
+            )
+            decision = evaluate_generation_gate(
+                base_single_shot=base_s,
+                cand_single_shot=cand_s,
+                base_verified=base_v,
+                cand_verified=cand_v,
+                config=GateConfig(
+                    min_single_shot_net_gain=args.min_gain,
+                    max_single_shot_regressions=args.max_regressions,
+                ),
+            )
+            if args.as_json:
+                print(json.dumps(decision.to_dict(), indent=2))
+            else:
+                print(format_gate_decision(decision))
+            if not decision.accepted:
+                sys.exit(2)
+            return
+
+        ds_dir = Path(args.datasets_dir) if args.datasets_dir and Path(args.datasets_dir).exists() else None
+        fw_log = Path(args.flywheel_log) if args.flywheel_log else None
+        _, summary = export_weighted_curriculum(
+            results_dir=Path(args.results_dir) if args.results_dir else None,
+            flywheel_log=fw_log,
+            datasets_dir=ds_dir,
+            out_dir=Path(args.out_dir),
+        )
+        if args.as_json:
+            print(json.dumps(summary.to_dict(), indent=2))
+        else:
+            print(format_curriculum_plan(summary))
         return
 
     if args.cmd in ("export-dpo", "export-sft"):
