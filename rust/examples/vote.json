@@ -1,0 +1,6 @@
+{
+  "model": "mock-model",
+  "rules": [
+    { "match": "", "content": "Six groups of seven give 42.\nANSWER: 42" }
+  ]
+}

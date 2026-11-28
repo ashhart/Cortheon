@@ -1,0 +1,40 @@
+name: Rust orchestrator
+
+on:
+  pull_request:
+    paths:
+      - "rust/**"
+      - "flash_forge/**"
+      - "pyproject.toml"
+      - ".github/workflows/rust.yml"
+  push:
+    paths:
+      - "rust/**"
+      - "flash_forge/**"
+      - "pyproject.toml"
+      - ".github/workflows/rust.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: rust:1.85-bookworm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Rust formatting
+        run: |
+          rustup component add rustfmt
+          cargo fmt --all --manifest-path rust/Cargo.toml -- --check
+      - name: Install Cortheon and its verifier dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends python3-venv
+          python3 -m venv /tmp/cortheon-venv
+          /tmp/cortheon-venv/bin/python -m pip install .
+      - name: Run Rust tests with the Python verifier
+        env:
+          CORTHEON_PYTHON: /tmp/cortheon-venv/bin/python
+        run: cargo test --locked --manifest-path rust/Cargo.toml -- --test-threads=1

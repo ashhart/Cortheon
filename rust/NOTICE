@@ -1,0 +1,18 @@
+cortheon-rs is a derivative work of Cortheon v2
+  https://github.com/ashhart/Cortheon  (commit 194a62b, MIT License)
+  Copyright (c) 2026 Cortheon contributors
+
+Ported from Cortheon (logic re-implemented in Rust):
+  flash_forge/reason_forge.py  solve_reasoning (Wave 1 early abort, Wave 2/3,
+                               adjudication, pairwise judge), _cluster_answers,
+                               _branch_weight, _answer_satisfies_prompt_format,
+                               the integer/rational subset of _answers_equivalent
+  flash_forge/client.py        _build_payload, pairwise_vote, 400 grammar fallback
+  flash_forge/skill_loader.py  card loading, match_exemplars
+  bench/run_aime_ablation.py   load_aime2025, maj4_prose arm, select_maj4_answer, grade_aime
+
+Used unchanged at runtime (imported from a Cortheon checkout, not copied):
+  flash_forge/sandbox.py       extract_python_code, run_python (bwrap / rlimit sandbox)
+  flash_forge/reason_forge.py  extract_answer_from_stdout/_prose, normalize_answer,
+                               _answers_equivalent (SymPy), _has_executable_assert
+  flash_forge/_skill/          protocol cards and exemplars (prompt text)

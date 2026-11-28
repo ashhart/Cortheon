@@ -1,0 +1,28 @@
+[package]
+name = "cortheon-rs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Tokio orchestration core for Cortheon-style execution-verified parallel consensus (Rust port of Cortheon v2 ReasonForge hot path)"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4.5", features = ["derive", "env"] }
+axum = "0.7"
+regex = "1"
+anyhow = "1"
+bytes = "1"
+libc = "0.2"
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
