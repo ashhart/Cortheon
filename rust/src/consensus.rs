@@ -23,6 +23,8 @@ pub struct Outcome {
     pub verified_constraints: bool,
     pub error: String,
     pub latency_s: f64,
+    pub exec_elapsed_s: f64,
+    pub completion_tokens: i64,
     pub endpoint: String,
 }
 

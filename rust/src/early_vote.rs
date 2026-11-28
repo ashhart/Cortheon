@@ -81,6 +81,7 @@ pub async fn run(
         !endpoints.is_empty(),
         "maj_early needs at least one endpoint"
     );
+    crate::client::check_model_ids(endpoints)?;
     ensure!(
         endpoints
             .iter()

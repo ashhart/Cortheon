@@ -80,6 +80,33 @@ def handle(req: dict) -> dict:
         return {"raw_answer": raw, "norm_answer": rf.normalize_answer(raw)}
     if op == "normalize":
         return {"norm": rf.normalize_answer(req.get("raw", ""))}
+    if op == "fallback_answer":
+        # Mirror CompletionResult.json_payload(), including its fallback for fenced
+        # JSON. Use Python's str() for non-string answers from unstructured servers.
+        text = req["content"].strip()
+        try:
+            obj = json.loads(text)
+        except ValueError:
+            start, end = text.find("{"), text.rfind("}")
+            try:
+                obj = json.loads(text[start:end + 1]) if 0 <= start < end else None
+            except ValueError:
+                obj = None
+        raw = str(obj.get("final_answer", "")).strip() if isinstance(obj, dict) else ""
+        return {"norm": rf.normalize_answer(raw or rf.extract_answer_from_prose(text))}
+    if op in ("aime_candidate", "aime_prose"):
+        from bench.run_aime_ablation import extract_prose_candidate, normalize_aime_integer
+        norm = extract_prose_candidate(req["content"])
+        if op == "aime_prose":
+            return {"norm": norm}
+        return {"norm": norm, "valid_aime_int": normalize_aime_integer(norm)}
+    if op == "grade_aime":
+        from bench.run_aime_ablation import grade_aime
+        correct, detail = grade_aime(req["predicted"], req["expected"])
+        return {"correct": correct, "detail": detail}
+    if op == "scrub_detail":
+        from bench.run_aime_ablation import scrub_detail_paths
+        return {"detail": scrub_detail_paths(req["detail"])}
     if op == "equiv":
         return {"eq": bool(rf._answers_equivalent(req.get("a", ""), req.get("b", "")))}
     return {"error": f"unknown op {op!r}"}

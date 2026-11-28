@@ -5,12 +5,16 @@ on:
     paths:
       - "rust/**"
       - "flash_forge/**"
+      - "bench/run_aime_ablation.py"
+      - "bench/stats.py"
       - "pyproject.toml"
       - ".github/workflows/rust.yml"
   push:
     paths:
       - "rust/**"
       - "flash_forge/**"
+      - "bench/run_aime_ablation.py"
+      - "bench/stats.py"
       - "pyproject.toml"
       - ".github/workflows/rust.yml"
 

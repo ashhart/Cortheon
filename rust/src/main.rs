@@ -2,9 +2,13 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use cortheon_rs::client::Sampling;
 use cortheon_rs::prompts::{self, load_aime2025, AimeItem, SkillPack};
-use cortheon_rs::runner::{build_ctx_for_arms, run_one, summarize, write_events, BuildOpts};
+use cortheon_rs::runner::{
+    build_ctx_for_arms, run_one_with_timeline, summarize, write_events, BuildOpts,
+};
+use cortheon_rs::timeline::Timeline;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
 #[command(
@@ -39,7 +43,7 @@ enum Cmd {
         start: usize,
         #[arg(long, default_value_t = 30)]
         end: usize,
-        /// Comma-separated arms: cortheon_w1, cortheon_full, maj, maj_early
+        /// Comma-separated arms: vanilla_b1, maj4_prose, maj8_prose, pal_b1, cortheon_w1, cortheon_full, maj, maj_early
         #[arg(long, default_value = "cortheon_w1")]
         arms: String,
         #[arg(long)]
@@ -84,6 +88,9 @@ enum Cmd {
         out: PathBuf,
         #[arg(long, default_value = "rust_events.jsonl")]
         events: PathBuf,
+        /// Write live ReasonForge progress events as JSON lines, with problem_id and arm.
+        #[arg(long)]
+        progress_jsonl: Option<PathBuf>,
     },
     /// Serve the mock OpenAI-compatible server
     Mock {
@@ -167,6 +174,7 @@ async fn main() -> Result<()> {
             deep,
             out,
             events,
+            progress_jsonl,
         } => {
             let cortheon_src = checkout(cortheon_src);
             let worker_script = worker_script.unwrap_or_else(|| {
@@ -181,14 +189,11 @@ async fn main() -> Result<()> {
             );
             for arm in &arms {
                 match arm.as_str() {
-                    "cortheon_w1" | "cortheon_full" => anyhow::ensure!(
-                        n <= 4,
-                        "{arm} implements four Wave-1 roles; use --n 1 through 4"
-                    ),
-                    "maj" | "maj_early" => (),
-                    other => anyhow::bail!(
-                        "unknown arm {other:?}; use cortheon_w1, cortheon_full, maj or maj_early"
-                    ),
+                    "cortheon_w1" | "cortheon_full" | "vanilla_b1" | "pal_b1" | "maj4_prose"
+                    | "maj8_prose" | "maj" | "maj_early" => (),
+                    other => {
+                        anyhow::bail!("unknown arm {other:?}; see run --help for available arms")
+                    }
                 }
             }
             let items: Vec<AimeItem> = match bench.as_str() {
@@ -217,18 +222,44 @@ async fn main() -> Result<()> {
                 deterministic_seed,
                 capture_output,
                 worker_script,
-                exec_workers: exec_workers.unwrap_or(n.max(1)),
+                exec_workers: exec_workers.unwrap_or(n.min(4)),
                 light_workers,
                 sandbox_timeout_s: sandbox_timeout,
                 agree,
                 speculative: !no_speculative && !no_stream,
             };
+            if let Some(path) = &progress_jsonl {
+                anyhow::ensure!(
+                    path != &out && path != &events,
+                    "--progress-jsonl needs its own output file"
+                );
+            }
             let ctx = build_ctx_for_arms(&opts, &arms, n).await?;
+            let progress = progress_jsonl
+                .map(std::fs::File::create)
+                .transpose()?
+                .map(|file| Arc::new(Mutex::new(Ok(file))));
             let mut ev_file = std::io::BufWriter::new(std::fs::File::create(&events)?);
             let mut rows = vec![];
             for it in &items {
                 for arm in &arms {
-                    let (row, evs, b) = run_one(&ctx, arm, it, n, deep).await?;
+                    let mut timeline = Timeline::new();
+                    if let Some(file) = progress.clone() {
+                        let (arm, problem) = (arm.clone(), it.id.clone());
+                        timeline = timeline.with_progress(move |event| {
+                            let mut record = event.clone();
+                            record["arm"] = serde_json::json!(arm);
+                            record["problem_id"] = serde_json::json!(problem);
+                            let mut writer = file.lock().unwrap();
+                            if let Ok(f) = &mut *writer {
+                                if let Err(err) = writeln!(f, "{record}") {
+                                    *writer = Err(err);
+                                }
+                            }
+                        });
+                    }
+                    let (row, evs, b) =
+                        run_one_with_timeline(&ctx, arm, it, n, deep, timeline).await?;
                     eprintln!(
                         "[{arm}] {} pred={} correct={} wall={:.2}s gen={:.2}s verify={:.2}s orch={:.3}s idle={:.3}s | {}",
                         it.id, row["predicted"], row["correct"], b.wall_s, b.gen_prefill_s + b.gen_decode_s, b.verify_s, b.orch_busy_s, b.idle_wait_s,
@@ -247,6 +278,11 @@ async fn main() -> Result<()> {
                 )?,
             )?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
+            if let Some(file) = progress {
+                if let Err(e) = &*file.lock().unwrap() {
+                    anyhow::bail!("writing the progress log failed: {e}");
+                }
+            }
         }
     }
     Ok(())

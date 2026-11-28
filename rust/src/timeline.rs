@@ -9,6 +9,7 @@
 //! `orch_busy + idle_wait` is the orchestration critical path ("gap").
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -42,6 +43,7 @@ pub struct Timeline {
     t0: Instant,
     events: Arc<Mutex<Vec<Event>>>,
     capture_index: Arc<AtomicUsize>,
+    on_progress: Option<Arc<dyn Fn(&Value) + Send + Sync>>,
 }
 
 impl Default for Timeline {
@@ -56,6 +58,18 @@ impl Timeline {
             t0: Instant::now(),
             events: Arc::new(Mutex::new(Vec::new())),
             capture_index: Arc::new(AtomicUsize::new(0)),
+            on_progress: None,
+        }
+    }
+    /// Subscribe to the event dictionaries consumed by flash_forge.progress.
+    pub fn with_progress(mut self, callback: impl Fn(&Value) + Send + Sync + 'static) -> Self {
+        self.on_progress = Some(Arc::new(callback));
+        self
+    }
+    pub fn progress(&self, payload: Value) {
+        self.emit("progress", "", 0, &payload.to_string());
+        if let Some(callback) = &self.on_progress {
+            callback(&payload);
         }
     }
     pub fn next_capture_index(&self) -> usize {

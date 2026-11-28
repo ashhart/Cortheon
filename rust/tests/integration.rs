@@ -87,6 +87,223 @@ async fn stats(url: &str) -> Value {
         .unwrap()
 }
 
+fn aime_oracle(opts: &BuildOpts, case: Value) -> Value {
+    let output = std::process::Command::new(&opts.python)
+        .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/aime_oracle.py"))
+        .arg(case.to_string())
+        .env("PYTHONPATH", &opts.cortheon_src)
+        .output()
+        .expect("run upstream Python oracle");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).expect("upstream oracle JSON")
+}
+
+#[tokio::test]
+async fn published_majorities_match_upstream_schedules_votes_and_grades() {
+    for (arm, samples) in [
+        (
+            "maj8_prose",
+            vec![
+                "ANSWER: 008",
+                "ANSWER: 7",
+                "ANSWER: 7",
+                "ANSWER: 8",
+                "no explicit answer\n701",
+                "ANSWER: 701",
+                "ANSWER: 8",
+                "ANSWER: 7",
+            ],
+        ),
+        (
+            "maj4_prose",
+            vec![
+                "ANSWER: 1/2",
+                "ANSWER: 0.5",
+                "ANSWER: sqrt(2)",
+                "ANSWER: sqrt(2)",
+            ],
+        ),
+        ("maj4_prose", vec!["", "", "", ""]),
+    ] {
+        let rules = samples
+            .iter()
+            .enumerate()
+            .map(|(i, text)| Rule {
+                seed: Some(101 * (i as i64 + 1)),
+                ..rule("", text.to_string(), 0.0, 5000.0)
+            })
+            .collect();
+        let (url, _server) = mock::spawn(
+            Scenario {
+                model: "m".into(),
+                rules,
+            },
+            0,
+        )
+        .await
+        .unwrap();
+        let opts = opts_for(vec![url.clone()], 2, false, 10.0);
+        let reference = aime_oracle(
+            &opts,
+            serde_json::json!({"samples": samples, "expected": "008"}),
+        );
+        let item = AimeItem {
+            id: "sample".into(),
+            prompt: "Choose an integer.".into(),
+            expected: "008".into(),
+        };
+        let ctx = build_ctx_for_arms(&opts, &[arm.into()], 4).await.unwrap();
+        let (row, _, _) = run_one(&ctx, arm, &item, 4, false).await.unwrap();
+        assert_eq!(row["samples"], samples.len());
+        assert_eq!(row["predicted"], reference["predicted"]);
+        assert_eq!(row["extra"]["vote"], reference["vote"]);
+        assert_eq!(row["correct"], reference["grade"][0]);
+        assert!(row["detail"]
+            .as_str()
+            .unwrap()
+            .ends_with(reference["grade"][1].as_str().unwrap()));
+        let observed = stats(&url).await;
+        let mut sent: Vec<_> = observed["bodies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|body| {
+                (
+                    body["seed"].as_i64().unwrap(),
+                    body["temperature"].as_f64().unwrap(),
+                )
+            })
+            .collect();
+        sent.sort_by_key(|v| v.0);
+        assert_eq!(serde_json::to_value(sent).unwrap(), reference["config"]);
+    }
+}
+
+#[tokio::test]
+async fn consensus_matches_upstream_on_mixed_math_and_verified_branches() {
+    use cortheon_rs::consensus::{branch_weight, cluster, equiv, format_ok, Outcome};
+    use serde_json::json;
+    let (url, _server) = mock::spawn(
+        Scenario {
+            model: "m".into(),
+            rules: vec![],
+        },
+        0,
+    )
+    .await
+    .unwrap();
+    let opts = opts_for(vec![url], 2, false, 10.0);
+    let outcomes = [
+        ("analytical", "0.5", false, false),
+        ("pal", "1/2", true, true),
+        ("pal", "7", true, false),
+        ("pal", "007", false, true),
+        ("analytical", "sqrt(2)", false, false),
+        ("pal", "", true, true),
+    ];
+    let formats = [
+        ("Give an exact integer", "2/3"),
+        ("ANSWER: <int>", "-42"),
+        ("integer from 000 to 999", "０７"),
+        ("free form", "sqrt(2)"),
+        ("free form", ""),
+    ];
+    let pairs = [
+        ("42", "0042"),
+        ("1/2", "2/4"),
+        ("1/0", "2"),
+        ("Alice", "alice"),
+        ("0.3333333333", "1/3"),
+        ("sqrt(2)", "2**(1/2)"),
+        ("１２", "12"),
+        (
+            "340282366920938463463374607431768211456/2",
+            "170141183460469231731687303715884105728",
+        ),
+    ];
+    let reference = aime_oracle(
+        &opts,
+        json!({"outcomes": outcomes, "format": formats, "equiv": pairs}),
+    );
+    let ctx = build_ctx(&opts).await.unwrap();
+    let values: Vec<_> = outcomes
+        .iter()
+        .map(|&(kind, answer, ok, checked)| Outcome {
+            kind: kind.into(),
+            norm_answer: answer.into(),
+            exec_ok: Some(ok),
+            verified_constraints: checked,
+            ..Default::default()
+        })
+        .collect();
+    let refs = values.iter().collect::<Vec<_>>();
+    assert_eq!(
+        json!(cluster(&ctx.light_pool, &refs).await),
+        reference["clusters"]
+    );
+    assert_eq!(
+        json!(values.iter().map(branch_weight).collect::<Vec<_>>()),
+        reference["weights"]
+    );
+    assert_eq!(
+        json!(formats.map(|(question, norm)| format_ok(question, norm))),
+        reference["format"]
+    );
+    let mut equivalent = vec![];
+    for (a, b) in pairs {
+        equivalent.push(equiv(&ctx.light_pool, a, b).await);
+    }
+    assert_eq!(json!(equivalent), reference["equiv"]);
+}
+
+#[tokio::test]
+async fn different_selected_models_are_rejected_before_any_dispatch() {
+    use cortheon_rs::client::{Endpoint, Stats};
+    use std::sync::Arc;
+    let mut urls = vec![];
+    let mut eps = vec![];
+    let mut servers = vec![];
+    for model in ["left", "right"] {
+        let (url, server) = mock::spawn(
+            Scenario {
+                model: model.into(),
+                rules: vec![],
+            },
+            0,
+        )
+        .await
+        .unwrap();
+        eps.push(Arc::new(
+            Endpoint::connect(&url, None, None, true, 10.0, 4)
+                .await
+                .unwrap(),
+        ));
+        urls.push(url);
+        servers.push(server);
+    }
+    let mut opts = opts_for(urls.clone(), 2, false, 10.0);
+    assert!(build_ctx_for_arms(&opts, &["maj_early".into()], 4)
+        .await
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("differs"));
+    let error =
+        cortheon_rs::early_vote::run(&eps, &Stats::default(), &Timeline::new(), "sample", 4)
+            .await
+            .unwrap_err();
+    assert!(error.to_string().contains("differs"));
+    opts.model = Some("left".into());
+    assert!(build_ctx(&opts).await.is_err());
+    for url in urls {
+        assert_eq!(stats(&url).await["started"], 0);
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cancelled_vote_keeps_partial_chunks_out_of_token_totals() {
     let scenario = Scenario {
@@ -361,7 +578,10 @@ async fn analytical_contradiction_blocks_two_vote_abort() {
     let tr = solve_reasoning(ctx, &tl, PROBLEM, 4, false, false)
         .await
         .unwrap();
-    assert!(tr.early_aborted, "3 PALs agree -> abort allowed");
+    // The upstream solver records early_abort only while a slot is pending.
+    // The third PAL resolves the contradiction and also finishes the last slot.
+    assert!(!tr.early_aborted);
+    assert!(!tl.events().iter().any(|ev| ev.ev == "req_cancel"));
     assert!(
         tr.wave1
             .iter()

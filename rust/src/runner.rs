@@ -1,7 +1,7 @@
 //! Run solver arms over problems and record per-problem results and client events.
 
 use crate::client::{Endpoint, Sampling, Stats};
-use crate::orchestrator::{grade_aime, majority_vote, solve_reasoning, Ctx};
+use crate::orchestrator::{solve_reasoning, try_majority_vote, Ctx};
 use crate::prompts::{AimeItem, SkillPack};
 use crate::timeline::{breakdown, Breakdown, Timeline};
 use crate::verifier::{VerifierConfig, VerifierPool};
@@ -54,7 +54,7 @@ pub async fn build_ctx_for_arms(o: &BuildOpts, arms: &[String], n: usize) -> Res
     } else {
         8
     };
-    let mut eps = vec![];
+    let mut eps: Vec<Arc<Endpoint>> = vec![];
     for e in &o.endpoints {
         let mut endpoint = Endpoint::connect(
             e,
@@ -71,6 +71,7 @@ pub async fn build_ctx_for_arms(o: &BuildOpts, arms: &[String], n: usize) -> Res
         endpoint.capture_output = o.capture_output;
         eps.push(Arc::new(endpoint));
     }
+    crate::client::check_model_ids(&eps)?;
     let vc = |n: usize| VerifierConfig {
         python: o.python.clone(),
         worker_script: o.worker_script.clone(),
@@ -108,10 +109,25 @@ pub async fn run_one(
     n: usize,
     deep: bool,
 ) -> Result<(Value, Vec<crate::timeline::Event>, Breakdown)> {
+    run_one_with_timeline(ctx, arm, item, n, deep, Timeline::new()).await
+}
+
+pub async fn run_one_with_timeline(
+    ctx: &Arc<Ctx>,
+    arm: &str,
+    item: &AimeItem,
+    n: usize,
+    deep: bool,
+    tl: Timeline,
+) -> Result<(Value, Vec<crate::timeline::Event>, Breakdown)> {
     ctx.stats.reset();
-    let tl = Timeline::new();
     tl.emit("problem_start", "", 0, "");
+    let samples = sample_count(arm, n);
     let (predicted, detail, extra) = match arm {
+        "vanilla_b1" | "pal_b1" => {
+            let (prediction, detail) = crate::ablation::single(ctx, &tl, arm, item).await?;
+            (prediction, detail, json!({}))
+        }
         "cortheon_w1" | "cortheon_full" => {
             let tr = solve_reasoning(
                 ctx.clone(),
@@ -144,14 +160,21 @@ pub async fn run_one(
                 w1.join(", ")
             );
             (
-                tr.final_answer.clone(),
+                ctx.light_pool.normalize(&tr.final_answer).await?,
                 det,
-                json!({"early_aborted": tr.early_aborted, "spec_hits": tr.spec_hits, "wave2_triggered": tr.wave2_triggered}),
+                json!({"early_aborted": tr.early_aborted, "spec_hits": tr.spec_hits,
+                    "wave2_triggered": tr.wave2_triggered, "wave2_reason": tr.wave2_reason,
+                    "verified": tr.verified, "final_explanation": tr.final_explanation,
+                    "recovered_from_disagreement": tr.recovered_from_disagreement}),
             )
         }
-        "maj" => {
-            let (p, meta) = majority_vote(ctx.clone(), &tl, &item.prompt, n).await;
-            (p, format!("maj{n}_prose {meta}"), json!({}))
+        "maj" | "maj4_prose" | "maj8_prose" => {
+            let (p, meta) = try_majority_vote(ctx.clone(), &tl, &item.prompt, samples).await?;
+            let detail = format!(
+                "maj{samples}_prose ({}/{samples} votes)",
+                meta["winner_count"]
+            );
+            (p, detail, json!({"vote": meta}))
         }
         "maj_early" => {
             let vote =
@@ -170,7 +193,7 @@ pub async fn run_one(
             )
         }
         other => {
-            anyhow::bail!("unknown arm {other:?} (use cortheon_w1, cortheon_full, maj, maj_early)")
+            anyhow::bail!("unknown arm {other:?}")
         }
     };
     let expected = (!item.expected.is_empty()).then_some(&item.expected);
@@ -183,7 +206,7 @@ pub async fn run_one(
                 .is_ok_and(|v| v.to_string() == predicted);
             (Some(right), format!("expected {expected}"))
         } else {
-            let (right, grade) = grade_aime(&ctx.light_pool, &predicted, expected).await;
+            let (right, grade) = ctx.light_pool.grade_aime(&predicted, expected).await?;
             (Some(right), grade)
         }
     } else {
@@ -207,14 +230,30 @@ pub async fn run_one(
     };
     let pt = sum_usage("/prompt_tokens");
     let ct = sum_usage("/completion_tokens");
+    let detail = format!("{detail} | {grade}");
+    let detail = if arm != "maj_early" && detail.contains('/') {
+        ctx.light_pool.scrub_detail(&detail).await?
+    } else {
+        detail
+    };
     let row = json!({
-        "impl": "rust", "arm": arm, "id": item.id, "expected": expected, "predicted": predicted,
+        "impl": "rust", "arm": arm, "id": item.id, "samples": samples, "expected": expected, "predicted": predicted,
         "correct": correct, "wall_s": b.wall_s, "llm_calls": b.requests, "prompt_tokens": pt,
         "completion_tokens": ct, "reasoning_tokens": sum_usage("/completion_tokens_details/reasoning_tokens"),
         "cached_tokens": sum_usage("/prompt_tokens_details/cached_tokens"),
-        "total_tokens": pt.zip(ct).map(|(p, c)| p + c), "detail": format!("{detail} | {grade}"), "breakdown": b, "extra": extra,
+        "total_tokens": pt.zip(ct).map(|(p, c)| p + c), "detail": detail, "breakdown": b, "extra": extra,
     });
     Ok((row, events, b))
+}
+
+fn sample_count(arm: &str, n: usize) -> usize {
+    match arm {
+        "vanilla_b1" | "pal_b1" => 1,
+        "maj4_prose" => 4,
+        "maj8_prose" => 8,
+        "cortheon_w1" | "cortheon_full" => n.min(4),
+        _ => n,
+    }
 }
 
 pub fn summarize(rows: &[Value]) -> Value {

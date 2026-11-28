@@ -12,14 +12,16 @@ use anyhow::{anyhow, Result};
 use futures::StreamExt;
 use serde_json::{json, Map, Value};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Semaphore};
 
 #[derive(Clone, Debug, Default)]
 pub struct Caps {
     pub model_id: String,
+    pub context_length: i64,
+    pub reasoning_optional: bool,
     pub structures: bool,
     pub thinking_budget: bool,
     pub thinking_switch: bool,
@@ -46,6 +48,7 @@ pub struct CallSpec {
     pub json_schema: Option<Value>,
     pub schema_name: String,
     pub guided_choice: Option<Vec<String>>,
+    pub stop: Option<Vec<String>>,
     pub grammar_budget: bool,
     pub loop_guard: bool,
 }
@@ -68,6 +71,7 @@ impl Default for CallSpec {
             json_schema: None,
             schema_name: "response".into(),
             guided_choice: None,
+            stop: None,
             grammar_budget: true,
             loop_guard: true,
         }
@@ -104,6 +108,22 @@ impl CompletionResult {
     }
 }
 
+pub(crate) fn check_model_ids(endpoints: &[Arc<Endpoint>]) -> Result<()> {
+    if let Some((first, rest)) = endpoints.split_first() {
+        for ep in rest {
+            anyhow::ensure!(
+                ep.caps.model_id == first.caps.model_id,
+                "selected model {:?} on {} differs from {:?} on {}",
+                ep.caps.model_id,
+                ep.base_url,
+                first.caps.model_id,
+                first.base_url
+            );
+        }
+    }
+    Ok(())
+}
+
 pub struct Endpoint {
     pub base_url: String,
     pub caps: Caps,
@@ -115,6 +135,10 @@ pub struct Endpoint {
     pub max_tokens: Option<u32>,
     pub deterministic_seed: Option<u32>,
     pub capture_output: bool,
+    observed_reasoning: AtomicBool,
+    reasoning_token_floor: AtomicI64,
+    template_kwargs_rejected: AtomicBool,
+    reasoning_effort_rejected: AtomicBool,
 }
 
 /// Only sampling fields can be overridden. Routing, prompts, seeds and response
@@ -178,6 +202,12 @@ impl Stats {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Listener<'a> {
+    Content(Option<&'a mpsc::UnboundedSender<String>>),
+    Ballot(&'a (dyn Fn(&str, &str) + Sync)),
+}
+
 impl Endpoint {
     pub async fn connect(
         base_url: &str,
@@ -219,12 +249,23 @@ impl Endpoint {
         let is_tf =
             caps_nonempty || entry.get("owned_by").and_then(|x| x.as_str()) == Some("tensorfold");
         let b = |k: &str| caps_raw.get(k).and_then(|x| x.as_bool()).unwrap_or(false);
+        let context_length = [
+            &entry["context_length"],
+            &entry["max_model_len"],
+            &entry["meta"]["n_ctx"],
+        ]
+        .into_iter()
+        .filter_map(|v| v.as_i64().or_else(|| v.as_str()?.parse().ok()))
+        .find(|&n| n > 0)
+        .unwrap_or(32768);
         let caps = Caps {
             model_id: entry["id"]
                 .as_str()
                 .filter(|id| !id.is_empty())
                 .ok_or_else(|| anyhow!("model entry from {base_url}/models is missing its id"))?
                 .to_string(),
+            context_length,
+            reasoning_optional: caps_raw["reasoning_optional"].as_bool().unwrap_or(true),
             structures: if is_tf { b("structures") } else { true },
             thinking_budget: b("thinking_budget"),
             thinking_switch: b("thinking_switch"),
@@ -252,6 +293,10 @@ impl Endpoint {
             max_tokens: None,
             deterministic_seed: None,
             capture_output: false,
+            observed_reasoning: AtomicBool::new(false),
+            reasoning_token_floor: AtomicI64::new(0),
+            template_kwargs_rejected: AtomicBool::new(false),
+            reasoning_effort_rejected: AtomicBool::new(false),
         })
     }
 
@@ -280,7 +325,16 @@ impl Endpoint {
         if let Some(s) = spec.seed {
             o.insert("seed".into(), json!(s));
         }
+        if let Some(stop) = spec.stop.as_ref().filter(|s| !s.is_empty()) {
+            o.insert("stop".into(), json!(stop));
+        }
         let eff = |e: &str| caps.supported_efforts.iter().any(|x| x == e);
+        static REASONER: LazyLock<regex::Regex> = LazyLock::new(|| {
+            regex::Regex::new(r"(?i)(?:^|[^a-z0-9])(?:deepseek|ds\d|r1|qwq|qwen3|glm[-_]?5|nemotron|inkling|o[134](?:[-_]|$)|thinking|reasoner)").unwrap()
+        });
+        let generic_reasoner = !caps.is_tensorfold
+            && (self.observed_reasoning.load(Ordering::Relaxed)
+                || REASONER.is_match(&caps.model_id));
         if caps.thinking_switch {
             o.insert(
                 "chat_template_kwargs".into(),
@@ -290,11 +344,19 @@ impl Endpoint {
             if eff("none") {
                 o.insert("reasoning_effort".into(), json!("none"));
             }
-            if caps.is_tensorfold {
+            if caps.is_tensorfold || !self.template_kwargs_rejected.load(Ordering::Relaxed) {
                 o.insert(
                     "chat_template_kwargs".into(),
                     json!({"enable_thinking": false}),
                 );
+            }
+        }
+        if !spec.enable_thinking && !caps.reasoning_optional {
+            if caps.thinking_budget {
+                o.insert("thinking_budget".into(), json!(0));
+            }
+            if let Some(effort) = ["none", "minimal"].into_iter().find(|e| eff(e)) {
+                o.insert("reasoning_effort".into(), json!(effort));
             }
         }
         if spec.enable_thinking {
@@ -320,12 +382,31 @@ impl Endpoint {
                 if let Some(x) = pick {
                     o.insert("reasoning_effort".into(), json!(x));
                 }
+            } else if generic_reasoner
+                && !caps.thinking_budget
+                && spec.template_reasoning_effort.is_none()
+                && !self.reasoning_effort_rejected.load(Ordering::Relaxed)
+            {
+                let effort = spec
+                    .reasoning_effort
+                    .as_deref()
+                    .filter(|e| matches!(*e, "low" | "medium" | "high"))
+                    .or_else(|| {
+                        spec.thinking_budget
+                            .map(|tb| if tb <= 1200 { "low" } else { "medium" })
+                    });
+                if let Some(effort) = effort {
+                    o.insert("reasoning_effort".into(), json!(effort));
+                }
             }
             if spec.template_reasoning_effort.is_none()
+                && spec.max_tokens > 1
                 && !caps.thinking_budget
-                && !caps.supported_efforts.is_empty()
+                && (!caps.supported_efforts.is_empty() || generic_reasoner)
             {
-                let mt = o["max_tokens"].as_i64().unwrap_or(0).max(6144);
+                let safe = (caps.context_length / 2).clamp(1024, 16384);
+                let floor = self.reasoning_token_floor.load(Ordering::Relaxed).max(6144);
+                let mt = spec.max_tokens.max(floor.min(safe));
                 o.insert("max_tokens".into(), json!(mt));
             }
         }
@@ -393,6 +474,123 @@ impl Endpoint {
         r
     }
 
+    async fn post_with_fallback(
+        &self,
+        mut payload: Value,
+        guard: &mut CancelGuard,
+        preserve_thinking: bool,
+    ) -> Result<reqwest::Response> {
+        let mut rejected_controls = (false, false);
+        loop {
+            let response = self.post(&payload).send().await?;
+            guard.read_headers(&response);
+            let code = response.status().as_u16();
+            if code == 200 {
+                if rejected_controls.0 {
+                    self.template_kwargs_rejected.store(true, Ordering::Relaxed);
+                }
+                if rejected_controls.1 {
+                    self.reasoning_effort_rejected
+                        .store(true, Ordering::Relaxed);
+                }
+                return Ok(response);
+            }
+            let fields = payload.as_object_mut().unwrap();
+            let grammar = ["response_format", "guided_choice", "grammar_budget"];
+            if matches!(code, 400 | 422) && grammar.iter().any(|k| fields.contains_key(*k)) {
+                for key in grammar {
+                    fields.remove(key);
+                }
+            } else if matches!(code, 400 | 422)
+                && !preserve_thinking
+                && (fields.contains_key("chat_template_kwargs")
+                    || fields.contains_key("reasoning_effort"))
+            {
+                rejected_controls = (
+                    fields.remove("chat_template_kwargs").is_some(),
+                    fields.remove("reasoning_effort").is_some(),
+                );
+            } else {
+                let message = response.text().await.unwrap_or_default();
+                return Err(anyhow!("HTTP {code}: {}", trunc(&message, 300)));
+            }
+            if let Some(capture) = &mut guard.capture {
+                capture.prior_request_bodies.push(std::mem::replace(
+                    &mut capture.request_body,
+                    payload.clone(),
+                ));
+            }
+        }
+    }
+
+    fn recovery_payload(
+        &self,
+        spec: &CallSpec,
+        sent: &Value,
+        first: &CompletionResult,
+    ) -> Option<Value> {
+        // Fixed benchmark profiles specify the exact request and number of samples.
+        if self.max_tokens.is_some()
+            || self.deterministic_seed.is_some()
+            || spec.max_tokens <= 1
+            || !first.ok()
+            || first.finish_reason != "length"
+            || !first.content.trim().is_empty()
+            || (first.reasoning_tokens == 0 && first.reasoning.is_empty())
+            || (self.caps.thinking_budget && (spec.enable_thinking || self.caps.reasoning_optional))
+        {
+            return None;
+        }
+        let sent_max = sent["max_tokens"].as_i64()?;
+        let cap = sent_max
+            .max((self.caps.context_length / 2).max(1024))
+            .min(16384);
+        let next_max = if !spec.enable_thinking {
+            sent_max.saturating_mul(4).max(1024).min(cap)
+        } else if sent_max < 6144 && cap > sent_max {
+            sent_max.saturating_mul(2).max(6144).min(cap)
+        } else if !self.template_kwargs_rejected.load(Ordering::Relaxed) {
+            let mut commit = spec.clone();
+            let mut message = String::from("Your reasoning scratchpad reached the token limit before emitting the final answer. Do not continue brainstorming. Output ONLY the final requested answer/code directly now.");
+            let tail = first
+                .reasoning
+                .char_indices()
+                .rev()
+                .nth(2399)
+                .map_or(0, |(i, _)| i);
+            let notes = first.reasoning[tail..].trim();
+            if !notes.is_empty() {
+                message.push_str("\n\nScratchpad excerpt:\n");
+                message.push_str(notes);
+            }
+            match commit.messages.last_mut() {
+                Some((role, content)) if role == "user" => {
+                    content.push_str("\n\n");
+                    content.push_str(&message);
+                }
+                _ => commit.messages.push(("user".into(), message)),
+            }
+            commit.max_tokens = spec.max_tokens.clamp(2048, 4096);
+            commit.temperature = spec.temperature.min(0.3);
+            commit.enable_thinking = false;
+            commit.thinking_budget = None;
+            commit.reasoning_effort = None;
+            return Some(self.build_payload(&commit));
+        } else {
+            sent_max.saturating_mul(2).min(cap)
+        };
+        if next_max <= sent_max {
+            return None;
+        }
+        if spec.enable_thinking {
+            self.reasoning_token_floor
+                .fetch_max(next_max, Ordering::Relaxed);
+        }
+        let mut retry = sent.clone();
+        retry["max_tokens"] = json!(next_max);
+        Some(retry)
+    }
+
     /// Run one completion. Dropping the returned future cancels the HTTP request
     /// (connection closed) and records a `req_cancel` event with the tokens seen so far.
     /// `content_tx`, when given, receives the accumulated *content* every time a
@@ -405,8 +603,14 @@ impl Endpoint {
         stats: &Stats,
         content_tx: Option<mpsc::UnboundedSender<String>>,
     ) -> CompletionResult {
-        self.read_completion(spec, slot, tl, stats, content_tx, None)
-            .await
+        self.read_completion(
+            spec,
+            slot,
+            tl,
+            stats,
+            Listener::Content(content_tx.as_ref()),
+        )
+        .await
     }
 
     /// Report the terminal choice immediately, then drain and validate its usage and [DONE].
@@ -418,7 +622,7 @@ impl Endpoint {
         stats: &Stats,
         on_finish: impl Fn(&str, &str) + Sync,
     ) -> CompletionResult {
-        self.read_completion(spec, &spec.tag, tl, stats, None, Some(&on_finish))
+        self.read_completion(spec, &spec.tag, tl, stats, Listener::Ballot(&on_finish))
             .await
     }
 
@@ -428,11 +632,55 @@ impl Endpoint {
         slot: &str,
         tl: &Timeline,
         stats: &Stats,
-        content_tx: Option<mpsc::UnboundedSender<String>>,
-        on_finish: Option<&(dyn Fn(&str, &str) + Sync)>,
+        listener: Listener<'_>,
     ) -> CompletionResult {
-        let mut payload = self.build_payload(spec);
+        let payload = self.build_payload(spec);
         let _permit = self.sem.acquire().await.expect("semaphore");
+        let started = Instant::now();
+        let mut first = self
+            .read_attempt(spec, slot, tl, stats, listener, payload.clone())
+            .await;
+        if first.reasoning_tokens > 0 || !first.reasoning.is_empty() {
+            self.observed_reasoning.store(true, Ordering::Relaxed);
+        }
+        // A strict ballot is closed at its first terminal choice.
+        if matches!(listener, Listener::Content(_)) {
+            if let Some(retry) = self.recovery_payload(spec, &payload, &first) {
+                let second = self
+                    .read_attempt(spec, slot, tl, stats, listener, retry)
+                    .await;
+                first.latency_s = started.elapsed().as_secs_f64();
+                if second.ok() {
+                    first.prompt_tokens += second.prompt_tokens;
+                    first.completion_tokens += second.completion_tokens;
+                    first.cached_tokens += second.cached_tokens;
+                    first.reasoning_tokens += second.reasoning_tokens;
+                    if !second.content.trim().is_empty() {
+                        first.content = second.content;
+                        first.finish_reason = second.finish_reason;
+                    }
+                    if first.reasoning.is_empty() {
+                        first.reasoning = second.reasoning;
+                    }
+                }
+            }
+        }
+        first
+    }
+
+    async fn read_attempt(
+        &self,
+        spec: &CallSpec,
+        slot: &str,
+        tl: &Timeline,
+        stats: &Stats,
+        listener: Listener<'_>,
+        mut payload: Value,
+    ) -> CompletionResult {
+        let on_finish = match listener {
+            Listener::Ballot(notify) => Some(notify),
+            Listener::Content(_) => None,
+        };
         let mut guard = CancelGuard::new(tl.clone(), slot.to_string(), self.stream);
         tl.emit("req_start", slot, 0, &self.base_url);
         if self.max_tokens.is_some()
@@ -470,60 +718,21 @@ impl Endpoint {
         if self.capture_output {
             guard.capture = Some(OutputCapture::new(tl.next_capture_index(), payload.clone()));
         }
-        let mut resp = match self.post(&payload).send().await {
-            Ok(r) => r,
-            Err(e) => {
+        let preserve_thinking = on_finish.is_some()
+            || self.sampling.0.contains_key("chat_template_kwargs")
+            || self.sampling.0.contains_key("reasoning_effort");
+        let resp = match self
+            .post_with_fallback(payload, &mut guard, preserve_thinking)
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
                 return guard.finish(
                     stats,
-                    CompletionResult::err(&spec.tag, e.to_string(), t0.elapsed().as_secs_f64()),
+                    CompletionResult::err(&spec.tag, error.to_string(), t0.elapsed().as_secs_f64()),
                 )
             }
         };
-        guard.read_headers(&resp);
-        if resp.status().as_u16() != 200 {
-            let code = resp.status().as_u16();
-            let o = payload.as_object_mut().unwrap();
-            if code == 400 && (o.contains_key("response_format") || o.contains_key("guided_choice"))
-            {
-                o.remove("response_format");
-                o.remove("guided_choice");
-                o.remove("grammar_budget");
-                if let Some(capture) = &mut guard.capture {
-                    capture.prior_request_bodies.push(std::mem::replace(
-                        &mut capture.request_body,
-                        payload.clone(),
-                    ));
-                }
-                guard.request_id = None;
-                match self.post(&payload).send().await {
-                    Ok(r2) if r2.status().as_u16() == 200 => {
-                        guard.read_headers(&r2);
-                        resp = r2;
-                    }
-                    _ => {
-                        let txt = resp.text().await.unwrap_or_default();
-                        return guard.finish(
-                            stats,
-                            CompletionResult::err(
-                                &spec.tag,
-                                format!("HTTP {code}: {}", trunc(&txt, 300)),
-                                t0.elapsed().as_secs_f64(),
-                            ),
-                        );
-                    }
-                }
-            } else {
-                let txt = resp.text().await.unwrap_or_default();
-                return guard.finish(
-                    stats,
-                    CompletionResult::err(
-                        &spec.tag,
-                        format!("HTTP {code}: {}", trunc(&txt, 300)),
-                        t0.elapsed().as_secs_f64(),
-                    ),
-                );
-            }
-        }
         let mut out = CompletionResult {
             tag: spec.tag.clone(),
             finish_reason: "stop".into(),
@@ -539,8 +748,23 @@ impl Endpoint {
                     )
                 }
             };
-            let ch = &v["choices"][0];
             guard.read_response(&v);
+            let Some(ch) = v["choices"].get(0).filter(|choice| choice.is_object()) else {
+                let err = guard
+                    .stream_error
+                    .clone()
+                    .unwrap_or_else(|| "completion response has no choice".into());
+                return guard.finish(
+                    stats,
+                    CompletionResult::err(&spec.tag, err, t0.elapsed().as_secs_f64()),
+                );
+            };
+            if let Some(err) = guard.stream_error.clone() {
+                return guard.finish(
+                    stats,
+                    CompletionResult::err(&spec.tag, err, t0.elapsed().as_secs_f64()),
+                );
+            }
             guard.finish_reason = ch["finish_reason"].as_str().map(str::to_owned);
             out.content = ch["message"]["content"].as_str().unwrap_or("").to_string();
             out.reasoning = ch["message"]["reasoning_content"]
@@ -549,12 +773,16 @@ impl Endpoint {
                 .unwrap_or("")
                 .to_string();
             out.finish_reason = ch["finish_reason"].as_str().unwrap_or("stop").to_string();
+            if out.finish_reason == "error" {
+                out.raw_error = Some("backend returned an error finish reason".into());
+            }
             read_usage(&v, &mut out);
             out.latency_s = t0.elapsed().as_secs_f64();
             return guard.finish(stats, out);
         }
         let mut body = resp.bytes_stream();
         let mut buf: Vec<u8> = Vec::with_capacity(8192);
+        let mut saw_choice = false;
         'outer: while let Some(item) = body.next().await {
             let bytes = match item {
                 Ok(b) => b,
@@ -579,11 +807,10 @@ impl Endpoint {
                 }
                 let v = match serde_json::from_str::<Value>(data) {
                     Ok(v) => v,
-                    Err(e) if on_finish.is_some() => {
+                    Err(e) => {
                         out.raw_error = Some(format!("invalid SSE JSON: {e}"));
                         break 'outer;
                     }
-                    Err(_) => continue,
                 };
                 guard.read_response(&v);
                 if let Some(error) = &guard.stream_error {
@@ -603,6 +830,7 @@ impl Endpoint {
                     read_usage(&v, &mut out);
                 }
                 if let Some(ch) = v.get("choices").and_then(|c| c.get(0)) {
+                    saw_choice = true;
                     if on_finish.is_some() && guard.finish_reason.is_some() {
                         out.raw_error = Some("received a choice after the terminal choice".into());
                         break 'outer;
@@ -626,7 +854,7 @@ impl Endpoint {
                         if !c.is_empty() {
                             out.content.push_str(c);
                             if c.contains('`') {
-                                if let Some(tx) = &content_tx {
+                                if let Listener::Content(Some(tx)) = listener {
                                     let _ = tx.send(out.content.clone());
                                 }
                             }
@@ -646,8 +874,12 @@ impl Endpoint {
                 }
             }
         }
-        if guard.finish_reason.is_none() && !guard.done_seen && out.raw_error.is_none() {
-            out.raw_error = Some("stream closed without a terminal response".into());
+        if out.raw_error.is_none() {
+            if !saw_choice {
+                out.raw_error = Some("stream contains no completion choice".into());
+            } else if guard.finish_reason.is_none() && !guard.done_seen {
+                out.raw_error = Some("stream closed without a terminal response".into());
+            }
         }
         if on_finish.is_some() && out.raw_error.is_none() {
             if guard.finish_reason.is_none() || !guard.done_seen {

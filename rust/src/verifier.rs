@@ -48,6 +48,7 @@ impl Worker {
     async fn spawn(cfg: &VerifierConfig) -> Result<Worker> {
         let mut cmd = Command::new(&cfg.python);
         cmd.arg(&cfg.worker_script)
+            .env("PYTHONUNBUFFERED", "1")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
@@ -218,6 +219,54 @@ impl VerifierPool {
             .await?;
         Ok(v["eq"].as_bool().unwrap_or(false))
     }
+    pub async fn aime_candidate(&self, content: &str) -> Result<(String, String)> {
+        let v = self
+            .call(
+                json!({"op": "aime_candidate", "content": content}),
+                Duration::from_secs(30),
+            )
+            .await?;
+        let norm = v["norm"]
+            .as_str()
+            .with_context(|| format!("AIME answer extraction failed: {v}"))?;
+        Ok((
+            norm.to_owned(),
+            v["valid_aime_int"]
+                .as_str()
+                .context("missing normalized AIME integer")?
+                .to_owned(),
+        ))
+    }
+    pub async fn grade_aime(&self, predicted: &str, expected: &str) -> Result<(bool, String)> {
+        let v = self
+            .call(
+                json!({"op": "grade_aime", "predicted": predicted, "expected": expected}),
+                Duration::from_secs(30),
+            )
+            .await?;
+        let correct = v["correct"]
+            .as_bool()
+            .with_context(|| format!("AIME grading failed: {v}"))?;
+        Ok((
+            correct,
+            v["detail"]
+                .as_str()
+                .context("missing AIME grade detail")?
+                .to_owned(),
+        ))
+    }
+    pub async fn scrub_detail(&self, detail: &str) -> Result<String> {
+        let v = self
+            .call(
+                json!({"op": "scrub_detail", "detail": detail}),
+                Duration::from_secs(30),
+            )
+            .await?;
+        Ok(v["detail"]
+            .as_str()
+            .with_context(|| format!("scrubbing detail failed: {v}"))?
+            .to_owned())
+    }
     pub async fn normalize(&self, raw: &str) -> Result<String> {
         let v = self
             .call(
@@ -226,6 +275,18 @@ impl VerifierPool {
             )
             .await?;
         Ok(v["norm"].as_str().unwrap_or("").into())
+    }
+    pub(crate) async fn fallback_answer(&self, content: &str) -> Result<String> {
+        let v = self
+            .call(
+                json!({"op": "fallback_answer", "content": content}),
+                Duration::from_secs(30),
+            )
+            .await?;
+        Ok(v["norm"]
+            .as_str()
+            .context("missing fallback answer")?
+            .to_owned())
     }
     pub async fn ping(&self) -> Result<Value> {
         self.call(json!({"op": "ping"}), Duration::from_secs(10))
